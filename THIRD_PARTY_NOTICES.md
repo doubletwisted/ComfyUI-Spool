@@ -46,6 +46,14 @@ SOFTWARE.
 Spool installs `comfy-sdk` (MIT License, Copyright (c) 2026 Comfy Org) as a
 dependency for Comfy Cloud execution. It is not included in Spool.
 
+## Righteous typeface
+
+The Spool logo (`docs/images/spool-logo-*.svg`, `docs/images/spool-icon.svg`,
+`docs/images/icon.png`, `ui/spool-icon.svg` and the studio top bar) is drawn from
+glyph outlines of Righteous by Brian J. Bonislawsky (Astigmatic), licensed under
+the SIL Open Font License 1.1. The font itself is not included.
+https://fonts.google.com/specimen/Righteous
+
 ## ffmpeg and ffprobe
 
 Spool calls the `ffmpeg` and `ffprobe` executables installed on the host for

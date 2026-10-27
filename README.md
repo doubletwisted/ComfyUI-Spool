@@ -1,4 +1,18 @@
-# Spool - Video Timeline for ComfyUI
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/spool-logo-dark.svg">
+    <img src="docs/images/spool-logo-light.svg" alt="Spool" width="340">
+  </picture>
+</h1>
+
+<p align="center"><b>A video timeline studio inside ComfyUI</b></p>
+
+<p align="center">
+  <img alt="Comfy Registry: spool-timeline" src="https://img.shields.io/badge/Comfy_Registry-spool--timeline-ffb52e?labelColor=101113">
+  <img alt="ComfyUI 0.39 or newer" src="https://img.shields.io/badge/ComfyUI-0.39%2B-ecedf0?labelColor=101113">
+  <img alt="Python 3.11 or newer" src="https://img.shields.io/badge/Python-3.11%2B-ecedf0?labelColor=101113">
+  <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/License-GPL--3.0-ecedf0?labelColor=101113"></a>
+</p>
 
 Spool is a video editor that lives inside ComfyUI. Lay out shots on a timeline,
 generate takes for each shot with your own workflows, review them side by side
