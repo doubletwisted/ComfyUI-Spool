@@ -1,0 +1,1863 @@
+{
+  "cases": [
+    {
+      "name": "direct owner and unrelated clip",
+      "authored": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "a",
+            "name": "a",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          },
+          {
+            "id": "other",
+            "name": "other",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": []
+      },
+      "attempts": [
+        {
+          "id": "attempt",
+          "clip_id": "a",
+          "take_id": "future",
+          "status": "complete",
+          "prompt_id": "prompt",
+          "error": null,
+          "request": {
+            "clipName": "Original clip",
+            "clipRevision": 3,
+            "capture": {
+              "workflow": {
+                "nodes": []
+              },
+              "prompt": {
+                "save": {
+                  "class_type": "SaveImage",
+                  "inputs": {}
+                }
+              }
+            },
+            "clipId": "a"
+          },
+          "result": {
+            "primary": {
+              "file": "artifacts/attempt/result.png",
+              "frames": 120
+            },
+            "artifacts": [
+              {
+                "file": "artifacts/attempt/result.png",
+                "frames": 120
+              }
+            ]
+          }
+        }
+      ],
+      "attached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "a",
+            "name": "a",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": true,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          },
+          {
+            "id": "other",
+            "name": "other",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ]
+      },
+      "detached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "a",
+            "name": "a",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": false,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                },
+                "importedExecution": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          },
+          {
+            "id": "other",
+            "name": "other",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ]
+      }
+    },
+    {
+      "name": "split and duplicate of duplicate",
+      "authored": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "split",
+            "name": "split",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24,
+            "takeSourceIds": [
+              "a"
+            ]
+          },
+          {
+            "id": "copy2",
+            "name": "copy2",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24,
+            "takeSourceIds": [
+              "copy",
+              "split",
+              "a"
+            ]
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": []
+      },
+      "attempts": [
+        {
+          "id": "attempt",
+          "clip_id": "a",
+          "take_id": "future",
+          "status": "complete",
+          "prompt_id": "prompt",
+          "error": null,
+          "request": {
+            "clipName": "Original clip",
+            "clipRevision": 3,
+            "capture": {
+              "workflow": {
+                "nodes": []
+              },
+              "prompt": {
+                "save": {
+                  "class_type": "SaveImage",
+                  "inputs": {}
+                }
+              }
+            },
+            "clipId": "a"
+          },
+          "result": {
+            "primary": {
+              "file": "artifacts/attempt/result.png",
+              "frames": 120
+            },
+            "artifacts": [
+              {
+                "file": "artifacts/attempt/result.png",
+                "frames": 120
+              }
+            ]
+          }
+        }
+      ],
+      "attached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "split",
+            "name": "split",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": true,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24,
+            "takeSourceIds": [
+              "a"
+            ]
+          },
+          {
+            "id": "copy2",
+            "name": "copy2",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": true,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24,
+            "takeSourceIds": [
+              "copy",
+              "split",
+              "a"
+            ]
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ]
+      },
+      "detached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "split",
+            "name": "split",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": false,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                },
+                "importedExecution": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          },
+          {
+            "id": "copy2",
+            "name": "copy2",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": false,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                },
+                "importedExecution": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ]
+      }
+    },
+    {
+      "name": "deleted owner retains job with no reassignment",
+      "authored": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "new-position",
+            "name": "new-position",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": []
+      },
+      "attempts": [
+        {
+          "id": "attempt",
+          "clip_id": "a",
+          "take_id": "future",
+          "status": "complete",
+          "prompt_id": "prompt",
+          "error": null,
+          "request": {
+            "clipName": "Original clip",
+            "clipRevision": 3,
+            "capture": {
+              "workflow": {
+                "nodes": []
+              },
+              "prompt": {
+                "save": {
+                  "class_type": "SaveImage",
+                  "inputs": {}
+                }
+              }
+            },
+            "clipId": "a"
+          },
+          "result": {
+            "primary": {
+              "file": "artifacts/attempt/result.png",
+              "frames": 120
+            },
+            "artifacts": [
+              {
+                "file": "artifacts/attempt/result.png",
+                "frames": 120
+              }
+            ]
+          }
+        }
+      ],
+      "attached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "new-position",
+            "name": "new-position",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ],
+        "recoverableResults": [
+          {
+            "takeId": "future",
+            "clipId": "a",
+            "clipName": "Original clip",
+            "media": {
+              "file": "artifacts/attempt/result.png",
+              "frames": 120
+            },
+            "attemptId": "attempt"
+          }
+        ]
+      },
+      "detached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "new-position",
+            "name": "new-position",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ],
+        "recoverableResults": [
+          {
+            "takeId": "future",
+            "clipId": "a",
+            "clipName": "Original clip",
+            "media": {
+              "file": "artifacts/attempt/result.png",
+              "frames": 120
+            },
+            "attemptId": "attempt"
+          }
+        ]
+      }
+    },
+    {
+      "name": "chosen take match retains reused provenance",
+      "authored": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "unrelated",
+            "name": "unrelated",
+            "takeId": "future",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": []
+      },
+      "attempts": [
+        {
+          "id": "attempt",
+          "clip_id": "a",
+          "take_id": "future",
+          "status": "complete",
+          "prompt_id": "prompt",
+          "error": null,
+          "request": {
+            "clipName": "Original clip",
+            "clipRevision": 3,
+            "capture": {
+              "workflow": {
+                "nodes": []
+              },
+              "prompt": {
+                "save": {
+                  "class_type": "SaveImage",
+                  "inputs": {}
+                }
+              }
+            },
+            "clipId": "a"
+          },
+          "result": {
+            "primary": {
+              "file": "artifacts/attempt/result.png",
+              "frames": 120
+            },
+            "artifacts": [
+              {
+                "file": "artifacts/attempt/result.png",
+                "frames": 120
+              }
+            ]
+          }
+        }
+      ],
+      "attached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "unrelated",
+            "name": "unrelated",
+            "takeId": "future",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": true,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ]
+      },
+      "detached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "unrelated",
+            "name": "unrelated",
+            "takeId": "future",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": false,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                },
+                "importedExecution": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ]
+      }
+    },
+    {
+      "name": "legacy take owner identity",
+      "authored": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "owned",
+            "name": "owned",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24,
+            "takeOwnerId": "a"
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": []
+      },
+      "attempts": [
+        {
+          "id": "attempt",
+          "clip_id": "a",
+          "take_id": "future",
+          "status": "complete",
+          "prompt_id": "prompt",
+          "error": null,
+          "request": {
+            "clipName": "Original clip",
+            "clipRevision": 3,
+            "capture": {
+              "workflow": {
+                "nodes": []
+              },
+              "prompt": {
+                "save": {
+                  "class_type": "SaveImage",
+                  "inputs": {}
+                }
+              }
+            },
+            "clipId": "a"
+          },
+          "result": {
+            "primary": {
+              "file": "artifacts/attempt/result.png",
+              "frames": 120
+            },
+            "artifacts": [
+              {
+                "file": "artifacts/attempt/result.png",
+                "frames": 120
+              }
+            ]
+          }
+        }
+      ],
+      "attached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "owned",
+            "name": "owned",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": true,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24,
+            "takeOwnerId": "a"
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ]
+      },
+      "detached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "owned",
+            "name": "owned",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": false,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                },
+                "importedExecution": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ]
+      }
+    },
+    {
+      "name": "pending attempt has a job but no take",
+      "authored": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "a",
+            "name": "a",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": []
+      },
+      "attempts": [
+        {
+          "id": "attempt",
+          "clip_id": "a",
+          "take_id": "future",
+          "status": "running",
+          "prompt_id": "prompt",
+          "error": null,
+          "request": {
+            "clipName": "Original clip",
+            "clipRevision": 3,
+            "capture": {
+              "workflow": {
+                "nodes": []
+              },
+              "prompt": {
+                "save": {
+                  "class_type": "SaveImage",
+                  "inputs": {}
+                }
+              }
+            },
+            "clipId": "a"
+          },
+          "result": null
+        }
+      ],
+      "attached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "a",
+            "name": "a",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "running",
+            "progress": 0,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ]
+      },
+      "detached": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "a",
+            "name": "a",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "running",
+            "progress": 0,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt",
+            "target": "local"
+          }
+        ]
+      }
+    }
+  ],
+  "merges": [
+    {
+      "name": "drag keeps trims and chosen take",
+      "local": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "a",
+            "name": "a",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 5,
+            "out": 18
+          },
+          {
+            "id": "other",
+            "name": "other",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "selected": "a",
+        "frame": 9,
+        "jobs": []
+      },
+      "incoming": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "a",
+            "name": "a",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": true,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          },
+          {
+            "id": "other",
+            "name": "other",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [
+          {
+            "id": "new-media"
+          }
+        ],
+        "importedWorkflows": [
+          {
+            "id": "new-workflow"
+          }
+        ],
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt"
+          }
+        ]
+      },
+      "merged": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "a",
+            "name": "a",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": true,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                }
+              }
+            ],
+            "in": 5,
+            "out": 18
+          },
+          {
+            "id": "other",
+            "name": "other",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "selected": "a",
+        "frame": 9,
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt"
+          }
+        ]
+      },
+      "preserved": {
+        "project": "Ledger QA",
+        "clips": [
+          {
+            "id": "a",
+            "name": "a",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              },
+              {
+                "id": "future",
+                "number": 1,
+                "revision": 3,
+                "seed": "frozen",
+                "generated": true,
+                "media": {
+                  "file": "artifacts/attempt/result.png",
+                  "frames": 120
+                },
+                "artifacts": [
+                  {
+                    "file": "artifacts/attempt/result.png",
+                    "frames": 120
+                  }
+                ],
+                "request": {
+                  "clipName": "Original clip",
+                  "clipRevision": 3,
+                  "capture": {
+                    "workflow": {
+                      "nodes": []
+                    },
+                    "prompt": {
+                      "save": {
+                        "class_type": "SaveImage",
+                        "inputs": {}
+                      }
+                    }
+                  },
+                  "clipId": "a"
+                },
+                "workflowSnapshot": {
+                  "workflow": {
+                    "nodes": []
+                  },
+                  "prompt": {
+                    "save": {
+                      "class_type": "SaveImage",
+                      "inputs": {}
+                    }
+                  }
+                }
+              }
+            ],
+            "in": 5,
+            "out": 18
+          },
+          {
+            "id": "other",
+            "name": "other",
+            "takeId": "imported",
+            "takes": [
+              {
+                "id": "imported",
+                "media": {
+                  "file": "assets/black.png",
+                  "frames": 120
+                }
+              }
+            ],
+            "in": 0,
+            "out": 24
+          }
+        ],
+        "tailGap": 0,
+        "audioClips": [],
+        "media": [
+          {
+            "id": "new-media"
+          }
+        ],
+        "importedWorkflows": [
+          {
+            "id": "new-workflow"
+          }
+        ],
+        "selected": "a",
+        "frame": 9,
+        "jobs": [
+          {
+            "id": "attempt",
+            "clipId": "a",
+            "name": "Original clip",
+            "status": "complete",
+            "progress": 100,
+            "seed": "frozen",
+            "error": null,
+            "promptId": "prompt"
+          }
+        ]
+      }
+    }
+  ]
+}

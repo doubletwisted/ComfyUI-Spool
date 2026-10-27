@@ -1,0 +1,46 @@
+(async()=>{
+ const w=window,n=w.spoolNative,d=w.document,$=id=>d.getElementById(id),checks=[];
+ const check=(label,value)=>{if(!value)throw Error(label);checks.push(label);},clip=id=>n.state.clips.find(c=>c.id===id);
+ const api=async(path,data,method)=>{const r=await w.fetch('/spool/api/'+path,{method:method||(data?'POST':'GET'),headers:{'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});if(!r.ok)throw Error(await r.text());return r.json();};
+ const type=text=>{const field=$('clipNotes');field.focus();field.value=text;field.setSelectionRange(text.length,text.length);field.dispatchEvent(new w.Event('input',{bubbles:true}));};
+ const wait=async fn=>{const end=Date.now()+10000;while(!await fn()){if(Date.now()>end)throw Error('Notes wait timed out');await new Promise(r=>setTimeout(r,80));}};
+ await n.flush();const reset=await api('projects/'+n.projectKey);
+ for(const c of reset.document.clips){delete c.notes;delete c.noteDraft;c.intent=c.id==='shot'?'Keep the watch face unchanged.':'Keep this second shot.';}
+ await api('projects/'+n.projectKey,{revision:reset.revision,document:reset.document},'PUT');await n.poll();
+ n.selectClip('shot');if(!$('editor').classList.contains('compact')&&w.innerWidth<=760)$('toggleInspector').click();
+ const field=$('clipNotes'),section=$('clipNotesSection'),original='Keep the watch face unchanged.',text='Soften the light.\nKeep the watch — żółć. <script>throw Error("notes")</script>',initial=JSON.stringify({inputs:clip('shot').inputValues,recipe:clip('shot').workflowVersion});
+ check('Existing Notes text appears as one open note at the bottom of the inspector',!section.hidden&&section.previousElementSibling===$('inspectorContent')&&section.parentElement.nextElementSibling.classList.contains('inspector-foot')&&section.querySelector('[data-note-edit]').value===original&&!clip('shot').notes);
+ type(text);
+ await wait(async()=>(await api('projects/'+n.projectKey)).document.clips.find(c=>c.id==='shot').noteDraft===text);await n.flush();
+ check('New-note drafts autosave without becoming agent requests or losing focus',d.activeElement===field&&field.selectionStart===text.length&&(await api('projects/'+n.projectKey+'/status')).shots.find(c=>c.id==='shot').notes.length===1);
+ $('addClipNote').click();await n.flush();
+ const added=clip('shot').notes[1].id;
+ check('Add note creates a separate persistent open item and clears the draft',clip('shot').notes.length===2&&clip('shot').notes[1].text===text&&!clip('shot').intent&&!clip('shot').noteDraft&&!field.value&&$('notesOpenCount').textContent==='2 open');
+ n.undo();await n.flush();check('Adding a note is undoable without losing its draft',!clip('shot').notes&&field.value===text);n.redo();await n.flush();
+ const edit=section.querySelector('[data-note-edit="'+added+'"]');edit.focus();edit.value=text+'\nUse softer wind.';edit.dispatchEvent(new w.Event('input',{bubbles:true}));
+ n.selectClip('next');n.selectClip('shot');await n.flush();
+ check('Editing an open note preserves previous text and survives an immediate clip switch',clip('shot').notes[1].versions[0].text===text&&clip('shot').notes[1].text.endsWith('Use softer wind.'));
+ section.querySelector('[data-address="'+added+'"]').click();await n.flush();
+ check('Each checkbox addresses only its own note and collapses it into history',clip('shot').notes[0].status==='open'&&clip('shot').notes[1].status==='addressed'&&clip('shot').notes[1].addressedBy==='user'&&!$('notesHistory').open&&$('notesHistoryCount').textContent==='1'&&section.querySelectorAll('[data-address]').length===1);
+ n.undo();await n.flush();check('Addressing supports Undo',clip('shot').notes[1].status==='open');n.redo();await n.flush();
+ $('notesHistory').open=true;const history=section.querySelector('[data-note-history="'+added+'"]');history.open=true;
+ check('Addressed history shows completion identity, date and earlier text',history.textContent.includes('You')&&!!clip('shot').notes[1].addressedAt&&history.querySelector('.note-versions').textContent.includes(text)&&!history.querySelector('textarea'));
+ section.querySelector('[data-reopen="'+added+'"]').click();await n.flush();
+ const reopened=clip('shot').notes.at(-1);
+ check('Reopen creates an open copy and keeps the addressed record intact',reopened.status==='open'&&reopened.reopenedFrom===added&&clip('shot').notes[1].status==='addressed'&&section.querySelector('[data-reopen="'+added+'"]').disabled&&section.querySelector('[data-note-history="'+added+'"]').open);
+ field.blur();await n.flush();const status=await api('projects/'+n.projectKey+'/status'),first=status.shots.find(c=>c.id==='shot').notes[0];
+ await api('projects/'+n.projectKey+'/commands',{operationId:crypto.randomUUID(),revision:status.revision,actor:'agent:notes-qa',scope:{projectId:n.projectKey,clipIds:['shot'],capabilities:['notes']},action:'address_note',arguments:{clipId:'shot',noteId:first.id,expectedText:first.text,summary:'Preserved the watch face in the updated workflow.'}});await n.poll();
+ const agent=section.querySelector('[data-note-history="'+first.id+'"]');agent.open=true;
+ check('Agent completion appears in the same history with its factual summary',agent.textContent.includes('Agent')&&agent.textContent.includes('Preserved the watch face in the updated workflow.')&&clip('shot').notes[0].addressedBy==='agent:notes-qa');
+ n.selectClip('next');check('Each clip has independent notes',section.querySelector('[data-note-edit]').value==='Keep this second shot.');type('Draft for the next shot');n.selectClip('shot');await n.flush();
+ check('Switching clips saves drafts without assigning them to another clip',!field.value&&clip('next').noteDraft==='Draft for the next shot');
+ $('audioInspectorTab').click();check('Notes remain available in the Audio inspector',!section.hidden&&section.querySelectorAll('[data-address]').length===1);$('inputsInspectorTab').click();
+ check('Note actions leave generation inputs untouched',JSON.stringify({inputs:clip('shot').inputValues,recipe:clip('shot').workflowVersion})===initial);
+ await n.chooseTake('shot','two');await n.flush();check('Choosing another take preserves open notes and addressed history',clip('shot').notes.at(-1).id===reopened.id&&clip('shot').notes[0].status==='addressed');
+ n.selectClip('next',false,{ctrlKey:true});check('Multi-selection hides Notes',section.hidden);n.selectClip('shot');
+ const saved=await api('projects/'+n.projectKey);check('Notes, history and drafts persist in the project document',saved.document.clips.find(c=>c.id==='shot').notes[0].resolution.includes('watch face')&&saved.document.clips.find(c=>c.id==='next').noteDraft==='Draft for the next shot');
+ section.scrollIntoView({block:'nearest'});const bounds=field.getBoundingClientRect(),scroll=section.parentElement;
+ check('Notes fit full, compact and narrow inspectors without horizontal overflow',bounds.width>100&&bounds.width<=scroll.clientWidth&&scroll.scrollWidth<=scroll.clientWidth+1);
+ check('Notes render literal Unicode text without HTML injection or execution controls',!section.querySelector('script')&&!section.textContent.includes('Generate')&&!n.state.jobs.length);
+ return {checks};
+})()

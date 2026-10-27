@@ -1,0 +1,8 @@
+# Development material that Comfy Registry packages leave out.
+tests/
+promo/
+.native-test/
+docs/archive/
+__pycache__/
+*.pyc
+AGENTS.local.md

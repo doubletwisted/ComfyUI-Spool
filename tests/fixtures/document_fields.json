@@ -1,0 +1,58 @@
+{
+ "edit": [
+  "project",
+  "brief",
+  "fps",
+  "fpsExplicit",
+  "resolution",
+  "exportRange",
+  "clips",
+  "tailGap",
+  "videoTracks",
+  "videoTailGaps",
+  "disabledVideoTracks",
+  "audioClips",
+  "audioTracks",
+  "hiddenMediaIds",
+  "deletedTakeIds",
+  "deletedMediaIds"
+ ],
+ "records": [
+  "jobs",
+  "recoverableResults",
+  "media",
+  "importedWorkflows",
+  "clearedRenderIds"
+ ],
+ "view": [
+  "selected",
+  "selectedAudio",
+  "selection",
+  "takeSelection",
+  "frame",
+  "zoom",
+  "snap",
+  "muted",
+  "loop",
+  "trimSingle",
+  "viewerZoom",
+  "previewQuality",
+  "activeVideoTrack"
+ ],
+ "serverOwned": [
+  "jobs",
+  "recoverableResults"
+ ],
+ "undoSkips": [
+  "jobs",
+  "recoverableResults",
+  "media",
+  "importedWorkflows",
+  "clearedRenderIds",
+  "zoom",
+  "snap",
+  "muted",
+  "loop",
+  "previewQuality"
+ ]
+}

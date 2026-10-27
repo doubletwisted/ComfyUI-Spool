@@ -1,0 +1,70 @@
+# Deadline (experimental)
+
+Spool can render takes on a Thinkbox Deadline farm through
+[ComfyUI-Deadline-Plugin](https://github.com/doubletwisted/ComfyUI-Deadline-Plugin).
+Support is experimental: it relies on helper methods inside that plugin, so a
+plugin update can need a matching Spool update.
+
+## Setup
+
+1. Install ComfyUI-Deadline-Plugin on the ComfyUI that runs Spool, and its
+   Deadline plugin in your repository, as that project describes. Spool finds
+   `deadlinecommand` on PATH, or in Deadline 10's default Windows location.
+2. Keep the Spool project on storage the workers can read and write. Spool stages
+   each submission inside the project folder.
+3. Select the clip, click **Edit in Comfy**, add one **Submit to Deadline** node and
+   set its pool, group and worker restrictions. Click **Apply to clip**.
+4. **Generate**. The inspector names the route as **Deadline**.
+
+No changes to the Submit node, the worker plugin or the repository are needed.
+
+## What happens on the farm
+
+Spool submits one job per take, with execution-only batch and chunk sizes of one;
+the saved graph keeps its own settings. Each job carries a standard Deadline
+PreTaskScript and tags that identify the Spool submission and take.
+
+On the worker, that script:
+
+- checks the frozen workflow and input files against their recorded size and hash,
+- gives every task attempt its own output folder,
+- keeps the exact seeds Spool froze,
+- copies the outputs and writes a receipt listing them, with their hashes, before
+  the task completes.
+
+Job scripts follow Deadline's
+[pre- and post-job/task script](https://docs.thinkboxsoftware.com/products/deadline/10.4/1_User%20Manual/manual/job-scripts.html)
+contract. Submission files live under
+`<project output>/spool-submissions/<submissionId>/` and receipts under
+`spool-receipts/`.
+
+## Collecting results
+
+Spool checks each receipt's project, shot, take, submission and job identity, the
+reported files, their sizes and their SHA256 hashes. It copies the originals into
+the clip's folder before making review media. Then:
+
+- A completed job without a receipt waits for collection.
+- An invalid receipt is recorded once and cannot hide a later valid one.
+- A retried task stays inspectable but never replaces the accepted result or adds
+  a second take.
+- Failed or suspended jobs ask for attention in **Renders** and are never
+  resubmitted on their own.
+
+**Cancel request** cancels an owned job. If the connection drops after
+submission, **Find existing Deadline job** searches for the tagged job instead of
+submitting again; several matches need an operator. Progress comes from the
+worker's own reports and is not estimated.
+
+## Tested so far
+
+Real farm runs covered CPU image (LoadImage to SaveImage) and video (LoadVideo to
+SaveVideo, with audio) jobs, restarts of the coordinating ComfyUI, finishing
+while it was offline, and a retried task. Synthetic tests cover out-of-order
+arrival, corrupt files, ownership and missing outputs. VHS or custom savers on a
+farm, warm workers and simultaneous multi-worker races are untested.
+
+## Older jobs
+
+Pre-release versions of Spool submitted Deadline jobs through a patched Submit node
+and worker. Those jobs remain collectable; new installations need no patches.

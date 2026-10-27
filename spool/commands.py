@@ -1,0 +1,252 @@
+"""Small typed commands shared by human controls and external agents."""
+import copy
+import json
+import subprocess
+
+from . import attempts, farm, ledger, operations, requests, notes
+from .store import Conflict, linked
+
+
+def scope_check(project_id, scope, capability, clip_ids=(), takes=0):
+    if not isinstance(scope, dict) or scope.get("projectId") != project_id or capability not in scope.get("capabilities", []):
+        raise ValueError("Command requires explicit project scope and capability: " + capability)
+    if set(clip_ids) - set(scope.get("clipIds", [])):
+        raise ValueError("Command includes a shot outside its declared scope")
+    if takes and (type(scope.get("maxTakes")) is not int or takes > scope["maxTakes"]):
+        raise ValueError("Experiment exceeds the declared take budget")
+    if scope.get("maxConcurrent") is not None and (type(scope["maxConcurrent"]) is not int or scope["maxConcurrent"] < 1):
+        raise ValueError("Concurrency limit must be a positive integer")
+
+
+def status(store, project_id, clip_id=None, limit=50, offset=0):
+    if not 1 <= limit <= 100 or offset < 0:
+        raise ValueError("Choose a page size of 1-100 and nonnegative offset")
+    project = store.get(project_id)
+    shots = project["document"]["clips"]
+    if clip_id is not None:
+        shots = [c for c in shots if c["id"] == clip_id]
+        if not shots:
+            raise KeyError("Shot not found")
+    values = [{"id": c["id"], "name": c["name"], "notes": notes.entries(c), "workflowVersion": c.get("workflowVersion"),
+               "inputs": c.get("inputValues", {}), "bindings": c.get("bindings", []), "selectedTakeId": c.get("takeId"), "in": c.get("in"), "out": c.get("out"),
+               "totalTakes": len(c.get("takes", [])),
+               "takes": [{"id": t["id"], "generated": t.get("generated", False), "placeholder": t.get("placeholder", False),
+                          "media": {k: t["media"].get(k) for k in ("id", "kind", "width", "height", "duration", "fps", "frames", "audio", "poster", "file")}} for t in c.get("takes", [])[-50:]]} for c in shots[offset:offset + limit]]
+    experiments, feedback = store.recent_review(project_id)
+    return {"projectId": project_id, "revision": project["revision"], "brief": project["document"].get("brief", ""), "shots": values,
+            "audioClips": [{"id": c["id"], "name": c.get("name", "Audio"), "notes": notes.entries(c)} for c in project["document"].get("audioClips", [])],
+            "totalShots": len(shots), "nextOffset": offset + limit if offset + limit < len(shots) else None,
+            "jobs": project["document"]["jobs"][-50:], "experiments": experiments, "feedback": feedback,
+            "recoverableResults": project["document"].get("recoverableResults", [])[-50:]}
+
+
+def prepare_experiment(store, project_id, revision, arguments):
+    project = store.get(project_id)
+    if project["revision"] != revision:
+        raise Conflict("Project changed before experiment preparation")
+    mode = arguments.get("mode", "repeat")
+    if mode not in ("repeat", "explore"):
+        raise ValueError("Choose Repeat or Explore")
+    variants = arguments.get("variants")
+    if not isinstance(variants, list) or not 1 <= len(variants) <= 100:
+        raise ValueError("Supply 1-100 explicit variants")
+    resolved, items = [], []
+    for variant in variants:
+        clip = next((c for c in project["document"]["clips"] if c["id"] == variant.get("clipId")), None)
+        if not clip:
+            raise ValueError("Experiment references an unavailable shot")
+        capture = store.workflow(clip.get("workflowVersion"))
+        controls = {b["key"]: b for b in capture.get("bindings", [])}
+        values = variant.get("values", {})
+        if mode == "repeat" and values:
+            raise ValueError("Repeat keeps saved inputs; use Explore for changes")
+        if not isinstance(values, dict) or set(values) - set(controls):
+            raise ValueError("Map each variation to a verified bound literal control")
+        diffs = []
+        for key, value in values.items():
+            b = controls[key]; original = capture["prompt"][b["nodeId"]]["inputs"][b["input"]]
+            numeric_float = b.get("contract", {}).get("inputType") == "FLOAT" and type(original) in (int, float) and type(value) in (int, float)
+            if linked(original) or type(value) is not type(original) and not (type(original) is float and type(value) is int) and not numeric_float:
+                raise ValueError("Variation does not match its literal input type")
+            baseline = clip.get("inputValues", {}).get(key, original)
+            if baseline != value:
+                diffs.append({"key": key, "label": b.get("label", b["input"]), "before": baseline, "after": value})
+        count = variant.get("count", 1)
+        if type(count) is not int or not 1 <= count <= 16:
+            raise ValueError("Choose 1-16 takes per variant")
+        item = {"clipId": clip["id"], "count": count, "values": copy.deepcopy(values)}
+        if "shotInputs" in variant:
+            item["shotInputs"] = copy.deepcopy(variant["shotInputs"])
+        items.append(item)
+        resolved.append({"clipId": clip["id"], "workflowVersion": clip["workflowVersion"], "values": {**clip.get("inputValues", {}), **values}, "diffs": diffs, "count": count})
+    return {"intent": arguments.get("intent", ""), "mode": mode, "variants": resolved, "items": items, "takeCount": sum(i["count"] for i in items)}
+
+
+def execute(store, media, project_id, data):
+    action, arguments = data["action"], data.get("arguments", {})
+    identity, revision, actor = data["operationId"], data["revision"], data["actor"]
+    if not isinstance(identity, str) or not 1 <= len(identity) <= 200 or not isinstance(actor, str) or not 1 <= len(actor) <= 100 or type(revision) is not int:
+        raise ValueError("Supply operation ID, saved revision and actor")
+    scope = data.get("scope")
+    if action in ("prepare_experiment", "queue_experiment"):
+        # Queue replay is resolved by the exact frozen command envelope below.
+        scope_check(project_id, scope, "queue", [v["clipId"] for v in arguments.get("variants", [])], sum(v.get("count", 1) for v in arguments.get("variants", [])))
+        if action == "prepare_experiment":
+            return prepare_experiment(store, project_id, revision, arguments)
+        payload = store.operation_payload(identity)
+        if payload:
+            if payload.get("command") != data:
+                raise Conflict("Operation ID already belongs to another experiment")
+            return status(store, project_id)
+        preview = prepare_experiment(store, project_id, revision, arguments)
+        if scope.get("maxConcurrent") is not None:
+            active = store.active_attempts(project_id)
+            if active + preview["takeCount"] > scope["maxConcurrent"]:
+                raise ValueError("Experiment exceeds the declared outstanding-job limit")
+        project = store.get(project_id)
+        frozen = requests.prepare(store, media, project, preview["items"])
+        for _, request in frozen:
+            request["experimentId"] = identity
+        payload = {"revision": revision, "items": preview["items"], "actor": actor, "experiment": preview, "command": data}
+        store.accept_queue(identity, project_id, revision, payload, frozen, actor)
+        return status(store, project_id)
+    note_actions = {"add_note", "edit_note", "address_note", "reopen_note"}
+    capabilities = {"set_inputs": "inputs", "set_shot_inputs": "inputs", "apply_workflow": "workflow", "choose_take": "choose_take", "feedback": "feedback", "brief": "edit", "cancel": "cancel", "recover_submission": "recover", **{action: "notes" for action in note_actions}}
+    if action not in capabilities:
+        raise ValueError("Unknown typed command")
+    clip_id = arguments.get("clipId")
+    if action not in ("brief", "cancel", "recover_submission") and not clip_id:
+        raise ValueError("Supply an explicit shot ID for this command")
+    scope_check(project_id, scope, capabilities[action], [clip_id] if clip_id else [])
+    adopted = None
+    cancellation = None
+    send_cancellation = False
+    if action == "cancel" and store.operation(identity, project_id, data) is None:
+        attempt = store.attempt(arguments["attemptId"])
+        if attempt["project_id"] != project_id or attempt["clip_id"] not in scope.get("clipIds", []):
+            raise ValueError("Attempt is outside the cancellation scope")
+        if attempt["status"] not in ("intent", "waiting_for_host", "cancel_requested", "complete", "failed", "cancelled") and attempts.target_of(attempt["request"]) != attempts.CLOUD:
+            submission = store.submission_for(attempt["id"])
+            # Local attempts have no submission; the cancel policy decides for them below.
+            if attempts.target_of(attempt["request"], submission) == attempts.DEADLINE:
+                if not submission or not submission["external_id"]:
+                    raise ValueError("Claimed work needs an owned Deadline job; resolve uncertain submission first")
+                try:
+                    owner = farm.job_value(submission["external_id"], "SpoolSubmissionId")
+                except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+                    raise ValueError("Cancellation was not sent; retry Cancel request after the Deadline lookup recovers: " + str(error)) from error
+                if owner != submission["id"]:
+                    raise ValueError("Cancellation refused: external job ownership did not match; no cancellation was sent")
+                cancellation = (submission["id"], submission["external_id"])
+    if action == "recover_submission":
+        attempt = store.attempt(arguments["attemptId"])
+        if attempt["project_id"] != project_id or attempt["clip_id"] not in scope.get("clipIds", []):
+            raise ValueError("Submission is outside recovery scope")
+        submission = store.submission_for(attempt["id"])
+        if not submission:
+            raise ValueError("This attempt has no Deadline submission")
+        found = farm.submission_jobs(submission["id"])
+        if len(found) > 1:
+            raise Conflict("Multiple jobs match; operator resolution required")
+        if found:
+            if farm.job_value(found[0], "SpoolSubmissionId") != submission["id"] or farm.job_value(found[0], "SpoolAttemptId") != attempt["id"]:
+                raise ValueError("Deadline job identity failed ownership verification")
+            adopted = found[0]
+    def apply(db, document):
+        nonlocal send_cancellation
+        clips = [*document["clips"], *document.get("audioClips", [])] if action in note_actions else document["clips"]
+        clip = next((c for c in clips if c["id"] == clip_id), None)
+        if clip_id and not clip:
+            raise ValueError("Shot is no longer available")
+        if action in note_actions:
+            return notes.apply(clip, action, arguments, actor), True
+        if action in ("set_inputs", "set_shot_inputs"):
+            capture = store.recipe(project_id, clip.get("workflowVersion"), db)
+            if capture is None:
+                raise ValueError("Save an executable workflow to this clip first")
+        if action == "set_inputs":
+            controls = {b["key"]: b for b in capture.get("bindings", [])}
+            values = arguments["values"]
+            if not isinstance(values, dict) or set(values) - set(controls):
+                raise ValueError("Input is not bound in this captured recipe")
+            for key, value in values.items():
+                b = controls[key]; original = capture["prompt"][b["nodeId"]]["inputs"][b["input"]]
+                numeric_float = b.get("contract", {}).get("inputType") == "FLOAT" and type(original) in (int, float) and type(value) in (int, float)
+                if type(value) is not type(original) and not (type(original) is float and type(value) is int) and not numeric_float:
+                    raise ValueError("Input literal type changed")
+            clip.setdefault("inputValues", {}).update(values)
+        elif action == "set_shot_inputs":
+            bindings = {b["key"]: b for b in capture.get("bindings", [])}
+            for value in arguments["inputs"]:
+                binding = bindings.get(value["key"])
+                requests.validate_shot_input(binding, value)
+            clip["shotInputs"] = copy.deepcopy(arguments["inputs"])
+        elif action == "apply_workflow":
+            capture = store.recipe(project_id, arguments["workflowVersion"], db)
+            if capture is None:
+                raise ValueError("Captured workflow is outside this project")
+            operations.assign_workflow(clip, arguments["workflowVersion"], capture)
+        elif action == "choose_take":
+            projected = ledger.attach(copy.deepcopy(document), store.project_attempts(project_id, db))
+            choices = next(c for c in projected["clips"] if c["id"] == clip_id)["takes"]
+            take = next((t for t in choices if t["id"] == arguments["takeId"] and not t.get("placeholder")), None)
+            if not take:
+                raise ValueError("Take is unavailable for this shot")
+            operations.choose_take(document, clip, take["id"], take["media"]["frames"])
+        elif action == "feedback":
+            take_id = arguments["takeId"]
+            projected = ledger.attach(copy.deepcopy(document), store.project_attempts(project_id, db))
+            if not any(t["id"] == take_id for c in projected["clips"] if c["id"] == clip_id for t in c["takes"]):
+                raise ValueError("Feedback requires a stable take in this project")
+            if arguments.get("verdict") not in ("keep", "reject", "revise", "unrated"):
+                raise ValueError("Choose keep, reject, revise or unrated")
+            store.record_feedback(db, identity, project_id, take_id, actor, arguments)
+            return {"feedbackId": identity}, False
+        elif action == "brief":
+            document["brief"] = arguments["text"]
+        elif action == "cancel":
+            attempt = store.project_attempt(project_id, arguments["attemptId"], db)
+            if not attempt or attempt["clip_id"] not in scope.get("clipIds", []):
+                raise ValueError("Attempt is outside the cancellation scope")
+            submission = store.submission_for(attempt["id"], db)
+            target = attempts.target_of(json.loads(attempt["request"]), submission)
+            outcome = attempts.cancel_action(attempt["status"], target, bool(submission and submission["external_id"]))
+            if outcome == "refused":
+                if attempt["status"] in attempts.TERMINAL:
+                    raise ValueError("This job has already finished")
+                if target == attempts.LOCAL:
+                    raise ValueError("Cancel a running local render from ComfyUI's queue; Spool records the outcome Comfy reports")
+                raise ValueError("Claimed work needs an owned Deadline job; resolve uncertain submission first")
+            if outcome == "cancelled":
+                store.transition(attempt["id"], attempts.CANCELLED, db=db)
+                return {"attemptId": attempt["id"], "status": "cancelled"}, False
+            if target == attempts.CLOUD:
+                store.transition(attempt["id"], attempts.CANCEL_REQUESTED, db=db)
+                return {"attemptId": attempt["id"], "status": "cancel_requested", "target": "cloud"}, False
+            note = "Cancellation delivery is unconfirmed; refresh job status before any further action. No automatic repeat."
+            claimed = store.cancellation_claimed(db, attempt["id"])
+            if attempt["status"] != "cancel_requested" and not claimed:
+                if cancellation != (submission["id"], submission["external_id"]):
+                    raise Conflict("Deadline job changed during cancellation ownership lookup; retry Cancel request")
+                store.claim_cancellation(db, identity)
+                store.transition(attempt["id"], attempts.CANCEL_REQUESTED, error=note, db=db)
+                send_cancellation = True
+            elif claimed and attempt["status"] != "cancel_requested":
+                store.transition(attempt["id"], attempts.CANCEL_REQUESTED, error=note, db=db)
+            return {"attemptId": attempt["id"], "status": "cancel_requested", "jobId": submission["external_id"], "submissionId": submission["id"], "note": note}, False
+        elif action == "recover_submission":
+            if adopted:
+                store.adopt_submission_job(db, submission["id"], adopted)
+            return {"attemptId": attempt["id"], "jobId": adopted, "status": "adopted" if adopted else "submission_uncertain", "note": "No automatic resubmission"}, False
+        if clip:
+            clip["revision"] = clip.get("revision", 0) + 1
+        return {"clipId": clip_id, "action": action}, True
+    result = store.command(identity, project_id, revision, data, apply)
+    if send_cancellation:
+        try:
+            farm.fail_job(result["jobId"])
+        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+            store.finish_cancellation(identity, str(error))
+            raise
+        result = store.finish_cancellation(identity)
+    return result

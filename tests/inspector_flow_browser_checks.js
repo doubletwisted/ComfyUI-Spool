@@ -1,0 +1,51 @@
+(async()=>{
+ const w=window,d=w.document,n=w.spoolNative,$=id=>d.getElementById(id),checks=[],c=()=>n.state.clips.find(c=>c.id==='shot');
+ const check=(label,ok)=>{if(!ok)throw Error(label);checks.push(label);},wait=async fn=>{const end=Date.now()+30000;while(!await fn()){if(Date.now()>end)throw Error('Inspector wait: '+$('toast').textContent);await new Promise(r=>setTimeout(r,50));}};
+ const api=async(path,data)=>{const r=await w.fetch('/spool/api/'+path,{method:data?'POST':'GET',headers:{'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});const value=await r.json();if(!r.ok)throw Error(value.error);return value;};
+ n.selectClip('shot');if(!d.getElementById('editor').classList.contains('compact')&&w.innerWidth<=760)$('toggleInspector').click();await n.chooseTake('shot','s04');await n.flush();
+ const recipe=await api('workflows/'+c().workflowVersion);
+ recipe.prompt.noise={class_type:'ImageAddNoise',inputs:{image:['105:114',0],seed:42,strength:0}};recipe.prompt.save.inputs.images=['noise',0];
+ recipe.prompt.text={class_type:'CLIPTextEncode',inputs:{text:'A calm desert walk'}};recipe.prompt.duration={class_type:'PrimitiveFloat',inputs:{value:5}};
+ recipe.bindings.push({key:'prompt',nodeId:'text',input:'text',role:'positive',label:'Prompt'},{key:'duration',nodeId:'duration',input:'value',role:'duration',label:'Duration (seconds)'},{key:'seed',nodeId:'noise',input:'seed',role:'seed',label:'Seed'});
+ await api('projects/'+n.projectKey+'/capture/shot',{revision:n.revision,capture:recipe});await n.poll();n.selectClip('shot');
+ check('A single quiet workflow row replaces the generation metadata block',$('inspectorContent').querySelector('.clip-workflow-heading').textContent.includes('Clip workflow')&&!d.querySelector('.generation-base'));
+ check('Workflow actions stay together above direct inputs',!$('applyClipWorkflow')&&!$('useCurrentTake')&&!!$('editClipWorkflow'));
+ check('Redundant summary, readiness, Advanced and creative buttons are absent',!d.querySelector('.generation-summary,.workflow-readiness,.workflow-advanced,.creative-actions'));
+ check('Prompt and duration remain directly editable',d.querySelector('[data-native-control="1"]').value==='A calm desert walk'&&d.querySelector('[data-native-control="2"]').value==='5');
+ const seed=d.querySelector('[data-native-control="3"]'),mode=d.querySelector('[data-seed-mode]');
+ check('Seed behavior is beside its exact seed field',seed.closest('.seed-controls')===mode.parentElement&&[...mode.options].map(o=>o.text).join(',')==='Fixed,Increment,Decrement,Randomize');
+ check('Takes is clearly labelled beside a compact Generate action',$('nativeCount').parentElement.textContent.includes('Takes')&&$('generate').getBoundingClientRect().width<$('generate').parentElement.getBoundingClientRect().width*.7);
+ const reload=$('reloadTakeWorkflow'),edit=$('editClipWorkflow'),reloadBounds=reload.getBoundingClientRect(),editBounds=edit.getBoundingClientRect();
+ check('Reload workflow from take is beside Edit in Comfy and fits the inspector',reload.textContent==='Reload workflow from take'&&!reload.disabled&&reload.previousElementSibling===edit&&Math.abs(reloadBounds.top-editBounds.top)<1&&reloadBounds.right<=$('inspectorContent').getBoundingClientRect().right+1);
+ $('openWorkflow').click();check('Reload has no redundant clip-menu entry',![...d.querySelectorAll('[role=menuitem]')].some(b=>/Reset from take|Reload workflow from take/.test(b.textContent)));d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+ check('Image target uses the available input width',d.querySelector('.image-input-target').getBoundingClientRect().width>=d.querySelector('.image-input').getBoundingClientRect().width*.9);
+ const imageKey=c().bindings[0].key,original=c().inputValues[imageKey],takes=c().takes.length,clips=n.state.clips.length;
+ const file=async(name)=>new w.File([await w.fetch('/spool/api/input/'+name).then(r=>r.blob())],name,{type:'image/png'});
+ const replacement=await file('take-setup-s15.png'),transfer=new w.DataTransfer();transfer.items.add(replacement);
+ d.querySelector('.image-input-target').focus();d.querySelector('[data-image-input]').dispatchEvent(new w.ClipboardEvent('paste',{clipboardData:transfer,bubbles:true,cancelable:true}));
+ await wait(()=>c().inputValues[imageKey]!==original&&$('toast').textContent.includes('replaced'));await n.flush();const pasted=c().inputValues[imageKey];
+ check('Paste uploads the image into the bound workflow input',pasted.startsWith('spool-')&&decodeURIComponent(d.querySelector('.native-source-preview').src).endsWith(pasted));
+ check('Pasting an input creates no timeline clip or take',n.state.clips.length===clips&&c().takes.length===takes);
+ n.undo();await n.flush();check('Image replacement is undoable',c().inputValues[imageKey]===original);n.redo();await n.flush();check('Redo restores the exact uploaded file',c().inputValues[imageKey]===pasted);
+ const red=await file('take-setup-s04.png'),drop=new w.DataTransfer();drop.items.add(red);d.querySelector('[data-image-input]').dispatchEvent(new w.DragEvent('drop',{dataTransfer:drop,bubbles:true,cancelable:true}));
+ await wait(()=>c().inputValues[imageKey]!==pasted);await n.flush();check('Drop replaces the input without adding timeline clips',n.state.clips.length===clips&&c().inputValues[imageKey]!==original);
+ const dropped=c().inputValues[imageKey],picker=d.querySelector('[data-image-file]');picker.files=transfer.files;picker.dispatchEvent(new w.Event('change',{bubbles:true}));await wait(()=>c().inputValues[imageKey]!==dropped);await n.flush();
+ check('File selection uses the same image replacement path',c().inputValues[imageKey].startsWith('spool-'));
+ const set=(field,value)=>{field.value=value;field.dispatchEvent(new w.Event('change',{bubbles:true}));};
+ set(d.querySelector('[data-native-control="3"]'),'42');set(d.querySelector('[data-seed-mode]'),'increment');set($('nativeCount'),'2');await n.flush();
+ const before=new Set(n.state.jobs.map(j=>j.id));$('generate').click();await wait(()=>n.dialogRoot.getElementById('generationReviewQueue'));
+ check('Batch review exposes the exact incremental seeds',n.dialogRoot.getElementById('modal').textContent.includes('Seed: 43')&&n.dialogRoot.getElementById('modal').textContent.includes('Seed: 44'));
+ const originalFetch=w.fetch;let lost=false;
+ try{w.fetch=async(...args)=>{const response=await originalFetch.apply(w,args);if(String(args[0]).endsWith('/queue')&&!lost){lost=true;throw Error('QA lost queue acceptance');}return response;};await n.dialogRoot.getElementById('generationReviewQueue').onclick();}
+ finally{w.fetch=originalFetch;}
+ check('An unconfirmed submission keeps the seed unchanged',lost&&String(c().inputValues.seed.__spool_int__||c().inputValues.seed)==='42');
+ n.dialogRoot.getElementById('generationReviewCancel').click();$('showQueue').click();await n.dialogRoot.getElementById('retryQueue').onclick();n.dialogRoot.getElementById('closeRenders').click();await n.flush();await wait(async()=>{await n.poll();return n.state.jobs.filter(j=>!before.has(j.id)).length===2&&n.state.jobs.filter(j=>!before.has(j.id)).every(j=>j.status==='complete');});
+ check('Successful submission advances the visible seed once',String(c().inputValues.seed.__spool_int__||c().inputValues.seed)==='44');
+ const jobs=n.state.jobs.filter(j=>!before.has(j.id)),attempts=await Promise.all(jobs.map(j=>api('attempts/'+j.id)));
+ check('Queue retry retains exactly two reviewed requests',jobs.length===2);
+ check('Actual CPU requests use the reviewed seeds',attempts.map(a=>String(a.request.inputValues.seed)).join(',')==='43,44');
+ const generated=c().takes.filter(t=>t.generated).at(-1),img=new w.Image();img.src='/spool/media/'+n.projectKey+'/'+generated.media.file;await img.decode();const canvas=d.createElement('canvas');canvas.width=img.width;canvas.height=img.height;const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0);const pixel=ctx.getImageData(0,0,1,1).data;
+ check('A real CPU render uses the replacement blue image',pixel[2]>240&&pixel[0]<15&&pixel[1]<15);
+ check('Generating preserves the selected edit',c().takeId==='s04');
+ return {checks};
+})()

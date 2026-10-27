@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {applyGraphInputs,captureWidgetBindings} from '../web/graph-inputs.js';
+const widget=(name,value)=>({name,value}),node=(id,type,widgets=[],inputs=[])=>({id,type,widgets,inputs,serialize(){return {widgets_values:this.widgets.filter(w=>w.options?.serialize!==false).map(w=>w.value)};}});
+const graph=(nodes,links=[],inputs=[])=>{const g={nodes,links:new Map(links.map(l=>[l.id,l])),inputs,getNodeById:id=>nodes.find(n=>String(n.id)===String(id))};for(const n of nodes)n.graph=g;return g;};
+const parent=node(105,'Subgraph',[widget('prompt','original'),widget('duration',5)]),inner=node(104,'Generate',[],[{name:'prompt',link:1}]),duration=node(111,'PrimitiveFloat',[],[{name:'value',link:2}]);
+parent.subgraph=graph([inner,duration],[{id:1,origin_id:'-10',origin_slot:0},{id:2,origin_id:-10,origin_slot:1}],[{name:'prompt'},{name:'duration'}]);
+const size=node(140,'PrimitiveInt',[widget('value',512)]),resize=node(132,'Resize',[],[{name:'width',link:3}]),flat=node('flat:42','Seed',[widget('seed',12)]),root=graph([parent,size,resize,flat],[{id:3,origin_id:140,origin_slot:0}]);
+applyGraphInputs(root,[{nodeId:'105:104',input:'prompt',value:'edited'},{nodeId:'105:111',input:'value',value:8},{nodeId:'132',input:'width',value:1024},{nodeId:'flat:42',input:'seed',value:17}]);
+assert.equal(parent.widgets[0].value,'edited');assert.equal(parent.widgets[1].value,8);assert.equal(size.widgets[0].value,1024);assert.equal(flat.widgets[0].value,17);
+const bindings=captureWidgetBindings(root,{'105:104':{inputs:{prompt:'edited',images:['114',0]}},'105:111':{inputs:{value:8}},132:{inputs:{width:1024}},'flat:42':{inputs:{seed:17}}});
+assert.deepEqual(bindings,[{nodeId:'132',input:'width',widgetNodeId:'140',widgetName:'value',widgetIndex:0},{nodeId:'105:104',input:'prompt',widgetNodeId:'105',widgetName:'prompt',widgetIndex:0},{nodeId:'105:111',input:'value',widgetNodeId:'105',widgetName:'duration',widgetIndex:1},{nodeId:'flat:42',input:'seed',widgetNodeId:'flat:42',widgetName:'seed',widgetIndex:0}]);
+assert.throws(()=>applyGraphInputs(root,[{nodeId:'105:missing',input:'prompt',value:'wrong'}]),/missing/);
+assert.throws(()=>applyGraphInputs(root,[{nodeId:'105:104',input:'nonexistent',value:'wrong'}]),/missing/);
+console.log('Editable graph controls: exposed subgraphs, primitives, flat execution IDs and safe rejection passed.');

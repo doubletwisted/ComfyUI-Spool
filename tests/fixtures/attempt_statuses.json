@@ -1,0 +1,115 @@
+{
+ "pending": [
+  "cancel_requested",
+  "collecting",
+  "collection_pending",
+  "dispatching",
+  "farm_attention",
+  "farm_queued",
+  "farm_running",
+  "intent",
+  "queued",
+  "running",
+  "submission_uncertain",
+  "submitting",
+  "uncertain",
+  "waiting_for_host"
+ ],
+ "terminal": [
+  "cancelled",
+  "complete",
+  "failed"
+ ],
+ "cancel": [
+  {
+   "status": "intent",
+   "target": "local",
+   "externalJob": false,
+   "action": "cancelled"
+  },
+  {
+   "status": "waiting_for_host",
+   "target": "cloud",
+   "externalJob": false,
+   "action": "cancelled"
+  },
+  {
+   "status": "uncertain",
+   "target": "local",
+   "externalJob": false,
+   "action": "cancelled"
+  },
+  {
+   "status": "queued",
+   "target": "local",
+   "externalJob": false,
+   "action": "refused"
+  },
+  {
+   "status": "running",
+   "target": "local",
+   "externalJob": false,
+   "action": "refused"
+  },
+  {
+   "status": "collection_pending",
+   "target": "local",
+   "externalJob": false,
+   "action": "refused"
+  },
+  {
+   "status": "uncertain",
+   "target": "cloud",
+   "externalJob": false,
+   "action": "requested"
+  },
+  {
+   "status": "running",
+   "target": "cloud",
+   "externalJob": false,
+   "action": "requested"
+  },
+  {
+   "status": "cancel_requested",
+   "target": "cloud",
+   "externalJob": false,
+   "action": "requested"
+  },
+  {
+   "status": "submission_uncertain",
+   "target": "deadline",
+   "externalJob": false,
+   "action": "refused"
+  },
+  {
+   "status": "uncertain",
+   "target": "deadline",
+   "externalJob": false,
+   "action": "refused"
+  },
+  {
+   "status": "farm_running",
+   "target": "deadline",
+   "externalJob": true,
+   "action": "requested"
+  },
+  {
+   "status": "complete",
+   "target": "cloud",
+   "externalJob": false,
+   "action": "refused"
+  },
+  {
+   "status": "failed",
+   "target": "deadline",
+   "externalJob": true,
+   "action": "refused"
+  },
+  {
+   "status": "cancelled",
+   "target": "local",
+   "externalJob": false,
+   "action": "refused"
+  }
+ ]
+}

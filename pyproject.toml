@@ -1,0 +1,30 @@
+[project]
+name = "spool-timeline"
+version = "0.1.0"
+description = "A video timeline studio inside ComfyUI: cut clips, generate takes with your own workflows locally or on Comfy Cloud, and choose the take that fits each shot."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Dominik Bargiel", email = "dominikbargiel97@gmail.com" }]
+requires-python = ">=3.11"
+dependencies = ["comfy-sdk>=0.5,<1"]
+keywords = ["comfyui", "video", "timeline", "editor", "generation", "takes"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Video :: Non-Linear Editor",
+]
+
+[project.urls]
+Repository = "https://github.com/doubletwisted/ComfyUI-Spool"
+"Bug Tracker" = "https://github.com/doubletwisted/ComfyUI-Spool/issues"
+
+[tool.comfy]
+PublisherId = "doubletwisted"
+DisplayName = "Spool - Video Timeline"
+Icon = "https://raw.githubusercontent.com/doubletwisted/ComfyUI-Spool/main/docs/images/icon.png"
+requires-comfyui = ">=0.39.0"

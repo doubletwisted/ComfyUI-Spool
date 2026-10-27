@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.log
+node_modules/
+.native-test/
+*.tmp.html
+*.tmp.mjs
+.worktrees/
+
+# Kept on the maintainer's machine only.
+/AGENTS.local.md
+/docs/archive/
+/promo/
+/demo/

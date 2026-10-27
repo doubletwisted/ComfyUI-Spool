@@ -1,0 +1,14 @@
+* text=auto
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.cjs text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+# Built from QA captures by tests/build_builtin_captures.py.
+ui/builtin-captures.json linguist-generated=true
+# Development material stays out of source archives and release packages.
+tests/ export-ignore
+.native-test/ export-ignore

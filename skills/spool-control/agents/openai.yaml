@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spool Control"
+  short_description: "Inspect, edit, generate and review Spool projects"
+  default_prompt: "Use $spool-control to inspect my project and carry out the requested editing or generation task."

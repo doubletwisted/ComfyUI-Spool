@@ -1,0 +1,59 @@
+# Changelog
+
+All notable changes to Spool are recorded here. Versions follow
+[semantic versioning](https://semver.org/).
+
+## 0.1.0 (unreleased)
+
+First public release.
+
+### Studio
+
+- A full-screen video studio opened from **Open Spool ↗** in ComfyUI's top bar.
+  Ordinary workflows need no Spool nodes or graph changes.
+- Timeline editing with video tracks, linked clip audio and a soundtrack lane:
+  trim, ripple, roll, slip, slide, split, duplicate (Alt-drag), disable, snapping,
+  box selection and undo/redo.
+- Takes: every clip collects candidate results; review them in Source or
+  side by side, choose the take used in the edit, and remove or permanently
+  delete takes. Copy files into a clip's folder to add them as takes.
+- Projects live in self-contained folders (a project file plus media), can be
+  opened from shared storage, downloaded and imported.
+- Export the sequence, a range or selected clips to MP4 with an audio mix, or
+  export a single frame.
+- Clip notes, a keyboard shortcut sheet, a non-blocking Renders panel and a
+  layout that adapts to laptop screens.
+
+### Generation
+
+- Add workflows from a curated library of built-in templates, the current Comfy
+  graph or a saved workflow file. Spool captures an immutable recipe and exposes
+  the workflow's key inputs (prompt, seed, duration, size, sources) on the clip.
+- **Edit in Comfy** opens the clip's original workflow; **Apply to clip** brings
+  changes back, including media added in Comfy.
+- Generate on the local ComfyUI, on Comfy Cloud, or on a Thinkbox Deadline farm
+  (experimental, through ComfyUI-Deadline-Plugin). Every result is collected with
+  a durable receipt; interrupted work is recovered without repeating it.
+- Seed modes (fixed, increment, decrement, randomize) with exact 64-bit seeds.
+
+### Automation
+
+- A scoped command API and CLI (`python -m spool`) for agents and scripts, with
+  explicit project, clip, capability and budget limits, plus the
+  `skills/spool-control` agent skill.
+
+### Documentation
+
+- A user guide, agent and Deadline docs, and contributor notes.
+
+### Requirements and security
+
+- Python 3.11+, ffmpeg and ffprobe on PATH; tested with ComfyUI 0.42.1 and
+  frontend 1.55.18. Missing requirements are reported in the studio and the
+  health route. Comfy Cloud needs the `comfy-sdk` package and a Comfy plan that
+  allows API keys; free accounts can run Cloud workflows as Partner Nodes on their
+  own ComfyUI.
+- `SPOOL_CREDENTIALS` moves the saved Comfy Cloud key to another folder.
+- Changes are accepted only from Spool's own pages or local tools; actions that
+  reach beyond project files answer only the computer running Spool. See
+  [SECURITY.md](SECURITY.md).
