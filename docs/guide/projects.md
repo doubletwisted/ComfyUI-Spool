@@ -59,7 +59,7 @@ Run this from the Spool folder with Python 3.11+, aiohttp and Pillow installed,
 and ffmpeg on PATH. Inside `ComfyUI/custom_nodes`, it uses the same settings
 folder as the ComfyUI extension (`ComfyUI/user/spool`). Options: `--port`,
 `--storage` (or `SPOOL_STORAGE`) for the settings folder, and `--host`. See
-[SECURITY.md](../../SECURITY.md) before changing the host.
+[Security and network access](security.md) before changing the host.
 
 Editing, import, export and queueing work while ComfyUI is stopped. Queued renders
 wait until a ComfyUI with Spool starts.

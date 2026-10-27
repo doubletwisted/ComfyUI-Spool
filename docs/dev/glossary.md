@@ -1,7 +1,7 @@
 # Spool glossary
 
 Terms used in code, docs and architecture reviews. This file fixes vocabulary;
-module contracts are in [docs/dev](docs/dev/architecture.md).
+module contracts are in [architecture.md](architecture.md).
 
 ## Editing
 
@@ -82,4 +82,4 @@ module contracts are in [docs/dev](docs/dev/architecture.md).
   beyond JavaScript's safe range (`spool/wire.py` and `ui/wire.js`).
 - **Local control**: the request guard in `spool/routes.py`. Mutations need a
   same-origin page or an origin-less local tool; routes that reach beyond project
-  files also need a loopback peer and host name. See [SECURITY.md](SECURITY.md).
+  files also need a loopback peer and host name. See [Security and network access](../guide/security.md).

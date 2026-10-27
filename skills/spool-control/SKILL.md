@@ -15,7 +15,7 @@ For creative work, distinguish composition, subject identity, movement, pacing a
 
 ## Connect and identify
 
-Find the checkout from workspace instructions. Read its `docs/automation.md` for the current API and `docs/guide/` when behavior is unclear. This skill ships in `skills/spool-control` in the checkout; avoid depending on a particular machine path.
+Find the checkout from workspace instructions. Read its `docs/guide/automation.md` for the current API and `docs/guide/` when behavior is unclear. This skill ships in `skills/spool-control` in the checkout; avoid depending on a particular machine path.
 
 Use the user's host URL or the active Spool tab's origin. Query `/spool/api/health`, `/spool/api/capabilities?types=` and `/spool/api/projects` to verify the service and project. The empty `types` query avoids downloading full node definitions; fetch required definitions when preparing a graph. Resolve project and clip IDs before writing. A transient editor focus is context, not sufficient authority to modify an ambiguous project. Prefer an available Spool connector that exposes these contracts; otherwise use the CLI/HTTP API. Follow the environment's browser tools for visual work.
 

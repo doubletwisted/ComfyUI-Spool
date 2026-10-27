@@ -6,8 +6,10 @@
   seeds, Renders, Comfy Cloud and clip notes.
 - [Projects and storage](projects.md): project folders, external takes, saving,
   running without ComfyUI and diagnostics.
-
-Agents and scripts: [Agents and automation](../automation.md). Render farms:
-[Deadline](../deadline.md).
+- [Agents and automation](automation.md): the scoped command API, the CLI and
+  the agent skill.
+- [Deadline](deadline.md): rendering takes on a Thinkbox Deadline farm.
+- [Security and network access](security.md): who can use Spool, and exposing
+  it on a network.
 
 Press the keyboard button in the timeline toolbar for the full list of shortcuts.

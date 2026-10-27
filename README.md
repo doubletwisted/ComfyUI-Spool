@@ -8,59 +8,42 @@
 <p align="center"><b>A video timeline studio inside ComfyUI</b></p>
 
 <p align="center">
-  <img alt="Comfy Registry: spool-timeline" src="https://img.shields.io/badge/Comfy_Registry-spool--timeline-ffb52e?labelColor=101113">
-  <img alt="ComfyUI 0.39 or newer" src="https://img.shields.io/badge/ComfyUI-0.39%2B-ecedf0?labelColor=101113">
-  <img alt="Python 3.11 or newer" src="https://img.shields.io/badge/Python-3.11%2B-ecedf0?labelColor=101113">
-  <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/License-GPL--3.0-ecedf0?labelColor=101113"></a>
+  <a href="docs/guide/README.md"><img alt="User guide" src="https://img.shields.io/badge/User_guide-101113?style=flat&logo=gitbook&logoColor=white"></a>
+  <a href="CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-101113?style=flat&logo=keepachangelog&logoColor=white"></a>
+  <a href="https://github.com/sponsors/doubletwisted"><img alt="Sponsor" src="https://img.shields.io/badge/Sponsor-101113?style=flat&logo=githubsponsors&logoColor=white"></a>
+  <a href="https://buymeacoffee.com/doubletwisted"><img alt="Buy me a coffee" src="https://img.shields.io/badge/Buy_me_a_coffee-ffb52e?style=flat&logo=buymeacoffee&logoColor=101113"></a>
 </p>
 
-Spool is a video editor that lives inside ComfyUI. Lay out shots on a timeline,
-generate takes for each shot with your own workflows, review them side by side
-and choose the take that goes in the edit. Takes can render on this computer, on
-Comfy Cloud, or on a Thinkbox Deadline farm.
+Spool turns ComfyUI into a place to make a film, not just a shot. Lay out shots
+on a timeline, generate takes for each one with your own workflows, compare
+them, and choose the take that goes in the edit. Takes render on this computer,
+on Comfy Cloud or on a Deadline farm.
 
-Your workflows work as they are: Spool needs no custom nodes in the graph.
+Your workflows stay as they are: Spool needs no custom nodes in the graph.
 
 ![The Spool studio: a three-shot sequence, with two takes of the selected shot below the viewer and its workflow inputs on the right](docs/images/studio.webp)
 
-Version 0.1.0 is an early release. It is developed and tested on Windows.
-
-## What you can do
-
-- **Edit a sequence.** Video tracks, linked clip audio and a soundtrack lane.
-  Trim, ripple, roll, slip, slide, split, duplicate and disable clips, with
-  snapping, box selection and undo.
-- **Generate takes per shot.** Add a built-in workflow, the graph open in
-  ComfyUI or a workflow file. Spool exposes its main inputs (sources, prompt,
-  seed, duration, size) on the clip, and each Generate adds new takes.
-- **Review and choose.** Scrub takes, compare two side by side, then **Use take**.
-  New results never replace the take in the edit on their own.
-- **Edit the workflow in ComfyUI.** **Edit in Comfy** opens the clip's workflow
-  in a ComfyUI tab; **Apply to clip** brings your changes back.
-- **Keep everything in a project folder.** Footage, inputs, takes and the edit
-  live together and can sit on shared storage.
-- **Export** the sequence, a range or a single frame.
-- **Automate** with a scoped command API, a CLI and an agent skill.
+> [!NOTE]
+> Spool 0.1.0 is an early release, developed and tested on Windows. Expect rough
+> edges, and please [report them](https://github.com/doubletwisted/ComfyUI-Spool/issues/new?template=bug_report.yml).
 
 ## Requirements
 
-- ComfyUI 0.39.0 or newer. Tested with ComfyUI 0.42.1 and frontend 1.55.18.
-- Python 3.11 or newer. On older Python, Spool disables itself and logs why.
-- `ffmpeg` and `ffprobe` on the PATH of the process running ComfyUI. They are
-  used for import, previews and export.
-- For Comfy Cloud: the `comfy-sdk` package from `requirements.txt` and a Comfy
-  API key.
+- ComfyUI 0.39.0 or newer (tested with 0.42.1 and frontend 1.55.18)
+- Python 3.11 or newer
+- `ffmpeg` and `ffprobe` on the PATH of the process running ComfyUI
+- For Comfy Cloud: a Comfy API key
 
 If something is missing, the studio shows **Setup needed** in its top bar and
 ComfyUI's startup log says what to install.
 
 ## Install
 
-**ComfyUI Manager or the Comfy Registry:** search for **Spool** and install
-`spool-timeline`. With comfy-cli: `comfy node install spool-timeline`.
+**ComfyUI Manager:** search for **Spool** and install `spool-timeline`. With
+comfy-cli: `comfy node install spool-timeline`.
 
-**Manually:** clone into `ComfyUI/custom_nodes` and install the dependency with
-the Python that runs ComfyUI:
+**Manually:** clone into `custom_nodes` and install the requirements with the
+Python that runs ComfyUI:
 
 ```powershell
 cd ComfyUI/custom_nodes
@@ -68,102 +51,120 @@ git clone https://github.com/doubletwisted/ComfyUI-Spool Spool
 python -m pip install -r Spool/requirements.txt
 ```
 
-On the Windows portable build, use `python_embeded\python.exe -m pip install ...`
-instead of `python`. Restart ComfyUI and reload the browser tab.
+On the Windows portable build, use `python_embeded\python.exe` instead of
+`python`. Restart ComfyUI and reload the browser tab.
 
 ## Quick start
 
-1. Click **Open Spool ↗** in ComfyUI's top bar. The studio opens in its own tab.
-2. Click **New project**, or choose **Project → Open project folder…**.
-3. Open **Workflows** in the left sidebar and click a card to add a shot. You can
-   also drag a ComfyUI workflow tab or a workflow `.json` file onto the timeline,
-   or import footage under **Media**.
-4. Select the clip. Fill in its inputs in the inspector on the right: choose a
-   source image or video, write the prompt, set the duration and seed.
-5. Set the number of **Takes** and click **Generate**. Follow progress under
-   **Renders**.
-6. Review the new takes in **Source**, compare them, and click **Use take** to put
-   one in the edit.
-7. Trim and arrange the clips, add a soundtrack, then **Export** an MP4.
+1. Click **Open Spool ↗** in ComfyUI's top bar, then **New project**.
+2. Open **Workflows** and click a card to add a shot. You can also drag a ComfyUI
+   workflow tab or a `.json` file onto the timeline, or import footage under
+   **Media**.
+3. Select the clip and fill in its inputs on the right: source, prompt, duration,
+   seed.
+4. Set the number of **Takes** and click **Generate**.
+5. Review the takes, compare two side by side, and click **Use take**.
+6. Trim and arrange the clips, add a soundtrack and **Export**.
 
-The [user guide](docs/guide/README.md) covers each step in detail.
+## Documentation
 
-## Where your work is saved
+- [Editing](docs/guide/editing.md): the timeline, audio, takes, media and export,
+  including OpenTimelineIO for Resolve and Premiere Pro
+- [Generation](docs/guide/generation.md): workflows, clip inputs, Edit in Comfy,
+  Renders and Comfy Cloud
+- [Projects and storage](docs/guide/projects.md): project folders, saving and
+  running without ComfyUI
+- [Agents and automation](docs/guide/automation.md): the scoped command API, the
+  CLI and the [`spool-control` skill](skills/spool-control/SKILL.md)
+- [Deadline](docs/guide/deadline.md): rendering takes on a Thinkbox Deadline farm
+  (experimental)
+- [Security and network access](docs/guide/security.md)
 
-Each project is a folder. It holds `project.spool` (the edit, workflow versions
-and render records), the inputs you add, and one output folder per clip with its
-takes. Open a project folder from another computer, or from a network share, to
-continue working. See [Projects and storage](docs/guide/projects.md).
+## FAQ
 
-Spool's own settings and the list of opened projects are kept in
-`ComfyUI/user/spool`. Set `SPOOL_STORAGE` to move them. The Comfy Cloud API key is
-stored outside every project, in `%LOCALAPPDATA%\Spool` on Windows and
-`~/.config/Spool` elsewhere.
+<details>
+<summary>Do my workflows need Spool nodes?</summary>
 
-## Comfy Cloud
+No. Spool reads an ordinary workflow, exposes its main inputs on the clip and
+leaves the graph alone. **Edit in Comfy** opens the clip's workflow in a ComfyUI
+tab, and **Apply to clip** brings your changes back.
+</details>
 
-Cloud workflows in the library run on Comfy Cloud by default. Enter your key in
-**Project → Comfy settings…**, or set `COMFY_API_KEY`. Cloud runs and
-Partner Nodes spend credits from that key. Spool does not need a local GPU or a
-running ComfyUI to render on Cloud.
+<details>
+<summary>Will a new render replace the take in my edit?</summary>
 
-Running on Comfy Cloud needs a Comfy plan that allows API keys. With a free
-account, set **Execute on** to **Local ComfyUI · Partner Nodes**: the same
-workflow then runs on your ComfyUI and pays for the Partner Node with Comfy
-credits. See [Generation](docs/guide/generation.md#comfy-cloud).
+No. New results are added as takes. Only **Use take** changes what plays in the
+edit.
+</details>
 
-## Deadline (experimental)
+<details>
+<summary>Do I need a GPU?</summary>
 
-A workflow that contains one **Submit to Deadline** node from
-[ComfyUI-Deadline-Plugin](https://github.com/doubletwisted/ComfyUI-Deadline-Plugin)
-renders on your farm, one job per take. Results come back with the same checks as
-local renders. See [Deadline](docs/deadline.md).
+Not for Comfy Cloud: Cloud renders need neither a local GPU nor a running
+ComfyUI. Local renders use the GPU of the ComfyUI that Spool runs in.
+</details>
 
-## Run Spool without ComfyUI
+<details>
+<summary>Can I use Comfy Cloud with a free account?</summary>
 
-From the Spool folder, with Python, aiohttp and Pillow installed:
+Running on Comfy Cloud needs a plan that allows API keys. With a free account,
+set **Execute on** to **Local ComfyUI · Partner Nodes**: the workflow runs on your
+ComfyUI and pays for Partner Nodes with Comfy credits. See
+[Comfy Cloud](docs/guide/generation.md#comfy-cloud).
+</details>
 
-```powershell
-python -m spool            # http://127.0.0.1:8190/spool/
-```
+<details>
+<summary>Where is my work saved?</summary>
 
-Editing, import and export work while ComfyUI is stopped. Save your ComfyUI
-launcher in **Project → Comfy settings…** and Spool can start it for you. Use `--port` to change
-the port and `--storage` (or `SPOOL_STORAGE`) to choose the settings folder.
+Each project is a folder holding `project.spool`, the inputs you add and one
+folder of takes per clip. Open it from another computer or a network share to
+continue. Spool's own settings live in `ComfyUI/user/spool`; the Comfy Cloud key
+is stored outside every project. See [Projects and storage](docs/guide/projects.md).
+</details>
 
-## Agents and scripts
+<details>
+<summary>Can I edit while ComfyUI is stopped?</summary>
 
-Agents and scripts drive Spool through the same backend as the studio: inspect
-shots, change inputs, edit the timeline, queue a bounded number of takes and
-complete clip notes. Every command names its project, clips, capabilities and
-take budget. See [Agents and automation](docs/automation.md) and the
-[`spool-control` skill](skills/spool-control/SKILL.md).
+Yes. Run `python -m spool` from the Spool folder and open
+`http://127.0.0.1:8190/spool/`. Editing, import and export work without ComfyUI,
+and Spool can start your ComfyUI for you. See
+[Running without ComfyUI](docs/guide/projects.md#running-without-comfyui).
+</details>
 
-## Known limitations
+<details>
+<summary>Which workflows does Spool understand?</summary>
 
-- Developed and tested on Windows. Reveal in Explorer and Open clip folder are
-  Windows only; macOS and Linux are untested.
-- Spool exposes inputs it can identify with confidence. Anything else stays in
-  the workflow's saved settings, editable through **Edit in Comfy**.
-- Spool stages files for LoadImage, LoadImageMask, LoadAudio, LoadVideo and
-  VHS_LoadVideo. Workflows with other file loaders need those files in place.
-- Results are collected from SaveImage, PreviewImage, SaveVideo and
-  VHS_VideoCombine.
-- A render lost mid-run is not resumed. Spool marks it uncertain and never
-  re-renders on its own.
+Spool stages files for LoadImage, LoadImageMask, LoadAudio, LoadVideo and
+VHS_LoadVideo, and collects results from SaveImage, PreviewImage, SaveVideo and
+VHS_VideoCombine. Inputs it cannot identify with confidence stay in the
+workflow's saved settings, editable through **Edit in Comfy**. See
+[Limitations](docs/guide/generation.md#limitations).
+</details>
 
-More detail: [limitations](docs/guide/generation.md#limitations).
+<details>
+<summary>Does it work on macOS or Linux?</summary>
 
-## Security
+It is untested there. Spool is developed on Windows, and **Reveal in Explorer**
+and **Open clip folder** are Windows only.
+</details>
 
-Spool has no user accounts. Anyone who can reach ComfyUI's port can use it, so
-start ComfyUI with `--listen` only on networks you trust. [SECURITY.md](SECURITY.md)
-explains what each request may do and how to report a vulnerability.
+<details>
+<summary>Is it safe to run ComfyUI with <code>--listen</code>?</summary>
 
-## Contributing
+Only on a network you trust. Spool has no user accounts, so anyone who can reach
+ComfyUI's port can open and change projects and queue renders on your key. See
+[Security and network access](docs/guide/security.md).
+</details>
 
-Development setup, the test gate and browser checks are in
-[CONTRIBUTING.md](CONTRIBUTING.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+## Support
+
+If Spool saves you time, you can support its development through
+[GitHub Sponsors](https://github.com/sponsors/doubletwisted) or
+[Buy Me a Coffee](https://buymeacoffee.com/doubletwisted).
+
+Found a bug or want a feature? Open an
+[issue](https://github.com/doubletwisted/ComfyUI-Spool/issues/new/choose). Want to
+help? Read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

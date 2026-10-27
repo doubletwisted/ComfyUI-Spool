@@ -59,4 +59,4 @@ First public release.
 - `SPOOL_CREDENTIALS` moves the saved Comfy Cloud key to another folder.
 - Changes are accepted only from Spool's own pages or local tools; actions that
   reach beyond project files answer only the computer running Spool. See
-  [SECURITY.md](SECURITY.md).
+  [Security and network access](docs/guide/security.md).

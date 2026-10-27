@@ -7,7 +7,7 @@ complete clip notes.
 
 ## The agent skill
 
-[`skills/spool-control`](../skills/spool-control/SKILL.md) teaches an agent to
+[`skills/spool-control`](../../skills/spool-control/SKILL.md) teaches an agent to
 operate Spool: inspecting shots, editing inputs and the timeline, generating within
 a budget, reviewing results and completing notes. Install the folder in your
 agent's skill directory and invoke `$spool-control`. Its references hold the full
@@ -104,4 +104,4 @@ changes an agent's scope.
 ## Security
 
 Scope is a command contract, not authentication. Keep Spool on loopback, or on a
-trusted network, as described in [SECURITY.md](../SECURITY.md).
+trusted network, as described in [Security and network access](security.md).

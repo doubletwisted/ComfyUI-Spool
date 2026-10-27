@@ -1,7 +1,7 @@
-# Security
+# Security and network access
 
-Spool is a studio that runs inside ComfyUI, or on its own with `python -m spool`.
-It has no user accounts. Who can use it depends on who can reach the port.
+Spool has no user accounts. Who can use it depends on who can reach the port of
+the ComfyUI it runs in, or of `python -m spool`.
 
 ## What each request may do
 
@@ -60,5 +60,4 @@ refused. Adding or editing a note never authorizes execution. See
 
 ## Reporting a vulnerability
 
-Report it privately through the repository's security advisory form ("Report a
-vulnerability"). Please do not open a public issue.
+See the [security policy](../../.github/SECURITY.md).

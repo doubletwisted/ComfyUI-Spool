@@ -2,7 +2,7 @@
 
 Spool is a ComfyUI extension with three parts: a Python backend that owns
 projects and execution, the studio (a browser app served at `/spool/`), and a
-small Comfy page extension. Vocabulary is defined in [GLOSSARY.md](../../GLOSSARY.md).
+small Comfy page extension. Vocabulary is defined in [the glossary](glossary.md).
 
 ```text
 ComfyUI page (web/*)  ── BroadcastChannel bridge ──  Studio (ui/*)

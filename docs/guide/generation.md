@@ -116,7 +116,7 @@ The inspector names the route for each clip:
 - **Comfy Cloud:** the default for Cloud workflows. **Execute on** switches a
   Cloud workflow to **Local ComfyUI · Partner Nodes** instead.
 - **Deadline:** any workflow containing one **Submit to Deadline** node. See
-  [Deadline](../deadline.md).
+  [Deadline](deadline.md).
 
 When you click Generate, Spool saves each take's exact workflow, inputs and files
 before sending it. Results are copied into the clip's folder and checked against

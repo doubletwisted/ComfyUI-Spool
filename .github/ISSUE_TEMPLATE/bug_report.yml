@@ -1,0 +1,76 @@
+name: Bug report
+description: Something in Spool is broken, crashes or behaves unexpectedly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search [existing issues](https://github.com/doubletwisted/ComfyUI-Spool/issues) first, and keep each report to one problem.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Timeline and editing
+        - Takes and review
+        - Generation on local ComfyUI
+        - Comfy Cloud
+        - Deadline
+        - Edit in Comfy / Apply to clip
+        - Import, playback or export
+        - Projects and storage
+        - Agents, CLI or command API
+        - Install and setup
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add the built-in Image to Video workflow
+        2. Set Takes to 2 and click Generate
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include error messages exactly as shown.
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Spool, ComfyUI and frontend versions, OS and browser.
+      placeholder: Spool 0.1.0, ComfyUI 0.42.1, frontend 1.55.18, Windows 11, Chrome 141
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics and logs
+      description: |
+        Click the status in the studio's top bar and choose **Copy diagnostics**, then paste it here. Add the relevant part of ComfyUI's console log if there is an error. Remove API keys and private paths.
+      render: text
+
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or recordings
+      description: Drag files here if they help show the problem.
