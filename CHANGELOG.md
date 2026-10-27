@@ -21,6 +21,9 @@ First public release.
   opened from shared storage, downloaded and imported.
 - Export the sequence, a range or selected clips to MP4 with an audio mix, or
   export a single frame.
+- Export the timeline as OpenTimelineIO (`.otio`) for Resolve, Premiere Pro and
+  other editors: video tracks, covered clips, trims, gaps and audio lanes, with
+  clips referencing the original files in place.
 - Clip notes, a keyboard shortcut sheet, a non-blocking Renders panel and a
   layout that adapts to laptop screens.
 

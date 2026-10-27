@@ -144,3 +144,25 @@ are never changed.
 
 Gaps export as black. Track mute and solo and clip gain and fades apply; the
 viewer's mute does not.
+
+### Timeline for another editor
+
+Choose **OpenTimelineIO (.otio)** as the format to continue the edit in DaVinci
+Resolve, Premiere Pro, Kdenlive or another editor that imports OTIO. The file
+keeps every video track, covered clips, trims, gaps and the audio lanes (A1 per
+video track, A2 soundtrack) for the export range. Disabled clips and tracks, muted
+clips and muted or un-soloed lanes arrive disabled rather than removed.
+
+- Clips point at the original files where they are, at full resolution; nothing is
+  copied. A shot of an imported video points into the whole source file, so the
+  editor can trim past the shot's ends. Move the media with the `.otio` file, or
+  relink it in the editor.
+- Footage at another frame rate carries a speed change, matching how Spool plays
+  each source frame once. Source timecode is respected.
+- In DaVinci Resolve, set the project's timeline frame rate to the Spool sequence
+  rate before **File › Import › Timeline**. Resolve builds the imported timeline
+  at the project rate, so a 30 fps sequence in a 24 fps project is converted and
+  trims round to the nearest frame. Resolve names clips after their files.
+- Gain, fades, transitions and the export resolution are not carried; set them
+  in the editor. **Include audio tracks** off leaves only the video tracks.
+- The file downloads and is also kept in the project's `exports` folder.

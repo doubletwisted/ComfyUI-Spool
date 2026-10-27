@@ -75,6 +75,8 @@ class RouteGuardTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status, 403)
             response = await self.client.post('/spool/api/comfy/start', json={}, headers=REBOUND)
             self.assertEqual(response.status, 403)
+            response = await self.client.post('/spool/api/export/otio?projectId=' + self.project['id'], json={'projectId': self.project['id'], 'tracks': []}, headers=REBOUND)
+            self.assertEqual(response.status, 403)
             launch.assert_not_called()
 
     async def test_take_downloads_outside_the_project_stay_on_this_computer(self):

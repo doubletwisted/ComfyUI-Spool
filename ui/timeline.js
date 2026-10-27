@@ -87,6 +87,19 @@ export function exportPlan(doc,range={start:0,end:total(doc)}){
  for(const c of doc.audioClips||[]){const audio=audioSettings(c);if(enabled(c)&&trackAudible(doc,audioTrack(c))&&!audio.muted)audioClips.push({file:c.media.file,start:c.start,in:c.in,out:c.out,...audio});}
  return {audio:true,clips,audioClips:audioClips.filter(c=>c.start<range.end&&c.start+c.out-c.in>range.start),...(range.start?{audioOffset:range.start}:{})};
 }
+// The authored layers for an editable handoff: every track and covered clip, cut to the range, nothing flattened.
+// Disabled and muted items stay as disabled items; audio that would overlap on its lane moves to an added lane.
+export function timelinePlan(doc,range={start:0,end:total(doc)}){
+ const cut=(c,start,extra)=>{const s=Math.max(start,range.start),e=Math.min(start+c.out-c.in,range.end);return e>s?{id:c.id,name:c.name,start:s-range.start,in:c.in+s-start,out:c.in+e-start,...extra}:null;};
+ const real=c=>!takeOf(c).placeholder,rows=layout(doc).filter(r=>real(r.clip)),lanes=new Map(),video=[];
+ for(let track=1;track<=videoTracks(doc);track++)video.push({kind:'video',name:'V'+track,enabled:videoTrackEnabled(doc,track),clips:rows.filter(r=>videoTrack(r.clip)===track).map(r=>cut(r.clip,r.start,{file:takeOf(r.clip).media.file,takeId:takeOf(r.clip).id,enabled:enabled(r.clip)})).filter(Boolean)});
+ const lane=(key,name,track)=>{if(!lanes.has(key))lanes.set(key,{kind:'audio',name,enabled:trackAudible(doc,track),clips:[]});return lanes.get(key).clips;};
+ const sound=(c,start,file,on)=>{const {gainDb,muted,fadeIn,fadeOut}=audioSettings(c);return cut(c,start,{file,enabled:on&&!muted,gainDb,fadeIn,fadeOut});};
+ for(const {clip:c,start} of rows)if(linkedAudio(c))lane(videoTrack(c),videoTrack(c)>1?'A1 / V'+videoTrack(c):'A1','source').push(sound(c,start,takeOf(c).media.file,videoEnabled(doc,c)));
+ for(const c of doc.audioClips||[])(audioTrack(c)==='source'?lane(sourceLane(c),sourceLane(c)>1?'A1 / V'+sourceLane(c):'A1','source'):lane('music','A2','music')).push(sound(c,c.start,c.media.file,enabled(c)));
+ const audio=[...lanes].sort(([a],[b])=>(a==='music')-(b==='music')||a-b).flatMap(([,t])=>{const packed=[];for(const c of t.clips.filter(Boolean).sort((a,b)=>a.start-b.start)){let p=packed.find(p=>p.end<=c.start);if(!p)packed.push(p={...t,name:t.name+(packed.length?' ('+(packed.length+1)+')':''),clips:[],end:0});p.clips.push(c);p.end=c.start+c.out-c.in;}return packed.map(({end,...p})=>p);});
+ return {duration:range.end-range.start,tracks:[...video,...audio]};
+}
 export function setEnabled(doc,ids,value){const selected=new Set(ids);for(const c of [...doc.clips,...doc.audioClips||[]])if(selected.has(c.id))c.enabled=value;}
 export function addVideoTrack(doc){return doc.videoTracks=videoTracks(doc)+1;}
 export const sourceTrackHidden=(doc,track)=>(doc.audioTracks?.hiddenSourceTracks||[]).includes(track);

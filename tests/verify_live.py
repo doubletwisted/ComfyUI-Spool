@@ -172,6 +172,15 @@ try:
     export_path = Path(vp["folder"]) / exported["url"].removeprefix("/spool/media/" + vp["id"] + "/")
     probe = json.loads(subprocess.check_output(["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", str(export_path)]))
     check("Real sequence/audio export is one second, 960×540 at 24 fps", abs(float(probe["format"]["duration"]) - 1) < .1 and probe["streams"][0]["width"] == 960 and probe["streams"][0]["avg_frame_rate"] == "24/1" and any(s["codec_type"] == "audio" for s in probe["streams"]))
+    timeline = call("/spool/api/export/otio?projectId=" + vp["id"], {"projectId": vp["id"], "fps": 24, "duration": 24, "name": "Live", "tracks": [
+        {"kind": "video", "name": "V1", "clips": [{"id": "clip-live", "file": m["file"], "start": 0, "in": 0, "out": 24}]},
+        {"kind": "audio", "name": "A1", "clips": [{"id": "clip-live", "file": m["file"], "start": 0, "in": 0, "out": 24}]}]})
+    video_clip = json.loads(Path(timeline["path"]).read_text(encoding="utf-8"))["tracks"]["children"][0]["children"][0]
+    original = (Path(vp["folder"]) / m["originalFile"]).resolve()
+    print("timeline clip", json.dumps({k: video_clip[k] for k in ("source_range", "effects")}), flush=True)
+    check("Real timeline export references the original 30 fps take, interpreted once per 24 fps frame",
+          video_clip["media_reference"]["target_url"] == str(original.resolve()) and video_clip["source_range"]["duration"] == {"OTIO_SCHEMA": "RationalTime.1", "rate": 24.0, "value": 24.0}
+          and video_clip["media_reference"]["available_range"]["duration"]["value"] == 30 and [e["time_scalar"] for e in video_clip["effects"]] == [.8])
     evidence["videoProjectId"] = vp["id"]
     evidence["prompts"].append(vp["document"]["jobs"][0]["promptId"])
     evidence["completed"] = True

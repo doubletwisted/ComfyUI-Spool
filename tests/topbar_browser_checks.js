@@ -19,7 +19,12 @@
  $('workspaceMenu').click();$('toggleMedia').click();
  $('workspaceMenu').click();$('topbarDiagnostics').click();await wait(()=>!!$('diagnosticsLog')&&!$('modalOverlay').hidden);check('View retains real local diagnostics',JSON.parse($('diagnosticsLog').value).projectId===n.projectKey);$('closeModal').click();
  $('showQueue').click();check('Renders opens the existing queue without blocking the studio',!!$('queueList')&&$('modalOverlay').hidden);$('closeRenders').click();
- $('export').click();check('Export remains the sequence action',!!$('renderExport')&&!$('modalOverlay').hidden);$('closeModal').click();
+ $('export').click();check('Export remains the sequence action',!!$('renderExport')&&!$('modalOverlay').hidden);
+ $('exportFormat').value='otio';$('exportFormat').dispatchEvent(new Event('change'));check('OpenTimelineIO format relabels the export',$('renderExport').textContent==='Export timeline'&&$('exportAudioLabel').textContent==='Include audio tracks');
+ $('renderExport').click();await wait(()=>/complete|failed|missing|Error/i.test($('exportResult').textContent));
+ const timeline=await fetch($('exportResult').querySelector('a')?.href).then(r=>r.json()).catch(()=>null);
+ check('Timeline export downloads OpenTimelineIO with the clip on V1: '+$('exportResult').textContent,timeline?.OTIO_SCHEMA==='Timeline.1'&&timeline.tracks.children[0].name==='V1'&&timeline.tracks.children[0].children.some(c=>c.OTIO_SCHEMA==='Clip.1'&&c.metadata.spool.id==='shot'));
+ $('closeModal').click();$('export').click();check('Export keeps the chosen format',$('exportFormat').value==='otio');$('exportFormat').value='mp4';$('exportFormat').dispatchEvent(new Event('change'));check('MP4 format restores the video export',$('renderExport').textContent==='Export video');$('closeModal').click();
  await n.flush();check('Topbar navigation does not change clips or revision',JSON.stringify(n.state.clips)===initial&&n.revision===revision);
  const original=window.fetch,path='/spool/api/projects/'+n.projectKey,name='Topbar saved retry QA '+(compact?'compact':'full');let fail=true;
  window.fetch=async(input,options)=>{if(fail&&String(input)===path&&options?.method==='PUT')throw Error('Controlled topbar save failure');return original(input,options);};

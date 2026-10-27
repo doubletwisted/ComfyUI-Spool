@@ -656,6 +656,16 @@ def register(server, store, media, executor=None):
                 local_control(request, "Export original footage from the computer running Spool")
         return web.json_response(await asyncio.to_thread(media.export, data, metadata))
 
+    @routes.post("/spool/api/export/otio")
+    @endpoint
+    async def export_otio(request):
+        # The timeline names files by their path on this computer.
+        local_control(request, "Export an editable timeline from the computer running Spool")
+        store, media = await asyncio.to_thread(services, request)
+        data = await request.json()
+        metadata = ledger.media_records(await asyncio.to_thread(store.projected, data["projectId"])) if data.get("projectId") else []
+        return web.json_response(await asyncio.to_thread(media.export_timeline, data, metadata))
+
     @routes.post("/spool/api/projects/{project}/detect-cuts")
     @endpoint
     async def detect_clip_cuts(request):

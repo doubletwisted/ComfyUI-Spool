@@ -17,6 +17,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from spool.cuts import detect_cuts, scene_scores
+from spool.interchange import timecode_frames
 from spool.media import Media, _probe
 from spool.workflows import parse_import, workflow_document, workflow_metadata
 
@@ -343,6 +344,68 @@ class MediaTests(unittest.TestCase):
         self.assertGreater(self.rms(samples, .05, .2), .1)
         self.assertLess(self.rms(samples, .35, .65), .0001)
         self.assertGreater(self.rms(samples, .8, .95), .1)
+
+    def test_timeline_export_references_originals_with_offsets_rates_and_timecode(self):
+        original = self.root / 'timecoded.mp4'
+        subprocess.run([FFMPEG, '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=red:s=64x36:r=30:d=2', '-timecode', '01:00:00:00',
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(original)], check=True)
+        metadata = [{'id': 'shot', 'kind': 'video', 'file': 'shot-review.mp4', 'originalFile': str(original), 'fps': '30/1', 'sourceRange': {'start': 15}},
+                    {'id': 'av', 'kind': 'video', 'file': 'av-review.mp4', 'originalFile': 'av.mp4', 'fps': '24/1'}]
+        plan = {'duration': 60, 'fps': 24, 'width': 64, 'height': 36, 'name': 'QA cut', 'tracks': [
+            {'kind': 'video', 'name': 'V1', 'enabled': True, 'clips': [
+                {'id': 'b', 'name': 'Shot', 'file': 'shot-review.mp4', 'start': 24, 'in': 3, 'out': 15, 'enabled': False},
+                {'id': 'a', 'name': 'Generated', 'file': 'av-review.mp4', 'start': 0, 'in': 6, 'out': 30, 'takeId': 'take'}]},
+            {'kind': 'video', 'name': 'V2', 'enabled': False, 'clips': [{'id': 'c', 'name': 'Still', 'file': 'black.png', 'start': 12, 'in': 0, 'out': 12}]},
+            {'kind': 'audio', 'name': 'A1', 'enabled': True, 'clips': [{'id': 'a', 'name': 'Generated', 'file': 'av-review.mp4', 'start': 0, 'in': 6, 'out': 30, 'gainDb': -3, 'fadeIn': 0, 'fadeOut': 4}]},
+            {'kind': 'audio', 'name': 'A2', 'enabled': True, 'clips': [{'id': 'm', 'name': 'Tone', 'file': 'tone.wav', 'start': 6, 'in': 0, 'out': 24}]}]}
+        result = self.media.export_timeline(plan, metadata)
+        path = Path(result['path'])
+        self.assertEqual((path.parent, path.suffix), (self.root / 'exports', '.otio'))
+        self.assertTrue(result['filename'].startswith('QA-cut-'))
+        timeline = json.loads(path.read_text(encoding='utf-8'))
+        self.assertEqual(timeline, result['timeline'])
+        frames = lambda t: (t['value'], t['rate'])
+        v1, v2, a1, a2 = timeline['tracks']['children']
+        self.assertEqual([(t['kind'], t['name'], t['enabled']) for t in (v1, v2, a1, a2)], [('Video', 'V1', True), ('Video', 'V2', False), ('Audio', 'A1', True), ('Audio', 'A2', True)])
+        self.assertEqual([c['OTIO_SCHEMA'] for c in v1['children']], ['Clip.1', 'Clip.1', 'Gap.1'])
+        generated, shot, tail = v1['children']
+        self.assertEqual(generated['media_reference']['target_url'], str((self.root / 'av.mp4').resolve()))
+        self.assertEqual((frames(generated['source_range']['start_time']), frames(generated['source_range']['duration'])), ((6, 24), (24, 24)))
+        self.assertEqual((generated['effects'], generated['metadata']['spool']), ([], {'id': 'a', 'takeId': 'take'}))
+        # A shot of a 30 fps source with 01:00:00:00 timecode, 15 frames in, trimmed 3 more, played one frame per sequence frame.
+        self.assertEqual(shot['media_reference']['target_url'], str(original.resolve()))
+        self.assertEqual(frames(shot['source_range']['start_time']), (108000 + 15 + 3, 30))
+        self.assertEqual(frames(shot['source_range']['duration']), (12, 24))
+        self.assertEqual(frames(shot['media_reference']['available_range']['start_time']), (108000, 30))
+        self.assertEqual(frames(shot['media_reference']['available_range']['duration']), (60, 30))
+        self.assertEqual([(e['OTIO_SCHEMA'], e['time_scalar']) for e in shot['effects']], [('LinearTimeWarp.1', .8)])
+        self.assertFalse(shot['enabled'])
+        self.assertEqual(frames(tail['source_range']['duration']), (24, 24))
+        self.assertEqual([c['OTIO_SCHEMA'] for c in v2['children']], ['Gap.1', 'Clip.1'])
+        self.assertIsNone(v2['children'][1]['media_reference']['available_range'])
+        self.assertEqual(a1['children'][0]['metadata']['spool'], {'id': 'a', 'gainDb': -3, 'fadeIn': 0, 'fadeOut': 4})
+        self.assertEqual([frames(c['source_range']['duration']) for c in a2['children']], [(6, 24), (24, 24)])
+        self.assertEqual(frames(a2['children'][1]['media_reference']['available_range']['duration']), (48, 24))
+        try:
+            import opentimelineio as otio
+        except ImportError:
+            return
+        loaded = otio.adapters.read_from_file(str(path))
+        self.assertEqual(loaded.duration(), otio.opentime.RationalTime(60, 24))
+        self.assertEqual(loaded.tracks[0].range_of_child_at_index(1).start_time, otio.opentime.RationalTime(24, 24))
+
+    def test_timeline_export_rejects_overlaps_and_empty_timelines(self):
+        clip = {'file': 'black.png', 'start': 0, 'in': 0, 'out': 12}
+        with self.assertRaisesRegex(ValueError, 'Add a clip'):
+            self.media.export_timeline({'tracks': [{'kind': 'video', 'clips': []}]})
+        with self.assertRaisesRegex(ValueError, 'overlap'):
+            self.media.export_timeline({'tracks': [{'kind': 'video', 'name': 'V1', 'clips': [clip, {**clip, 'start': 6}]}]})
+
+    def test_source_timecode_frames(self):
+        self.assertEqual(timecode_frames('01:00:00:00', 24), 86400)
+        self.assertEqual(timecode_frames('00:01:00;02', 30000 / 1001), 1800)
+        self.assertEqual(timecode_frames('01:00:00;00', 30000 / 1001), 107892)
+        self.assertEqual(timecode_frames(None, 24), 0)
 
     def test_source_resolution_preserves_containment(self):
         for path in ['..', '.', '../outside.mp4', 'uploads/../../outside.mp4', '%2e%2e/outside.mp4']:

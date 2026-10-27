@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw, ImageOps
 
 from .cuts import detect_cuts, scene_scores
 from .export import export_sequence
+from .interchange import export_timeline
 from .workflows import workflow_metadata
 from .store import uid
 from .workflow_inputs import sources
@@ -686,3 +687,9 @@ class Media:
         result = export_sequence(data, root=self.root, resolve=self.resolve, probe=_probe, image_extensions=IMAGE_EXTENSIONS, sources=sources)
         result["url"] = "/spool/media/" + (self.project_id + "/" if self.project_id else "") + result["url"]
         return result
+
+    def export_timeline(self, data, metadata=()):
+        files = {c["file"] for t in data.get("tracks", []) for c in t.get("clips", [])}
+        sources = {m["file"]: self.original_source(m) for m in metadata if m["file"] in files}
+        return export_timeline(data, root=self.root, fps=float(data.get("fps", 24)), width=int(data.get("width", 960)), height=int(data.get("height", 540)),
+                               name=data.get("name"), sources=sources, resolve=self.resolve, probe=_probe, image_extensions=IMAGE_EXTENSIONS)

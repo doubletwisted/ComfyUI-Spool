@@ -96,6 +96,20 @@ Remaining, in order:
 Acceptance: ordinary drops never block; ambiguous first/last frame or prompt
 roles ask once; template coverage is reported, not assumed.
 
+### Timeline interchange
+
+OTIO export writes the authored layers referencing media in place. Verified in
+DaVinci Resolve Studio 21.1.1 with SOCRATES2 (30 fps sequence, 24 fps takes on NAS
+paths). In a 30 fps project every clip's position, length, source in/out and 125%
+speed matched, the media was online, and the off tracks came in off. Resolve rejected
+`file://` URLs, so references are plain paths. Resolve ignores the file's rate and
+uses the project's, and shows file names instead of clip names. Not verified yet in
+Premiere Pro or Kdenlive, or with source timecode other than zero; check the same
+points there.
+Possible follow-ups if needed: collecting media into a package (`.otioz`), FCP 7
+XML for editors without OTIO, gain as an editor-specific field, and
+sequence resolution where an importer reads one.
+
 ### Editing
 
 - Join clips: a false cut cannot be merged yet.

@@ -49,7 +49,8 @@ executor. `__main__.py` runs the same routes standalone (`python -m spool`).
 - **Workflows:** `workflows.py`, `workflow_inputs.py`, `graph_inputs.py`,
   `templates.py` (curated built-ins), `cloud_templates.json`.
 - **Media:** `media.py` (probing, proxies, staging, playback copies), `timing.py`
-  (source-frame clocks), `cuts.py` (hard-cut detection), `export.py`.
+  (source-frame clocks), `cuts.py` (hard-cut detection), `export.py` (MP4),
+  `interchange.py` (OpenTimelineIO JSON, written without the OTIO package).
 - **Host:** `launcher.py` (starts a configured ComfyUI), `credentials.py` (Cloud
   key), `requirements.py` (reported requirements), `wire.py` (exact integers).
 

@@ -40,6 +40,12 @@ while retaining an existing gap. Tail trimming only compensates an existing tail
 gap. Export fills gaps and soundtrack overhang with black frames and uses track
 mute/solo plus clip gain/fades, independently of monitor mute.
 
+`timelinePlan(document, range)` is the editable counterpart of the export plan:
+one entry per video track and audio lane, every clip cut to the range and nothing
+flattened, so covered clips survive. Disabled or muted items keep their place with
+`enabled: false`; audio that would overlap on a lane moves to an added lane.
+`spool/interchange.py` maps it to OpenTimelineIO against the original files.
+
 `splitAudio` accepts an optional clip ID so the editor's selected soundtrack
 continues to own the split. Without it, the containing soundtrack is used.
 `tests/timeline_checks.mjs` imports the production module with literal documents;
