@@ -3,7 +3,10 @@
 The studio has a library sidebar on the left (**Workflows** and **Media**), the
 viewer in the middle, the inspector on the right and the timeline below. Small
 arrows in the panel headers hide a panel; a matching arrow at the viewer's edge
-brings it back. On narrow windows the sidebar opens as a drawer.
+brings it back. A hidden sidebar leaves a thin icon rail: **Workflows** and
+**Media** open the sidebar over the viewer until you click elsewhere, and the
+bottom button docks it again. Spool remembers a hidden sidebar. On narrow windows
+the sidebar opens as a drawer.
 
 ## Clips and tracks
 
@@ -71,18 +74,27 @@ including a group move, is one undo step.
 
 ## Takes
 
-The **Takes** strip under the viewer shows the selected clip's takes. New,
-unreviewed takes carry a **New** badge, and the clip shows a blue count on the
-timeline. A take stops being new once you review it in Source or Compare, or use
-it; hovering does not count.
+The **Takes** rail beside the viewer lists the selected clip's takes from top to
+bottom, so **↑** and **↓** in Source step through them in the order you see. When a
+clip has no takes yet, or the window is narrower than 1100 pixels, takes show as a
+strip under the viewer instead. New, unreviewed takes carry a **New** badge, and
+the clip shows a blue count on the timeline. A take stops being new once you
+review it in Source or Compare, or use it; hovering does not count.
+
+Takes generated from the same inputs form one batch. When a clip has more than
+one batch, each starts with a heading that names what changed from the batch
+before it (for example **Prompt changed**), with its time and take count;
+imported footage has its own heading. Seeds may differ within a batch. Renders
+still in progress appear below the list with their stage and progress.
 
 - Move across a take thumbnail to scrub the whole take in the main viewer. Moving
   away restores what was there; nothing is chosen.
 - **Source** reviews a take on its own, with its own playhead (**Q** switches
   between Source and the edit; **1** to **9** pick a take). **Compare** (**C**)
   shows two takes side by side.
-- **Use take** (or **Enter** in Source) puts the take in the edit. It also loads
-  that take's workflow and inputs for the next Generate.
+- **Use take** (on the take you point at or review, or **Enter** in Source) puts
+  the take in the edit. It also loads that take's workflow and inputs for the
+  next Generate.
 - Select takes with their checkboxes, Ctrl-click or Shift-click. **Delete** takes
   them off this clip but keeps their files, with undo. **Permanently delete**
   removes their files after a confirmation and cannot be undone. The take in the

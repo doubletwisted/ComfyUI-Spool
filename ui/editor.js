@@ -21,6 +21,7 @@ save:'<path d="M4 3h14l3 3v15H3V3z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/>',
 queue:'<path d="M8 5h13M8 12h13M8 19h13"/><path d="M3 4v2M3 11v2M3 18v2"/>',
 export:'<path d="M12 15V3m-4 4 4-4 4 4M4 13v8h16v-8"/>',
 bin:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 9v11"/>',
+sidebar:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
 plus:'<path d="M12 4v16M4 12h16"/>',
 import:'<path d="M12 3v12m-4-4 4 4 4-4M4 15v6h16v-6"/>',
 clipboard:'<rect x="5" y="5" width="14" height="16" rx="2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h6"/>',
@@ -421,9 +422,39 @@ function renderInspector(){
 }
 function takeMidpoint(c,t){return (Math.min(c.in,t.media.frames-1)+Math.min(c.out,t.media.frames))/2;}
 function scrubTake(button,t,frame){takeHoverLabel.textContent='Hover · '+takeName(t)+' · '+tc(Math.floor(frame));thumbnails.scrub(button,t.media,frame,fps);}
+// Consecutive takes generated from the same inputs form one batch; seeds may differ within it.
+function takeBatchInputs(t){const seeds=new Set((t.request?.capture?.bindings||[]).filter(b=>b.role==='seed').map(b=>b.key));return Object.entries(t.request?.inputValues||{}).filter(([key])=>!seeds.has(key)).sort(([a],[b])=>a<b?-1:a>b?1:0);}
+const takeBatchKey=t=>t.generated?'generated:'+(t.request?.workflowVersion??'')+':'+JSON.stringify(takeBatchInputs(t)):t.original?'original':'imported';
+function takeBatchLabel(takes,previous){
+ const t=takes[0],count=takes.length+' '+(takes.length===1?'take':'takes');
+ if(!t.generated)return [t.original?'Original':'Imported',count];
+ const job=state.jobs.find(j=>j.id===t.request?.attemptId),time=job?.createdAt?new Date(job.createdAt*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+ let summary='Generated';
+ if(previous){
+  const labels=new Map((t.request?.capture?.bindings||[]).map(b=>[b.key,b.label||b.key])),now=new Map(takeBatchInputs(t)),before=new Map(takeBatchInputs(previous));
+  const changed=[...new Set([...now.keys(),...before.keys()])].filter(key=>JSON.stringify(now.get(key))!==JSON.stringify(before.get(key))).map(key=>labels.get(key)||key);
+  summary=t.request?.workflowVersion!==previous.request?.workflowVersion?'Workflow changed':changed.length?changed.slice(0,2).join(', ')+(changed.length>2?' +'+(changed.length-2):'')+' changed':'Same inputs';
+ }
+ return [summary,[time,count].filter(Boolean).join(' · ')];
+}
+function groupTakeCards(real,cards){
+ const groups=[];real.forEach((t,index)=>{const key=takeBatchKey(t);if(groups.at(-1)?.key===key)groups.at(-1).indexes.push(index);else groups.push({key,indexes:[index]});});
+ if(groups.length<2)return cards.join('');
+ let previous=null;
+ return groups.map(({indexes})=>{const takes=indexes.map(i=>real[i]),[summary,meta]=takeBatchLabel(takes,previous);if(takes[0].generated)previous=takes[0];return '<div class="take-group"><span>'+esc(summary)+'</span><span>'+esc(meta)+'</span></div>'+indexes.map(i=>cards[i]).join('');}).join('');
+}
+function jobPercent(j){
+ const observations=j.nodeProgress||[],node=observations.filter(n=>n.max>1).at(-1)||observations.at(-1),running=['running','farm_running'].includes(j.status);
+ return running?(j.target==='deadline'?j.farmProgress?.percent:node?.max>1?100*node.value/node.max:null):null;
+}
+function renderPendingTakes(c){
+ const jobs=c&&!selectedAudio()?pendingJobs(c):[];$('takes').classList.toggle('has-pending',jobs.length>0);
+ draw('takePending',jobs.map(j=>{const percent=jobPercent(j),known=Number.isFinite(percent);
+  return '<div class="take-pending-row" data-pending-job="'+esc(j.id)+'"><span class="take-pending-thumb">'+(known?Math.round(percent)+'%':'…')+'</span><span class="take-pending-info"><strong>'+(j.takeNumber?'Take '+String(j.takeNumber).padStart(2,'0'):'New take')+'</strong><small>'+esc(G.jobStage(j))+' · <span data-job-elapsed="'+esc(j.id)+'">'+esc(G.jobElapsed(j))+'</span></small>'+(known?'<span class="take-pending-bar"><i style="width:'+percent.toFixed(1)+'%"></i></span>':'')+'</span></div>';}).join(''));
+}
 function renderTakes(){
  renderPlaceholderState();
- const c=selected(),real=T.realTakes(c),list=$('takeList');updateTakeSelection();
+ const c=selected(),real=T.realTakes(c),list=$('takeList');updateTakeSelection();renderPendingTakes(c);
  $('takes').classList.toggle('has-real-takes',real.length>0&&!selectedAudio());
  $('takes').classList.toggle('has-clip',!!c&&!selectedAudio());
  $('takeCount').textContent=real.length;$('takesClip').textContent=c?.name||'';
@@ -432,12 +463,12 @@ function renderTakes(){
 
  if(!real.length){thumbnails.stopScrub();draw('takeList',c?'<div class="takes-empty">Copy videos or images into this clip’s folder to add takes.</div>':'');return;}
  const viewing=review.mode==='source'&&review.source?.clipId===c.id?review.source.takeId:null,unseen=new Set(takeSeen.unseen(c).map(t=>t.id));
- if(draw('takeList',real.map(t=>{
+ if(draw('takeList',groupTakeCards(real,real.map(t=>{
   const chosen=t.id===c.takeId,setupChosen=chosen&&c.generationBase?.takeId===t.id,preview=t.id===viewing,title=t.original?'Original':String(t.number).padStart(2,'0');
   const fresh=unseen.has(t.id)?'<span class="take-badge new" title="Not yet reviewed in Source or Compare">New</span>':'';
   const body='<div class="take-heading"><strong>'+title+'</strong>'+(chosen||preview?'<span class="take-badge '+(chosen?'used':'preview')+'">'+(chosen?'In edit':'Preview')+'</span>':'')+fresh+'</div><button class="take-thumb" data-view="'+t.id+'" aria-label="Preview '+esc(title)+'"><img src="'+esc(url(t.media.poster))+'" alt=""></button><div class="take-details"><span class="take-duration" title="Full take duration">'+seconds(t.media.frames)+'</span>'+(t.seed!=null?'<span class="take-seed" title="Seed '+esc(decimal(t.seed))+'">Seed '+esc(decimal(t.seed))+'</span>':'')+(!setupChosen?'<button class="use-take" data-use="'+t.id+'">Use take</button>':'')+'</div>';
   return '<article class="take-card'+(chosen?' chosen':'')+(preview?' viewing':'')+'" data-take="'+esc(t.id)+'" tabindex="0" aria-label="Take '+esc(title)+'"><input type="checkbox" class="take-select" data-select-take="'+esc(t.id)+'" aria-label="Select take '+esc(title)+'">'+body+'</article>';
- }).join(''))){
+ })))){
   thumbnails.stopScrub();list.querySelectorAll('[data-view]').forEach(b=>{const img=b.querySelector('img'),t=c.takes.find(t=>t.id===b.dataset.view),middle=takeMidpoint(c,t);thumbnails.bind(img,t.media,middle,fps);b.draggable=true;img.draggable=false;b.ondragstart=e=>{thumbnails.stopScrub();draggedTake={projectId:projectKey,clipId:c.id,takeId:t.id,frames:t.media.frames};e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('application/spool-take',JSON.stringify(draggedTake));};b.ondragend=()=>{draggedTake=null;takeDropPreview.hidden=true;};b.onclick=()=>review.mode==='source'&&review.source?.takeId===b.dataset.view?play():viewTake(b.dataset.view);b.onpointerenter=b.onpointermove=e=>{const r=b.getBoundingClientRect(),end=t.media.frames;scrubTake(b,t,Math.min(end-1,Math.floor(clamp((e.clientX-r.left)/r.width,0,1)*end)));};b.onpointerleave=()=>thumbnails.stopScrub(b);});
   list.querySelectorAll('[data-use]').forEach(b=>b.onclick=()=>chooseTake(c.id,b.dataset.use));
  }
@@ -446,7 +477,8 @@ function renderTakes(){
 const takeSelectionTools=document.createElement('div');takeSelectionTools.className='take-selection-tools';takeSelectionTools.innerHTML='<span id="takeSelectionCount" role="status"></span><button id="selectAllTakes" class="outline">Select all</button>';
 const takesHead=$('takes').querySelector('.takes-head');takesHead.querySelector('.takes-title').after(takeSelectionTools);takeSelectionTools.append($('compareTakesStrip'));
 const takeTools=document.createElement('div');takeTools.className='take-tools';takeTools.innerHTML='<button id="archiveTakes" class="outline" aria-haspopup="menu" aria-expanded="false" title="Remove takes from this clip; Ctrl+Z restores them. Files are kept.">Delete &#9662;</button><button id="deleteTakesFromDisk" class="outline" aria-haspopup="menu" aria-expanded="false" title="Permanently delete media and its workflow JSON; cannot be undone">Permanently delete &#9662;</button>';takesHead.append(takeTools);
-const clipFolderButton=document.createElement('button');clipFolderButton.id='openClipFolder';clipFolderButton.className='outline';clipFolderButton.innerHTML=svg('folder')+'Open clip folder';takesHead.append(clipFolderButton);
+const clipFolderButton=document.createElement('button');clipFolderButton.id='openClipFolder';clipFolderButton.className='outline';clipFolderButton.innerHTML=svg('folder')+'<span class="folder-label">Open clip folder</span>';takesHead.append(clipFolderButton);
+const takePending=document.createElement('div');takePending.id='takePending';takePending.className='take-pending';takePending.setAttribute('aria-label','Takes being generated');$('takeList').after(takePending,document.querySelector('.takes-keys'));
 let openingClipFolder=false;
 clipFolderButton.onclick=async()=>{
  const clipId=selected()?.id,projectId=projectKey;if(!clipId||openingClipFolder)return;
@@ -462,7 +494,7 @@ function takeSelection(c=selected()){
 function updateTakeSelection(){
  if(!$('takeSelectionCount'))return;const c=selected(),takes=T.realTakes(c),ids=takeSelection(c);takeTools.hidden=takeSelectionTools.hidden=!!selectedAudio()||!takes.length;
  clipFolderButton.hidden=!c||!!selectedAudio();clipFolderButton.disabled=openingClipFolder||!productCapabilities.clipFolderReveal;clipFolderButton.title=productCapabilities.clipFolderReveal?'Open in Explorer. Copy completed videos or images here; they appear as new takes after a short scan.':'Opening clip folders requires an updated Windows Spool host';
- $('takeSelectionCount').textContent=ids.length+' selected';$('selectAllTakes').textContent=ids.length===takes.length?'Clear':'Select all';
+ $('takeSelectionCount').textContent=ids.length+' selected';$('takeSelectionCount').hidden=!ids.length;$('selectAllTakes').textContent=ids.length===takes.length?'Clear':'Select all';
  $('archiveTakes').disabled=!ids.length||!takes.some(t=>t.id!==c?.takeId);$('deleteTakesFromDisk').disabled=$('archiveTakes').disabled;$('archiveTakes').hidden=$('deleteTakesFromDisk').hidden=!ids.length;$('deleteTakesFromDisk').title='Permanently delete media and its workflow JSON; cannot be undone';
  for(const card of $('takeList').querySelectorAll('[data-take]')){const checked=ids.includes(card.dataset.take);card.classList.toggle('take-selected',checked);card.querySelector('[data-select-take]').checked=checked;}
 }
@@ -785,7 +817,7 @@ const placeholderState=document.createElement('div');placeholderState.id='placeh
 placeholderState.innerHTML='<span class="empty-symbol">'+svg('nodes')+'</span><strong id="placeholderTitle"></strong><p id="placeholderHint"></p>';$('emptyStage').after(placeholderState);
 function renderPlaceholderState(d=viewerData()){
  placeholderState.hidden=!d?.take?.placeholder;
- if(!placeholderState.hidden){const available=T.realTakes(d.clip).length>0;text('placeholderTitle',available?'Choose a take':'Not generated yet');text('placeholderHint',available?'Generated takes are ready below. Use a take to add it to the edit.':'Generate a take to preview this clip.');}
+ if(!placeholderState.hidden){const available=T.realTakes(d.clip).length>0;text('placeholderTitle',available?'Choose a take':'Not generated yet');text('placeholderHint',available?'Generated takes are ready in Takes. Use a take to add it to the edit.':'Generate a take to preview this clip.');}
 }
 function viewerHead(d){
  $('previewQuality').value=previewQuality();
@@ -1104,7 +1136,19 @@ $('generate').onclick=()=>queueClips(selectedVideos());$('export').onclick=expor
 $('projectName').onchange=e=>{edits.apply('Rename project',()=>{state.project=e.target.value.trim()||'Untitled project';e.target.value=state.project;},'none');};
 $('clipName').onchange=e=>{const c=selectedAudio()||selected();if(!c)return;edits.apply('Rename '+c.name,()=>{c.name=e.target.value.trim()||'Untitled clip';},'timeline');};
 $('reset').onclick=reset;
-$('toggleMedia').onclick=()=>{if(window.innerWidth<=1100){$('mediaPanel').classList.toggle('open');$('inspector').classList.remove('open');}else{document.querySelector('.workbench').classList.toggle('hide-media');}};
+$('toggleMedia').onclick=()=>{if(window.innerWidth<=1100){$('mediaPanel').classList.toggle('open');$('inspector').classList.remove('open');}else if($('workbench').classList.contains('hide-media')&&$('mediaPanel').classList.contains('open'))closeMediaFlyout();else setMediaCollapsed(!$('workbench').classList.contains('hide-media'));};
+// On desktop a collapsed media pool leaves an icon rail whose buttons open the pool over the viewer.
+const mediaCollapsedKey='spool-media-collapsed',mediaRail=document.createElement('nav');mediaRail.className='media-rail';mediaRail.setAttribute('aria-label','Workflows and media');
+mediaRail.innerHTML=[['workflows','nodes','Workflows'],['media','bin','Media']].map(([tab,icon,label])=>'<button type="button" class="iconbutton" data-rail-tab="'+tab+'" aria-pressed="false" title="'+label+'" aria-label="'+label+'">'+svg(icon)+'</button>').join('')+'<button type="button" class="iconbutton" id="dockMedia" title="Keep workflows and media open" aria-label="Keep workflows and media open">'+svg('sidebar')+'</button>';
+$('editor').append(mediaRail);
+function syncMediaRail(){const panel=$('mediaPanel'),open=panel.classList.contains('open');for(const b of mediaRail.querySelectorAll('[data-rail-tab]'))b.setAttribute('aria-pressed',open&&panel.dataset.tab===b.dataset.railTab);}
+function closeMediaFlyout(){if(window.innerWidth>1100&&$('mediaPanel').classList.contains('open')){$('mediaPanel').classList.remove('open');syncMediaRail();}}
+function setMediaCollapsed(collapsed){$('workbench').classList.toggle('hide-media',collapsed);$('mediaPanel').classList.remove('open');try{localStorage.setItem(mediaCollapsedKey,collapsed?'1':'0');}catch(error){}syncMediaRail();}
+mediaRail.querySelectorAll('[data-rail-tab]').forEach(b=>b.onclick=()=>{const panel=$('mediaPanel'),same=panel.classList.contains('open')&&panel.dataset.tab===b.dataset.railTab;setBinTab(b.dataset.railTab);panel.classList.toggle('open',!same);syncMediaRail();});
+$('dockMedia').onclick=()=>setMediaCollapsed(false);
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('#mediaPanel,.media-rail,#modalOverlay,#native-clip-menu'))closeMediaFlyout();},true);
+$('mediaPanel').addEventListener('dragend',closeMediaFlyout);
+try{if(window.innerWidth>1100&&localStorage.getItem(mediaCollapsedKey)==='1')$('workbench').classList.add('hide-media');}catch(error){}
 $('toggleInspector').onclick=()=>{if(window.innerWidth<=760){$('inspector').classList.toggle('open');$('mediaPanel').classList.remove('open');}else{document.querySelector('.workbench').classList.toggle('hide-inspector');}};
 for(const id of ['importMedia','importTop'])$(id).onclick=()=>pickImport();$('mediaFiles').onchange=e=>importFiles(e.target.files);
 $('importWorkflow').onclick=()=>pickImport(false,true);$('poolSearch').oninput=renderBin;$('addShot').onclick=showShotPicker;
@@ -1129,7 +1173,7 @@ $('editor').addEventListener('keydown',e=>{
  if(e.key==='Escape'&&!$('modalOverlay').hidden){e.stopPropagation();closeModal();return;}
  if(!$('modalOverlay').hidden){if(e.key==='Tab'){const nodes=[...$('modalOverlay').querySelectorAll('button:not(:disabled),input,a,iframe')].filter(n=>n.getClientRects().length);if(!nodes.length)return;const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){last.focus();e.preventDefault();}else if(!e.shiftKey&&document.activeElement===last){first.focus();e.preventDefault();}}return;}
  if(e.target.closest('input:not([type=range]):not([type=checkbox]):not([type=radio]),textarea,select,[contenteditable]:not([contenteditable=false])')){clearHeld();return;}
- if(e.key==='Escape'){clearHeld();hideTrimPreview();if(!review.audition){selectedCut=null;setTimelineSelection([]);render();save();}if(review.audition)cancelAudition();else setViewMode('edit');$('mediaPanel').classList.remove('open');$('inspector').classList.remove('open');return;}
+ if(e.key==='Escape'){clearHeld();hideTrimPreview();if(!review.audition){selectedCut=null;setTimelineSelection([]);render();save();}if(review.audition)cancelAudition();else setViewMode('edit');$('mediaPanel').classList.remove('open');syncMediaRail();$('inspector').classList.remove('open');return;}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){e.preventDefault();e.stopPropagation();selectedCut=null;pause();editView();setTimelineSelection([...state.clips,...state.audioClips||[]].map(c=>c.id));selectionAnchor=state.selectedAudio||state.selected;render();save();return;}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='d'){e.preventDefault();e.stopPropagation();e.shiftKey?toggleSelectedEnabled():duplicate();return;}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();e.stopPropagation();redo();return;}
@@ -1200,8 +1244,8 @@ $('emptyImport').onclick=()=>pickImport(true);$('emptyWorkflow').onclick=()=>pic
 {
  $('editor').classList.add('full-editor');setBinTab('workflows');
  $('editor').append($('mediaPanel'));$('editor').classList.add('studio-sidebar');
- const settings=document.createElement('div');settings.className='viewer-settings';settings.append($('viewerZoom'),$('previewQuality'));$('viewer').querySelector('.viewer-head').append(settings);
- $('viewer').querySelector('.viewer-meta').prepend($('monitorMute'));
+ const settings=document.createElement('div');settings.className='viewer-settings';settings.append($('viewerZoom'),$('previewQuality'));
+ $('viewer').querySelector('.viewer-meta').prepend(settings,$('monitorMute'));
  document.querySelector('.tools').append(document.querySelector('.history-tools'));
 }
 const inspectorHeightKey=VIEW_KEY+':inspector-height:full';
@@ -1219,7 +1263,7 @@ function panelBounds(name){
  const width=available,drawer=name==='media'?innerWidth<=1100:innerWidth<=760;
  let max;
  if(drawer)max=width-24;
- else{const other=$(name==='media'?'inspector':'mediaPanel'),occupied=getComputedStyle(other).display!=='none'&&getComputedStyle(other).position!=='absolute'?other.getBoundingClientRect().width:0;max=width-320-occupied;}
+ else{const other=$(name==='media'?'inspector':'mediaPanel'),takes=$('takes').getBoundingClientRect(),occupied=getComputedStyle(other).display!=='none'&&getComputedStyle(other).position!=='absolute'?other.getBoundingClientRect().width:0,rail=takes.width&&Math.abs(takes.top-$('viewer').getBoundingClientRect().top)<2?takes.width:0;max=width-320-occupied-rail;}
  max=Math.max(0,max);
  return {min:Math.min(name==='media'?160:240,max),max};
 }
@@ -1579,7 +1623,7 @@ function renderQueueList(){
  $('queuePending').hidden=!queueSubmission.pending;$('retryQueue').disabled=queueSubmission.sending;
  const row=j=>{
   const observations=j.nodeProgress||[],node=observations.filter(n=>n.max>1).at(-1)||observations.at(-1),running=['running','farm_running'].includes(j.status);
-  const farm=j.farmProgress,percent=running?(j.target==='deadline'?farm?.percent:node?.max>1?100*node.value/node.max:null):null;
+  const farm=j.farmProgress,percent=jobPercent(j);
   const progress=Number.isFinite(percent)?'<div class="render-progress"><progress max="100" value="'+esc(percent)+'" aria-label="'+esc(j.target==='deadline'?'Deadline worker':'Current node')+' progress"></progress></div>':'';
   const result=state.clips.flatMap(c=>c.takes).find(t=>t.generated&&t.request?.attemptId===j.id),output=result?.media?.originalFile;
   const details='<div class="render-execution"><p>'+esc(j.target==='deadline'?'Deadline':j.target==='cloud'?'Comfy Cloud · Developer Platform':'Local Comfy')+(farm?.worker?' · '+esc(farm.worker):'')+'</p>'+(farm?.message?'<p>'+esc(farm.message)+'</p>':'')+observations.map(n=>'<div class="job-node">'+esc(n.label)+(n.max>1?' / '+esc(n.value)+' of '+esc(n.max):'')+'</div>').join('')+(j.seeds?.length?'<p class="job-seeds">'+j.seeds.map(b=>esc(b.label)+': '+esc(decimal(b.value))).join(' / ')+'</p>':'')+(j.error?'<pre class="render-error">'+esc(j.error)+'</pre>':'')+(output?'<p class="render-output">Saved to <a class="download-link" target="_blank" href="'+esc(url(output))+'">'+esc(output)+'</a></p>':'')+'<code>'+esc(j.submission?.external_id||j.promptId||'')+'</code><a class="download-link" target="_blank" href="/spool/api/attempts/'+encodeURIComponent(j.id)+'">Execution record ↗</a></div>';

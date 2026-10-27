@@ -9,8 +9,9 @@ them.
 
 Open **Workflows** in the left sidebar. **Local Workflows** run open-weight models
 on your ComfyUI; **Cloud Workflows** use Partner Nodes. Workflows you add to the
-project appear under **Project Workflows**. Search, location filters and task
-chips narrow the list.
+project appear under **Project Workflows**. Search narrows the list, and
+**Local + Cloud**, **Local** and **Cloud** under it choose where workflows run. The
+filter button beside the search shows the task chips and marks a task filter in use.
 
 - **Click** a card to add a shot at the end of the timeline.
 - **Drag** it to a cut or empty space to insert a shot there.

@@ -20,7 +20,7 @@
   if(height==='viewer'){$('inspectorHeight').click();await frame();}
   for(const side of ['Left','Right'])if(visible($(side==='Left'?'mediaPanel':'inspector'))){$('toggle'+side+'Panel').click();await frame();}
   check(height+': both hidden panels can be reopened',visible($('showLeftPanel'))&&visible($('showRightPanel')));
-  if(innerWidth>1100){const viewer=$('viewer').getBoundingClientRect(),editor=$('editor').getBoundingClientRect();check(height+': hiding both panels releases the workspace width',viewer.width>editor.width-40);}
+  if(innerWidth>1100){const viewer=$('viewer').getBoundingClientRect(),editor=$('editor').getBoundingClientRect(),takes=$('takes').getBoundingClientRect(),rail=Math.abs(takes.top-viewer.top)<2?takes.width:0,icons=d.querySelector('.media-rail')?.getBoundingClientRect().width||0;check(height+': hiding both panels releases the workspace width',icons<=40&&viewer.width+rail+icons>editor.width-40);}
   $('showLeftPanel').click();await frame();$('showRightPanel').click();await frame();
   check(height+': arrows work repeatedly as panels open and close',visible($('inspector'))&&(visible($('mediaPanel'))||innerWidth<=760));
  }
@@ -28,6 +28,16 @@
  $('workspaceMenu').click();$('toggleInspector').click();await frame();
  check('The View menu stays synchronized with the panel controls',visible($('showRightPanel'))&&$('toggleInspector').getAttribute('aria-checked')==='false');
  $('showRightPanel').click();await frame();
+ if(innerWidth>1100){
+  $('toggleLeftPanel').click();await frame();const rail=d.querySelector('.media-rail'),viewer=$('viewer').getBoundingClientRect();
+  check('A hidden media pool leaves an icon rail',visible(rail)&&rail.getBoundingClientRect().width<=40&&!visible($('mediaPanel')));
+  rail.querySelector('[data-rail-tab="media"]').click();await frame();const pool=$('mediaPanel').getBoundingClientRect();
+  check('The icon rail opens the pool over the viewer without moving it',visible($('mediaPanel'))&&$('mediaPanel').dataset.tab==='media'&&pool.right>viewer.left&&$('viewer').getBoundingClientRect().left===viewer.left);
+  d.querySelector('.timeline-shell').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));await frame();
+  check('Clicking elsewhere closes the floating pool',!visible($('mediaPanel'))&&visible(rail));
+  $('dockMedia').click();await frame();d.querySelector('[data-bin-tab="workflows"]').click();await frame();
+  check('The rail can dock the pool again',visible($('mediaPanel'))&&!visible(rail)&&localStorage.getItem('spool-media-collapsed')==='0');
+ }
  await n.flush();check('Panel controls do not change the project or its revision',JSON.stringify(n.state.clips)===before&&n.revision===revision);
  check('Panel controls fit within the viewport',d.documentElement.scrollWidth<=innerWidth);
  return {checks};

@@ -56,7 +56,6 @@ separate origins. Do not fall back to capturing an arbitrary active graph.
 Keep project instructions in the agent conversation, separate from the video
 prompt. Extend the scoped commands for image, prompt and duration changes,
 workflow mapping and experiment plans; ask only about ambiguous input roles.
-Show notes, ratings and comparison beside takes when that area is redesigned.
 
 ### Paused-video seek can show stale footage
 

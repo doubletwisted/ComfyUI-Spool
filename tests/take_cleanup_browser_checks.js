@@ -10,7 +10,8 @@
  const before=JSON.stringify(shot()),T=await import('/spool/ui/timeline.js'),edit=JSON.stringify(T.exportPlan(n.state));
  check('Delete actions appear only once takes are selected',$('archiveTakes').hidden&&$('deleteTakesFromDisk').hidden);select('one');
  const left=$('takeSelectionCount').getBoundingClientRect(),right=$('archiveTakes').getBoundingClientRect();
- check('Selection count and Select all sit on the left, with Delete and Permanently delete on the right',left.left<right.left&&$('selectAllTakes').getBoundingClientRect().right<=right.left&&$('archiveTakes').parentElement=== $('deleteTakesFromDisk').parentElement);
+ const all=$('selectAllTakes').getBoundingClientRect(),precedes=(a,b)=>a.right<=b.left+1||a.bottom<=b.top+1;
+ check('Selection count and Select all come before Delete and Permanently delete',precedes(left,right)&&precedes(all,right)&&$('archiveTakes').parentElement=== $('deleteTakesFromDisk').parentElement);
  check('Take controls fit within the editor width',d.querySelector('.takes-head').getBoundingClientRect().right<=w.innerWidth+1&&$('deleteTakesFromDisk').getBoundingClientRect().right<=w.innerWidth+1);
  check('Ordinary Delete and Permanently delete are labelled distinctly',!$('deleteSelectedTakes')&&!$('deleteOtherTakes')&&$('archiveTakes').textContent.startsWith('Delete')&&$('archiveTakes').title.includes('Ctrl+Z')&&$('deleteTakesFromDisk').textContent.includes('Permanently delete')&&$('deleteTakesFromDisk').title.includes('cannot be undone'));
  $('archiveTakes').click();

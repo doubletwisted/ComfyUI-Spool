@@ -478,3 +478,151 @@ input:not([type=range]):not([type=file]),textarea{cursor:text}input[readonly]{cu
 .shortcut-sheet dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:7px 14px;margin:0;align-items:center}.shortcut-sheet dd{margin:0;color:var(--text);font-size:12px}
 .shortcut-sheet dt{display:flex;align-items:center;gap:3px;white-space:nowrap}.shortcut-join{color:var(--faint);font-size:11px;padding:0 1px}
 .shortcut-sheet kbd{min-width:20px;padding:2px 6px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;background:var(--raised);color:var(--text);font:11px var(--mono);text-align:center}
+/* Compact studio (2026-10-27): panels meet at 1px dividers, the top bar is one line, and a
+   clip's takes sit in a rail beside the viewer on desktop widths. */
+.editor.project-topbar.full-editor{--topbar-height:40px;padding:0;row-gap:0;grid-template-rows:var(--topbar-height) minmax(0,1fr) 32px var(--timeline-height,236px) 0px}
+.editor.full-editor.studio-sidebar,.editor.full-editor.inspector-full{column-gap:0}
+.full-editor .topbar{margin:0;padding:0 8px 0 12px}
+.full-editor .brand{font-size:15px;gap:7px}.full-editor .brandmark .icon{width:19px;height:19px}
+.project-topbar .bar-left{gap:10px}.project-topbar .bar-right{gap:6px}
+.project-topbar .project-identity{flex:0 1 auto;max-width:none;flex-direction:row;align-items:center;gap:6px}
+.project-topbar .project-save{align-self:center}
+.project-topbar .workspace-menu,.project-topbar .topbar-connection,.project-topbar .queue-pill{min-height:26px;padding-block:3px}
+.editor.project-topbar #export{min-height:26px;padding:3px 11px}
+.studio-sidebar>.media-panel{border:0;border-right:1px solid var(--line);border-radius:0}
+.full-editor .viewer,.full-editor .takes,.full-editor .inspector,.full-editor .timeline-shell{border:0;border-radius:0}
+.full-editor .takes{border-top:1px solid var(--line)}
+.full-editor .inspector{border-left:1px solid var(--line)}
+.full-editor .timeline-toolbar{border:0;border-top:1px solid var(--line);border-radius:0;margin-bottom:0}
+.full-editor .viewer-head{height:34px}.full-editor .viewer-stage{margin:0;border-radius:0}.full-editor .viewer-tail{padding:4px 8px 0}.full-editor .viewer-controls{height:36px}
+.full-editor .inspector-head{height:36px}.full-editor .media-panel>.panel-head{height:36px}
+.inspector .inspector-foot{padding:8px 10px;gap:10px}
+.inspector .inspector-foot .native-count input{height:32px}.inspector .inspector-foot .generate{min-height:32px;height:32px}
+.clip-notes{padding-top:10px}.notes-heading{margin-bottom:6px}
+/* The note composer is one line until it is used. */
+.notes-composer{margin-top:6px}.notes-composer>textarea{min-height:30px;height:30px;resize:none;padding:6px 9px}
+.notes-composer:focus-within>textarea,.notes-composer>textarea:not(:placeholder-shown){height:auto;min-height:60px;resize:vertical}
+.notes-composer:not(:focus-within):has(>textarea:placeholder-shown) .notes-compose-actions{display:none}
+/* Workflow location and task filters fold behind one toggle that counts active filters. */
+.workflow-search{padding:6px 8px 4px;align-items:center}
+.workflow-filter-toggle{position:relative;display:inline-grid;place-items:center;flex-shrink:0;width:28px;height:26px;padding:0;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--dim)}
+.workflow-filter-toggle svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
+.workflow-filter-toggle:hover,.workflow-filter-toggle[aria-expanded=true]{background:var(--hover);color:var(--text)}.workflow-filter-toggle.active{border-color:var(--accent);color:var(--accent)}
+#workflowFilterCount{position:absolute;top:-5px;right:-5px;min-width:14px;height:14px;padding:0 3px;border-radius:7px;background:var(--accent);color:var(--accent-ink);font:700 9px/14px var(--mono)}#workflowFilterCount:empty{display:none}
+.workflow-library[data-filters=closed] .workflow-filters{display:none}
+.workflow-actions{padding:0 4px 2px}.workflow-filters{padding:2px 8px 6px}
+.workflow-section{padding:8px 0}.workflow-section p{margin:2px 0 6px}.workflow-section h4{margin:8px 0 5px}
+.workflow-cards,.studio-sidebar .workflow-cards{grid-template-columns:repeat(auto-fill,minmax(min(108px,100%),1fr))}
+/* Pending renders sit where their takes will land. */
+.take-group,.take-pending:empty,.media-rail{display:none}
+.take-pending-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim)}
+.take-pending-thumb{display:grid;place-items:center;flex-shrink:0;border:1px dashed var(--line2);border-radius:4px;color:var(--dim);font:10px var(--mono)}
+.take-pending-info{display:flex;flex-direction:column;gap:2px;min-width:0}.take-pending-info strong{color:var(--text);font-weight:600}.take-pending-info small{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.take-pending-bar{display:block;height:3px;border-radius:2px;background:var(--line2);overflow:hidden}.take-pending-bar i{display:block;height:100%;background:var(--accent)}
+.takes:not(.has-real-takes) .take-pending{display:flex;gap:12px;padding:0 9px 6px}.takes:not(.has-real-takes) .take-pending-thumb{width:44px;height:25px}
+@media(min-width:1101px){
+ .editor.full-editor{--media-width:clamp(220px,18vw,320px);--inspector-width:clamp(320px,25vw,460px);--takes-width:clamp(200px,13vw,240px)}
+ /* A collapsed media pool keeps a 36px icon rail; the pool opens over the viewer from it. */
+ .editor.studio-sidebar:has(.workbench.hide-media),.editor.studio-sidebar.inspector-full:has(.workbench.hide-media.hide-inspector){grid-template-columns:36px minmax(0,1fr)}
+ .editor.studio-sidebar.inspector-full:has(.workbench.hide-media:not(.hide-inspector)){grid-template-columns:36px minmax(0,1fr) var(--inspector-width)}
+ .studio-sidebar:has(.workbench.hide-media)>.media-rail{display:flex;grid-area:2/1/5/2;flex-direction:column;align-items:center;gap:4px;padding:6px 0;background:var(--panel);border-right:1px solid var(--line)}
+ .media-rail .iconbutton{width:28px;min-height:28px}.media-rail .iconbutton[aria-pressed=true]{color:var(--text);background:var(--raised);box-shadow:inset 2px 0 var(--accent)}.media-rail #dockMedia{margin-top:auto}
+ .editor.studio-sidebar:has(.workbench.hide-media)>.media-panel.open{display:flex;position:absolute;grid-area:auto;left:36px;top:var(--topbar-height);bottom:0;width:var(--media-width);z-index:35;box-shadow:12px 0 32px #0009}
+ /* With real takes the strip under the viewer becomes a rail beside it. */
+ .editor.studio-sidebar.inspector-full>.workbench:has(>.takes.has-real-takes),.editor.studio-sidebar:not(.inspector-full)>.workbench.hide-inspector:has(>.takes.has-real-takes){grid-template-columns:minmax(0,1fr) var(--takes-width);grid-template-rows:minmax(0,1fr);grid-template-areas:"viewer takes"}
+ .editor.studio-sidebar:not(.inspector-full)>.workbench:not(.hide-inspector):has(>.takes.has-real-takes){grid-template-columns:minmax(0,1fr) var(--takes-width) var(--inspector-width);grid-template-rows:minmax(0,1fr);grid-template-areas:"viewer takes inspector"}
+ .full-editor .takes.has-real-takes{display:flex;flex-direction:column;border-top:0;border-left:1px solid var(--line)}
+ .full-editor .takes.has-real-takes .takes-head{flex-wrap:wrap;align-content:flex-start;gap:4px;height:auto;min-height:0;padding:6px 8px;border-bottom:1px solid var(--line)}
+ .takes.has-real-takes .take-selection-tools{display:contents}
+ .takes.has-real-takes .takes-title{order:0}.full-editor .takes.has-real-takes .takes-clip{display:none}
+ .takes.has-real-takes #compareTakesStrip{order:1;margin-left:auto}
+ .takes.has-real-takes #openClipFolder{order:2;margin-left:auto;width:26px;height:24px;padding:0;justify-content:center}
+ .takes.has-real-takes #openClipFolder .folder-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+ .takes.has-real-takes .takes-head::after{content:"";order:3;flex-basis:100%}
+ .takes.has-real-takes #takeSelectionCount{order:4}.takes.has-real-takes #selectAllTakes{order:5}
+ .takes.has-real-takes .take-tools{order:6;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+ .full-editor .takes.has-real-takes .take-list{flex:1 1 0;flex-direction:column;gap:2px;padding:4px;overflow-x:hidden;overflow-y:auto;scrollbar-gutter:stable}
+ .full-editor .takes.has-real-takes .take-card{flex:none;width:100%;max-width:none;display:grid;grid-template-columns:minmax(84px,46%) minmax(0,1fr);grid-template-rows:auto 1fr;column-gap:8px;row-gap:3px;align-items:start;padding:4px;border:1px solid transparent;border-radius:5px;background:transparent;box-shadow:none}
+ .full-editor .takes.has-real-takes .take-card:hover{background:var(--raised)}
+ .full-editor .takes.has-real-takes .take-card.chosen{background:#2b271e;box-shadow:inset 3px 0 var(--accent)}
+ .full-editor .takes.has-real-takes .take-card.viewing:not(.chosen){border-color:var(--preview);background:#18292c}
+ .full-editor .takes.has-real-takes .take-thumb{grid-column:1;grid-row:1/3;width:100%;height:auto;aspect-ratio:16/9;flex:none;align-self:center}
+ .full-editor .takes.has-real-takes .take-heading{grid-column:2;grid-row:1;height:auto;flex-wrap:wrap;gap:4px;padding-right:18px}
+ .full-editor .takes.has-real-takes .take-details{grid-column:2;grid-row:2;flex-wrap:wrap;align-content:flex-start;gap:2px 6px}
+ .full-editor .takes.has-real-takes .take-seed{display:block;flex-basis:100%}
+ .full-editor .takes.has-real-takes .use-take{position:absolute;right:5px;bottom:5px;margin:0;opacity:0;transition:opacity .12s}
+ .full-editor .takes.has-real-takes .take-card:is(:hover,:focus-within,.viewing) .use-take{opacity:1}
+ .takes.has-real-takes .take-group{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:8px 6px 3px;font-size:10px;color:var(--faint)}
+ .takes.has-real-takes .take-group span:first-child{color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .takes.has-real-takes .take-group span:last-child{flex-shrink:0;font-family:var(--mono)}
+ .takes.has-real-takes .take-pending{display:flex;flex-direction:column;gap:2px;flex-shrink:0;padding:4px;border-top:1px solid var(--line)}
+ .takes.has-real-takes .take-pending-row{display:grid;grid-template-columns:minmax(84px,46%) minmax(0,1fr);gap:8px;padding:4px}
+ .takes.has-real-takes .take-pending-thumb{width:100%;aspect-ratio:16/9}
+ .full-editor .takes.has-real-takes .takes-keys{display:flex;flex-wrap:wrap;align-items:center;gap:3px;flex-shrink:0;padding:5px 8px;border-top:1px solid var(--line);font-size:10px}
+}
+@media(min-width:1101px) and (hover:none){.full-editor .takes.has-real-takes .use-take{opacity:1}}
+/* Three control tiers: filled for the one primary action in an area (Export, Use take,
+   Generate), flat for secondary actions, and borders only around inputs. */
+.full-editor :is(#compareTakes,#tryInEdit,#cancelAudition,#addVideoTrack,#exportRangeSettings,#selectAllTakes,#openClipFolder,#monitorMute,#viewerZoom,#editClipWorkflow,#reloadTakeWorkflow,.workspace-menu,.topbar-connection,.queue-pill,.workflow-filter-toggle,.take-tools button){min-height:24px;padding:2px 8px;border-color:transparent;border-radius:4px;background:transparent;color:var(--dim);font-size:11px;font-weight:500;box-shadow:none}
+.full-editor :is(#compareTakes,#tryInEdit,#cancelAudition,#addVideoTrack,#exportRangeSettings,#selectAllTakes,#openClipFolder,#monitorMute,#viewerZoom,#editClipWorkflow,#reloadTakeWorkflow,.workspace-menu,.topbar-connection,.queue-pill,.workflow-filter-toggle,.take-tools button):hover:not(:disabled){background:var(--hover);color:var(--text)}
+.full-editor :is(#compareTakes,#tryInEdit,#editClipWorkflow,#reloadTakeWorkflow) .icon{width:13px;height:13px}
+.full-editor #compareTakes[aria-pressed=true]{color:var(--preview);background:#62d0e01a}
+.full-editor #exportRangeSettings[aria-pressed=true],.full-editor .workflow-filter-toggle.active{color:var(--accent);background:#ffb52614}
+.full-editor .project-topbar .queue-pill.busy,.project-topbar.full-editor .queue-pill.busy{color:var(--accent)}
+.full-editor .take-tools #deleteTakesFromDisk{color:#e5a1a1}
+.full-editor :is(#useSource,#export){min-height:26px;padding:3px 12px;border-radius:4px;font-size:11px;font-weight:600}
+.full-editor #editClipWorkflow,.full-editor #reloadTakeWorkflow{border-color:var(--line2)}
+.full-editor .inspector-name{font-size:13px;font-weight:600}
+/* The viewer header carries the review actions; Fit and resolution sit with the transport. */
+.full-editor .viewer-head{gap:8px;padding:0 10px}.full-editor .viewer-actions{gap:2px}
+.full-editor .viewer-meta .viewer-settings{display:flex;align-items:center;gap:2px;margin:0 4px 0 0}
+.full-editor .viewer-meta #previewQuality{max-width:150px;border:0;background:transparent;color:var(--dim);font-size:11px;padding:2px 4px}
+.full-editor .viewer-meta #previewQuality:hover{color:var(--text);background:var(--hover)}
+.full-editor .viewer-meta #viewerZoom{min-width:0;font-family:var(--mono)}
+/* Tabs are one size everywhere: 12px labels with an amber underline. */
+.full-editor .media-panel>.panel-head .seg button{min-height:28px;padding:4px 10px;font-size:12px}
+.full-editor .media-panel>.panel-head{padding:0 6px 0 4px}
+/* Media pool: search, then location, then the workflows. */
+.full-editor .workflow-search{gap:4px;padding:8px 10px 6px}
+.full-editor .workflow-search input{height:26px}
+.full-editor .workflow-search .seg{gap:0;border:0;background:transparent;padding:0}
+.full-editor .workflow-search .seg button{display:grid;place-items:center;width:26px;min-height:26px;padding:0;border:0;border-radius:4px;color:var(--faint);background:transparent}
+.full-editor .workflow-search .seg button.active{color:var(--text);background:var(--raised)}
+.workflow-search .seg svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.workflow-location{display:flex;gap:2px;margin:0 10px 6px;padding:2px;border:1px solid var(--line);border-radius:5px;background:var(--bg);flex-shrink:0}
+.workflow-location button{flex:1;min-width:0;min-height:22px;padding:2px 6px;border:0;border-radius:3px;background:transparent;color:var(--dim);font-size:11px;white-space:nowrap}
+.workflow-location button:hover{color:var(--text)}.workflow-location button.active{background:var(--raised);color:var(--text);font-weight:600}
+.full-editor .workflow-actions{gap:0;padding:0 6px 4px}.full-editor .workflow-actions button{min-height:22px;padding:2px 4px;font-size:10px;color:var(--dim)}
+.full-editor .workflow-filters{gap:4px;padding:0 10px 8px}.full-editor .workflow-filters button{padding:2px 8px;font-size:10px}
+.workflow-catalog #workflowList{padding:0 10px 10px}
+.full-editor .workflow-section{padding:10px 0 6px}.full-editor .workflow-section h3{font-size:11px}.full-editor .workflow-section h4{font-size:10px;color:var(--dim);margin:10px 0 6px}
+.workflow-catalog #workflowList .workflow-row>span{padding:5px 7px 6px}
+/* Take rail: one header row; the selection row appears only while takes are selected. */
+@media(min-width:1101px){
+ .full-editor .takes.has-real-takes .takes-head{row-gap:6px;padding:0 6px 0 10px;min-height:34px;align-content:center}
+ .takes.has-real-takes #selectAllTakes{order:1;margin-left:auto}
+ .takes.has-real-takes #openClipFolder{order:2;margin-left:0;width:24px;padding:0}
+ .takes.has-real-takes:not(:has(#takeSelectionCount:not([hidden]))) .takes-head::after{display:none}
+ .full-editor .takes.has-real-takes .take-list{gap:4px;padding:6px}
+ .full-editor .takes.has-real-takes .take-card{padding:5px;column-gap:9px}
+ .full-editor .takes.has-real-takes .take-heading strong{font-size:12px}
+ .full-editor .takes.has-real-takes .take-details{font-size:10px;color:var(--faint)}
+ .takes.has-real-takes .take-group{padding:10px 6px 2px}
+ .full-editor .takes.has-real-takes .takes-keys{padding:6px 10px;color:var(--faint)}
+}
+/* Use take shares the duration line, so its reserved space never covers text. */
+@media(min-width:1101px){
+ .full-editor .takes.has-real-takes .use-take{position:static;order:1;margin-left:auto;min-height:20px;padding:1px 7px;font-size:10px}
+ .full-editor .takes.has-real-takes .take-seed{order:2}
+ .takes.has-real-takes .take-pending:empty{display:none}
+}
+.notes-composer:not(:focus-within)>textarea:placeholder-shown{overflow:hidden}
+/* Generate: a small take count beside one primary button. */
+.inspector .inspector-foot .native-count{gap:6px;font-size:11px;color:var(--dim)}
+.inspector .inspector-foot .native-count input{width:44px;height:30px;padding:4px;font-size:12px}
+.inspector .inspector-foot .generate{min-height:30px;height:30px;min-width:104px;padding:4px 14px}
+/* Timeline toolbar: icon tools, then flat text actions. */
+.full-editor #addVideoTrack{color:var(--text)}
+.full-editor .timeline-toolbar{padding:0 8px}
+@media(max-height:820px){.editor.project-topbar.full-editor{grid-template-rows:var(--topbar-height) minmax(0,1fr) 32px var(--timeline-height,196px) 0px}}
+@media(max-width:600px){.editor.project-topbar.full-editor:has(.connection-warning:not([hidden])){--topbar-height:64px}.project-topbar.full-editor:has(.connection-warning:not([hidden])) .topbar{grid-template-rows:40px 24px}}

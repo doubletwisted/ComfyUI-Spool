@@ -62,5 +62,8 @@
  const attention=node().querySelector('.clip-attention'),rect=attention.getBoundingClientRect(),clipRect=node().getBoundingClientRect();
  check('Badges sit in the upper-right header and fit full/native/narrow clips',rect.right<=clipRect.right&&rect.top<clipRect.top+25&&rect.left>=clipRect.left);
  check('Badges have distinct icons and accessible descriptions',badge('open-notes').querySelector('svg')&&badge('open-notes').getAttribute('aria-label')==='2 open notes');
+ const takes=$('takes').getBoundingClientRect(),viewer=d.querySelector('.viewer').getBoundingClientRect(),groups=[...$('takeList').querySelectorAll('.take-group')];
+ if(w.innerWidth>1100)check('Takes sit in a rail beside the viewer',Math.abs(takes.top-viewer.top)<2&&takes.left>=viewer.right-1&&takes.height>viewer.height-2);
+ check('Imported and generated takes start separate batches',groups.length===2&&groups[0].textContent.startsWith('Imported')&&groups.every(g=>/\d+ takes?$/.test(g.textContent)));
  return {checks};
 })()
