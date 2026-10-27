@@ -1,7 +1,9 @@
 """Run Spool's editor and project store without ComfyUI: python -m spool"""
 import argparse
+import asyncio
 import os
 import sys
+import webbrowser
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -33,6 +35,7 @@ def main():
     parser.add_argument("--input-root", type=Path)
     parser.add_argument("--output-root", type=Path)
     parser.add_argument("--temp-root", type=Path)
+    parser.add_argument("--open", action="store_true", help="open the studio in the default browser")
     args = parser.parse_args()
     store = Workspace(args.storage)
     folders = COMFY if installed else store.root
@@ -47,7 +50,13 @@ def main():
         raise web.HTTPFound("/spool/")
 
     server.app.add_routes(server.routes)
-    print(f"Spool: http://{args.host}:{args.port}/spool/  (projects in {store.root})", flush=True)
+    url = f"http://{args.host}:{args.port}/spool/"
+    if args.open:
+        async def open_studio(app):
+            # on_startup runs before the socket listens; give it a moment.
+            asyncio.get_running_loop().call_later(0.5, webbrowser.open, url)
+        server.app.on_startup.append(open_studio)
+    print(f"Spool: {url}  (projects in {store.root})", flush=True)
     web.run_app(server.app, host=args.host, port=args.port, print=None)
 
 

@@ -24,6 +24,8 @@ First public release.
 - Export the timeline as OpenTimelineIO (`.otio`) for Resolve, Premiere Pro and
   other editors: video tracks, covered clips, trims, gaps and audio lanes, with
   clips referencing the original files in place.
+- `run_spool.bat` starts the studio without ComfyUI and opens it in the browser;
+  `python -m spool --open` does the same elsewhere.
 - Clip notes, a keyboard shortcut sheet, a non-blocking Renders panel and a
   layout that adapts to laptop screens.
 

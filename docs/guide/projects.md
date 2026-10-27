@@ -51,13 +51,16 @@ Spool.
 
 ## Running without ComfyUI
 
+On Windows, double-click `run_spool.bat` in the Spool folder. It uses the Python
+of the ComfyUI portable build, or a `venv` beside ComfyUI, and opens the studio
+at `http://127.0.0.1:8190/spool/`. Elsewhere, run this from the Spool folder:
+
 ```powershell
-python -m spool            # http://127.0.0.1:8190/spool/
+python -m spool --open
 ```
 
-Run this from the Spool folder with Python 3.11+, aiohttp and Pillow installed,
-and ffmpeg on PATH. Inside `ComfyUI/custom_nodes`, it uses the same settings
-folder as the ComfyUI extension (`ComfyUI/user/spool`). Options: `--port`,
+Either way you need Python 3.11+ with aiohttp and Pillow, and ffmpeg on PATH. Inside `ComfyUI/custom_nodes`, it uses the same settings
+folder as the ComfyUI extension (`ComfyUI/user/spool`). Options: `--open`, `--port`,
 `--storage` (or `SPOOL_STORAGE`) for the settings folder, and `--host`. See
 [Security and network access](security.md) before changing the host.
 

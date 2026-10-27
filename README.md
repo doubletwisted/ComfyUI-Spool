@@ -125,8 +125,8 @@ is stored outside every project. See [Projects and storage](docs/guide/projects.
 <details>
 <summary>Can I edit while ComfyUI is stopped?</summary>
 
-Yes. Run `python -m spool` from the Spool folder and open
-`http://127.0.0.1:8190/spool/`. Editing, import and export work without ComfyUI,
+Yes. Double-click `run_spool.bat` in the Spool folder, or run
+`python -m spool --open` there. Editing, import and export work without ComfyUI,
 and Spool can start your ComfyUI for you. See
 [Running without ComfyUI](docs/guide/projects.md#running-without-comfyui).
 </details>

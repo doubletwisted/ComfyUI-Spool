@@ -12,3 +12,4 @@ ui/builtin-captures.json linguist-generated=true
 # Development material stays out of source archives and release packages.
 tests/ export-ignore
 .native-test/ export-ignore
+*.bat text eol=crlf

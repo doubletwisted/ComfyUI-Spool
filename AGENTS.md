@@ -1,62 +1,45 @@
 # Spool
 
-Spool is a video timeline studio inside ComfyUI. The Python backend (`spool/`)
-owns projects and execution, the studio (`ui/`) is served at `/spool/`, and a
-small ComfyUI page extension (`web/`) adds **Open Spool ↗** and links graph tabs
-back to clips. The backend also runs without ComfyUI (`python -m spool`).
+Spool is a video timeline editor that complements ComfyUI. The backend is in
+`spool/`, the studio in `ui/`, and the small extension on the ComfyUI page in
+`web/`.
 
 Read [docs/dev/glossary.md](docs/dev/glossary.md) and
 [docs/dev/architecture.md](docs/dev/architecture.md) before planning a change. If
 `AGENTS.local.md` exists beside this file, read it too.
 
-## Never compromise on
+## Hit every surface
 
-- **Ordinary workflows.** A workflow needs no Spool nodes or graph rewrites. Keep
-  Spool's state, UI and execution adapters in this extension and prefer narrow
-  integration over changes to ComfyUI.
-- **The user's edit.** Generation never chooses a take; only an explicit choice
-  such as **Use take** changes the edit.
-- **No surprise renders.** A request is frozen before dispatch and never
-  resubmitted when its outcome is uncertain.
+The most common defect is a change that works where you tested it and is missing
+elsewhere. Before calling a change done, say which of these applied:
 
-## Before calling a change done
-
-Say which of these applied:
-
-- The same action from its other entry points: buttons, menus, shortcuts, the
-  inspector.
-- Laptop and narrow studio layouts.
-- The ComfyUI page side (`web/`): linked tabs and **Apply to clip**.
-- Standalone mode, with ComfyUI stopped.
-- The scoped command API and `skills/spool-control`.
-- Local ComfyUI, Comfy Cloud and Deadline.
-- Formats shared by Python and JavaScript: change both sides and the fixture.
-- The user guide and the CHANGELOG.
+- **Entry points.** An action is often reachable from a button, a menu, a
+  shortcut and the inspector.
+- **Where Spool runs.** Inside ComfyUI, standalone (`run_spool.bat` or
+  `python -m spool`), and the ComfyUI page side in `web/`.
+- **Render targets.** Local ComfyUI, Comfy Cloud and Deadline each need a
+  decision, even if it is "not supported".
+- **Commands.** What a user can do, the scoped command API usually should too.
+- **Python and JavaScript.** A shared format changes on both sides and in its
+  fixture.
+- **Docs.** The user guide and the CHANGELOG.
 
 ## Verifying
 
 - Run `python tests/run_architecture_checks.py` before every commit.
-- Run browser and live checks against an isolated host (`tests/run_host.py`),
-  never a ComfyUI someone uses for real work. Paid checks (`cloud-smoke`,
-  Deadline acceptance) run only when asked. See
-  [docs/dev/development.md](docs/dev/development.md).
-- Logic bugs get a test that fails without the fix; visual fixes get before/after
-  screenshots.
+- Run browser and live checks against an isolated host (`tests/run_host.py`).
+  Paid checks run only when asked. See [docs/dev/development.md](docs/dev/development.md).
 - Report mocked results separately from live evidence.
 
 ## Commits
 
-- Branch from `main`, one coherent change per branch, titled in plain language.
+- Branch from `main`; one change per branch, titled in plain language.
 - No AI attribution or `Co-Authored-By` trailers.
-- Do not push, tag, publish or open pull requests without an explicit
-  instruction. A change to `pyproject.toml` on `main` publishes to the Comfy
-  Registry.
 
-## Docs and work tracking
+## Docs
 
-- `docs/guide/` is for users; `docs/dev/` records decisions and constraints the
-  code cannot show. Rewrite outdated text rather than appending to it.
-- Outstanding work lives in GitHub issues. Do not commit plans or scratch files.
+- `docs/guide/` is for users, `docs/dev/` for decisions the code cannot show.
+- Outstanding work lives in GitHub issues, not in the repository.
 
 ## Clip notes
 
