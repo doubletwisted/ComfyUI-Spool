@@ -1,4 +1,6 @@
 // Own readiness before any runtime, project or dependency can await.
+// crypto.randomUUID exists only in secure contexts; Spool opened over plain HTTP from another machine still needs IDs.
+if(!crypto.randomUUID)crypto.randomUUID=()=>'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16));
 const editor=document.getElementById('editor'),notice=document.createElement('div');
 editor.inert=true;notice.id='spool-loading';notice.setAttribute('role','status');
 notice.style.cssText='position:fixed;inset:0;z-index:2147483647;display:grid;place-content:center;background:#111e;color:#eee;font:14px sans-serif;padding:24px';

@@ -8,6 +8,8 @@ import {createWorkflowLinks} from './workflow-link.js';
 import {applyGraphInputs} from './graph-inputs.js';
 import {captureComfyGraph} from './graph-capture.js';
 
+// crypto.randomUUID exists only in secure contexts; Comfy opened over plain HTTP from another machine still needs IDs.
+if(!crypto.randomUUID)crypto.randomUUID=()=>'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16));
 const bridgeId = hostBridgeId(sessionStorage,{reload:performance.getEntriesByType('navigation')[0]?.type==='reload',embedded:new URLSearchParams(location.search).has(TEMPLATE_PARAMS.mode)});
 const channel = openChannel(bridgeId);
 let embeddedTemplates,templatePreparation,stopWorkflowToolbar,studioButton,studioTab;
