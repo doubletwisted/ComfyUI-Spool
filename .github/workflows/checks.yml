@@ -1,0 +1,46 @@
+name: Checks
+
+# The architecture gate. Pull requests run it on Linux only, the cheapest
+# runner; run it by hand from the Actions tab for Windows, macOS and Linux.
+# Browser and live checks need a ComfyUI host and stay local; see
+# docs/dev/development.md.
+on:
+  pull_request:
+    paths-ignore: ['docs/**', '**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Gate on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["windows-latest", "macos-latest", "ubuntu-latest"]') || fromJSON('["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Install ffmpeg
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            macOS) brew install ffmpeg ;;
+            Linux) sudo apt-get update && sudo apt-get install -y ffmpeg ;;
+            Windows) choco install ffmpeg -y --no-progress ;;
+          esac
+      - name: Install Python packages
+        run: python -m pip install aiohttp pillow -r requirements.txt
+      - name: Run the gate
+        run: python tests/run_architecture_checks.py

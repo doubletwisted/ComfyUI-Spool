@@ -44,6 +44,11 @@ doc). It needs no ComfyUI host. The Deadline contract tests also run the real
 [ComfyUI-Deadline-Plugin](https://github.com/doubletwisted/ComfyUI-Deadline-Plugin)
 when it is checked out beside the Spool folder, and are skipped otherwise.
 
+[`checks.yml`](../../.github/workflows/checks.yml) runs the gate on Linux for
+pull requests that change more than docs. Run it by hand from the Actions tab to
+also cover Windows and macOS; macOS minutes cost ten times as much in a private
+repository. Browser and live checks still run locally.
+
 ## A test host
 
 Browser and live checks use an isolated CPU ComfyUI host. It keeps projects,
