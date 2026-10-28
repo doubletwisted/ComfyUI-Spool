@@ -626,3 +626,65 @@ input:not([type=range]):not([type=file]),textarea{cursor:text}input[readonly]{cu
 .full-editor .timeline-toolbar{padding:0 8px}
 @media(max-height:820px){.editor.project-topbar.full-editor{grid-template-rows:var(--topbar-height) minmax(0,1fr) 32px var(--timeline-height,196px) 0px}}
 @media(max-width:600px){.editor.project-topbar.full-editor:has(.connection-warning:not([hidden])){--topbar-height:64px}.project-topbar.full-editor:has(.connection-warning:not([hidden])) .topbar{grid-template-rows:40px 24px}}
+/* Studio polish (2026-10-28): amber marks the selection, the playhead and Generate; short
+   inspector controls are label-left rows; a status bar holds messages, save state and the
+   Comfy connection. */
+.editor.project-topbar.full-editor{grid-template-rows:var(--topbar-height) minmax(0,1fr) 32px var(--timeline-height,236px) 22px}
+@media(max-height:820px){.editor.project-topbar.full-editor{grid-template-rows:var(--topbar-height) minmax(0,1fr) 32px var(--timeline-height,196px) 22px}}
+.editor.studio-sidebar:has(.workbench.hide-media)>.media-panel.open{bottom:22px}
+.editor.project-topbar #export{background:transparent;border:1px solid var(--line2);color:var(--text)}
+.editor.project-topbar #export:hover:not(:disabled){background:var(--hover)}
+.full-editor .seg button.active,.full-editor .inspector-tabs button.active{border-color:var(--text)}
+.full-editor .timeline-toolbar .iconbutton.active{color:var(--text);background:var(--raised)}
+.track-select.active{color:var(--text)}
+.editor:not(:has(#exportRangeSettings[aria-pressed=true])) #exportRangeBar{background:#ffffff08;border-top-color:#ffffff2e}
+.editor:not(:has(#exportRangeSettings[aria-pressed=true])) #exportRangeBar button{background:var(--text);color:var(--bg)}
+/* Status bar: the latest message on the left, then save state, connection and shortcuts.
+   A toast takes over the message area instead of floating over the timeline. */
+.full-editor .footer{display:flex;gap:2px;padding:0 6px 0 12px;font-size:11px;color:var(--dim)}
+.full-editor .footer .status-message{margin-right:8px}
+.full-editor .footer :is(.project-save,.topbar-connection,#help){min-height:20px;height:20px;padding:0 7px;border-radius:3px;font-size:11px;line-height:20px;color:var(--faint)}
+.full-editor .footer :is(.project-save,.topbar-connection,#help):hover{background:var(--hover);color:var(--text)}
+.full-editor .footer .project-save[data-state=saving]{color:var(--accent)}
+.full-editor .footer .project-save:is([data-state=error],[data-state=conflict],[data-state=connection]){color:#ff9c8b}
+.full-editor .footer .topbar-connection:not([data-state=connected]){color:var(--warning)}
+.full-editor .footer #help .icon{width:13px;height:13px}
+.full-editor .toast{left:0;bottom:0;transform:none;max-width:min(64%,760px);min-height:22px;padding:3px 12px;border:0;border-radius:0;background:var(--raised);box-shadow:none;font-size:11px;line-height:16px}
+.full-editor .toast::before{content:"";display:inline-block;width:6px;height:6px;margin:0 8px 1px 0;border-radius:50%;background:var(--preview)}
+/* Inspector: workflow actions only when they apply, one callout for a blocking problem. */
+.full-editor .clip-workflow-heading{margin:0 0 12px;gap:6px}
+.full-editor .clip-workflow-actions{display:flex;gap:2px}
+.full-editor #editClipWorkflow,.full-editor #reloadTakeWorkflow{border-color:transparent}
+.full-editor #editClipWorkflow{color:var(--text)}
+.full-editor .workflow-problem{margin:0 0 12px;padding:7px 10px;border:1px solid var(--warning-line);border-radius:6px;background:var(--warning-surface);color:var(--warning);font-size:11px;line-height:1.45}
+.inspector:has(#inspectorContent :is(.workflow-problem,.no-workflow)) #generateReason{display:none}
+.clip-workflow-heading.no-workflow{flex-direction:column;justify-content:center;margin:32px 0 6px;color:var(--text);font-size:12px;font-weight:600;text-align:center}
+.clip-workflow-heading.no-workflow::before{content:"";width:28px;height:28px;background:var(--faint);-webkit-mask:var(--empty-workflow) center/contain no-repeat;mask:var(--empty-workflow) center/contain no-repeat}
+.clip-workflow-heading.no-workflow{--empty-workflow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='8' height='8' rx='2'/%3E%3Crect x='13' y='13' width='8' height='8' rx='2'/%3E%3Cpath d='M7 11v4a2 2 0 0 0 2 2h4'/%3E%3C/svg%3E")}
+.clip-workflow-heading.no-workflow :is(.workflow-route,.clip-workflow-actions){display:none}
+.clip-workflow-heading.no-workflow+.workflow-hint{max-width:250px;margin:0 auto 16px;color:var(--faint);text-align:center}
+/* Short controls are label-left rows; prompts, media and seeds keep the full width. */
+.full-editor .native-bindings{display:flex;flex-direction:column;gap:10px}
+.full-editor .native-bindings>.two-fields{display:flex;flex-direction:column;gap:10px;margin:0}
+.full-editor .native-bindings>label.field:is(:has(>input),:has(>select)),.full-editor .native-bindings>.two-fields>label.field{display:grid;grid-template-columns:minmax(72px,36%) minmax(0,1fr);align-items:center;column-gap:10px;margin:0}
+.full-editor .native-bindings .field>span{margin:0 0 5px;font-size:11px;line-height:1.35}
+.full-editor .native-bindings>label.field:is(:has(>input),:has(>select))>span,.full-editor .native-bindings>.two-fields>label.field>span{margin:0}
+.full-editor .native-bindings :is(input:not([type=file]),select){height:28px;padding:3px 8px;font-size:12px}
+.full-editor .native-bindings textarea{padding:7px 9px;line-height:1.5}
+.full-editor .native-bindings .seed-controls{display:flex;gap:6px}
+.full-editor .native-bindings .seed-controls>input{flex:1;min-width:0}
+.full-editor .native-bindings .seed-controls>select{flex:0 0 auto;width:auto}
+/* Timeline: a clip with no take in the edit is a hatched outline, empty audio is a quiet frame. */
+.full-editor .timeline-clip.no-take{background:repeating-linear-gradient(135deg,#17171a 0 7px,#1b1b1f 7px 14px);border-style:dashed;border-color:var(--line2)}
+.full-editor .timeline-clip.no-take :is(.filmstrip){display:none}
+.full-editor .timeline-clip.no-take :is(.clip-label,.clip-meta){background:none}
+.full-editor .timeline-clip.no-take .clip-label strong{color:var(--dim)}
+.full-editor .timeline-clip.no-take .clip-meta{justify-content:space-between}
+.full-editor .timeline-clip.no-take .clip-meta>span:first-child{display:inline;color:var(--faint)}
+.full-editor .audio-clip.no-audio{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.full-editor .audio-clip.no-audio .no-audio-label{color:var(--faint)}
+.full-editor .music-empty{border-color:var(--line2);color:var(--faint)}
+.full-editor .music-empty:hover{border-color:var(--dim);color:var(--text)}
+/* A narrow viewer drops the duration readout and shortens the preview menu so the transport never overlaps. */
+.full-editor .viewer{container:viewer / inline-size}
+@container viewer (max-width:620px){.full-editor .viewer-controls{grid-template-columns:auto minmax(0,1fr) auto}.full-editor .viewer-controls .transport{justify-self:center}.full-editor .tc-block .small{display:none}.full-editor .viewer-meta #previewQuality{max-width:96px}}

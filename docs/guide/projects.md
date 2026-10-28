@@ -77,7 +77,7 @@ Windows the launcher is a `.bat`, `.cmd` or `.exe`; on macOS and Linux it is a
 `.sh` or `.command` script or an executable file. ComfyUI Desktop cannot be
 started this way: start it yourself and enter its address (by default
 `http://127.0.0.1:8000`). **Save and connect** starts ComfyUI when it is not
-running and reuses it when it is. The top bar shows **Start Comfy**, **Starting
+running and reuses it when it is. The status bar shows **Start Comfy**, **Starting
 Comfy…** or **Comfy connected**, and the dialog shows startup logs. **Start Comfy
 automatically** is off by default. Closing Spool leaves ComfyUI running.
 

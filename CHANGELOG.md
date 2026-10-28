@@ -28,6 +28,9 @@ First public release.
   `python -m spool --open` does the same elsewhere.
 - Clip notes, a keyboard shortcut sheet, a non-blocking Renders panel and a
   layout that adapts to laptop screens.
+- A status bar for the latest message, save state and the Comfy connection. The
+  inspector shows short controls as compact rows and only the workflow actions
+  that apply.
 - The studio starts when opened over plain HTTP from another machine, such as a
   LAN or Tailscale address.
 

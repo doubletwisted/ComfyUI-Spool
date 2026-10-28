@@ -23,7 +23,7 @@
   $('emptyImport').click();const bytes=await fetch('/spool/media/'+n.projectKey+'/assets/black.png').then(r=>r.blob()),files=new DataTransfer();files.items.add(new File([bytes],'UI-import.png',{type:'image/png'}));input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));
   await wait(()=>n.state.clips.length>0);await n.flush();
   check('Import shortcut uploads actual media and adds a timeline clip',n.state.clips[0].takes[0].media.kind==='image'&&n.revision>revision);
-  check('Imported shot replaces welcome with working inspector controls',$('emptyStage').hidden&&visible($('editClipWorkflow'))&&visible($('generate')));
+  check('Imported shot replaces welcome with its workflow empty state',$('emptyStage').hidden&&visible($('inspectorContent').querySelector('.clip-workflow-heading.no-workflow'))&&!visible($('editClipWorkflow'))&&visible($('generate')));
   const count=n.state.clips.length;n.undo();await n.flush();
   check('Import through the welcome screen remains undoable',count>0&&n.state.clips.length===0&&!$('emptyStage').hidden);
  }finally{input.click=click;}

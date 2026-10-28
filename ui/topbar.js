@@ -8,7 +8,7 @@ export function createTopbar(root,actions){
  const title=document.createElement('div');title.className='project-title';name.title='Rename project';
  const project=button('projectMenu','▾');project.setAttribute('aria-label','Project menu');project.title='Projects, files and settings';
  title.append(name,project);
- const save=button('saveIndicator','');save.className='project-save';saveLabel.setAttribute('role','status');save.append(saveLabel);oldSave.remove();identity.append(title,save);
+ const save=button('saveIndicator','');save.className='project-save';saveLabel.setAttribute('role','status');save.append(saveLabel);oldSave.remove();identity.append(title);
  const projectMenu=document.createElement('div'),viewMenu=document.createElement('div');
  for(const [node,id,label] of [[projectMenu,'projectCommands','Project'],[viewMenu,'viewCommands','View and connection']]){node.id=id;node.className='topbar-menu';node.hidden=true;node.setAttribute('role','menu');node.setAttribute('aria-label',label);}
  const item=(menu,node,label,checked)=>{node.className='topbar-menu-item';node.textContent=label;node.removeAttribute('aria-label');node.setAttribute('role',checked?'menuitemcheckbox':'menuitem');if(checked)node.dataset.checked=checked;menu.append(node);return node;};
@@ -36,7 +36,9 @@ export function createTopbar(root,actions){
   if(index){head.prepend(control);viewer.append(opener);}else{head.append(control);viewer.prepend(opener);}
   return {control,opener};
  });
- left.replaceChildren(bar.querySelector('.brand'),identity,processing);right.replaceChildren(view,connection,renders,$('export'));
+ left.replaceChildren(bar.querySelector('.brand'),identity,processing);right.replaceChildren(view,renders,$('export'));
+ // Save state and the Comfy connection report status, so they live in the status bar.
+ $('help').before(save,connection);
  bar.append(projectMenu,viewMenu,warning);
  let open=null,trigger=null,saveState='saved';
  function close(focus=false){if(!open)return;open.hidden=true;trigger.setAttribute('aria-expanded','false');if(focus)trigger.focus();open=trigger=null;}

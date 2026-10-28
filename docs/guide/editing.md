@@ -1,8 +1,10 @@
 # Editing
 
 The studio has a library sidebar on the left (**Workflows** and **Media**), the
-viewer in the middle, the inspector on the right and the timeline below. Small
-arrows in the panel headers hide a panel; a matching arrow at the viewer's edge
+viewer in the middle, the inspector on the right and the timeline below. The
+status bar along the bottom shows the latest message, the save state (click it to
+save now or retry) and the Comfy connection. Small arrows in the panel headers
+hide a panel; a matching arrow at the viewer's edge
 brings it back. A hidden sidebar leaves a thin icon rail: **Workflows** and
 **Media** open the sidebar over the viewer until you click elsewhere, and the
 bottom button docks it again. Spool remembers a hidden sidebar. On narrow windows

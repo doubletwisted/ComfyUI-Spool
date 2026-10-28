@@ -90,7 +90,8 @@ Apply can be undone. Takes that already exist keep the workflow they were made
 with.
 
 **Reload workflow from take** restores the workflow and inputs that made the
-selected take.
+selected take. Either action appears only when the clip has something to open or
+restore; a clip without a workflow shows where to find one instead.
 
 ### Workflow files beside takes
 
