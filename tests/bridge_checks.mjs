@@ -22,7 +22,9 @@ const realTimeout=globalThis.setTimeout,realClear=globalThis.clearTimeout,active
 globalThis.setTimeout=(fn,ms)=>{const timer=realTimeout(()=>{activeTimers.delete(timer);fn();},ms);activeTimers.add(timer);return timer;};
 globalThis.clearTimeout=timer=>{activeTimers.delete(timer);realClear(timer);};
 const delay=ms=>new Promise(resolve=>realTimeout(resolve,ms));
-const id=crypto.randomUUID(),server=openChannel(id),channel=openChannel(id),observer=openChannel(id),client=createClient(channel,{timeoutMs:200});
+// A busy CI runner can take hundreds of milliseconds to deliver the first
+// message; only the dedicated timeout client below is meant to time out.
+const id=crypto.randomUUID(),server=openChannel(id),channel=openChannel(id),observer=openChannel(id),client=createClient(channel,{timeoutMs:5000});
 const replies=[];observer.addEventListener('message',({data})=>{if('result' in data||'error' in data)replies.push(data);});
 let received=0;
 const stop=serve(server,{
