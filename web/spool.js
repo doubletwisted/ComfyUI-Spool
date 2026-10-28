@@ -2,6 +2,7 @@ import { app } from "../../scripts/app.js";
 import {createTemplatePreparation} from './template-prepare.js';
 import {ACTIONS,HANDOFF_PARAM,LINK_APPLIED,LINK_APPLY,TEMPLATE_PARAMS,createClient,WORKFLOW_TAB_TYPE,openChannel,serve,hostBridgeId} from '/spool/ui/bridge.js';
 import {containsExactInt} from '/spool/ui/wire.js';
+import {keyText} from '/spool/ui/keys.js';
 import {createEmbeddedTemplates} from './template-browser.js';
 import {createWorkflowLinks} from './workflow-link.js';
 import {applyGraphInputs} from './graph-inputs.js';
@@ -75,7 +76,7 @@ function createWorkflowToolbar(){
  style.textContent='@media(max-width:1400px){#spool-workflow-toolbar .spool-linked-clip{display:none}#spool-workflow-toolbar .spool-apply-status{max-width:90px}}';document.head.append(style);
  bar.append(brand,name,button,status);app.menu.actionsGroup.append(bar);
  const client=createClient(openChannel(bridgeId),{timeoutMs:120000});let active=null,busy=false;
- const refresh=()=>{const record=workflowLinks.current();bar.style.display=record?.link?.editorId?'flex':'none';if(record!==active){active=record;status.textContent='';}name.textContent=record?.name||'Spool clip';bar.setAttribute('aria-label','Spool · '+name.textContent);button.title='Save changes to '+name.textContent+' and its workflow JSON. Ctrl+S saves the Comfy copy.';button.disabled=busy;button.style.opacity=busy?'.6':'1';bar.title=status.textContent||button.title;};
+ const refresh=()=>{const record=workflowLinks.current();bar.style.display=record?.link?.editorId?'flex':'none';if(record!==active){active=record;status.textContent='';}name.textContent=record?.name||'Spool clip';bar.setAttribute('aria-label','Spool · '+name.textContent);button.title='Save changes to '+name.textContent+' and its workflow JSON. '+keyText('Ctrl')+'+S saves the Comfy copy.';button.disabled=busy;button.style.opacity=busy?'.6':'1';bar.title=status.textContent||button.title;};
  button.onclick=async()=>{const record=workflowLinks.current();if(!record?.link?.editorId)return;busy=true;status.textContent='Applying...';refresh();try{await client.call(LINK_APPLY,{link:record.link});status.textContent='Applied';}catch(error){status.textContent=error.code==='SPOOL_BRIDGE_TIMEOUT'?'Open Spool and choose Edit in Comfy to reconnect.':error.message;}finally{busy=false;refresh();}};
  refresh();const timer=setInterval(refresh,250);return()=>{clearInterval(timer);client.close();app.menu.actionsGroup.remove(bar);style.remove();};
 }

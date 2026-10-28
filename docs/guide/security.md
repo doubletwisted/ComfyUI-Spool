@@ -16,7 +16,7 @@ does not apply.
 
 - importing footage by path
 - creating or opening a project folder
-- revealing a take or clip folder in Explorer
+- revealing a take or clip folder in the file manager
 - Comfy connection settings and the Cloud API key
 - starting ComfyUI
 - serving original footage, or any footage stored outside the project and Comfy folders
@@ -44,7 +44,7 @@ to `127.0.0.1`; its `--host` option carries the same risk.
 ## Credentials
 
 Spool saves the Comfy Cloud API key on this computer: in
-`%LOCALAPPDATA%\Spool\comfy-cloud.key` on Windows, otherwise
+`%LOCALAPPDATA%\Spool\comfy-cloud.key` on Windows, otherwise (macOS and Linux)
 `~/.config/Spool/comfy-cloud.key`. The key never goes into project folders,
 project exports or render receipts, and is redacted from Cloud error messages.
 `COMFY_API_KEY` is used when no key is saved. `SPOOL_CREDENTIALS` moves the key

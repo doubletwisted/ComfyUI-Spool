@@ -14,6 +14,7 @@ from .export import export_sequence
 from .interchange import export_timeline
 from .workflows import workflow_metadata
 from .store import uid
+from .system import find_tool
 from .workflow_inputs import sources
 from .ownership import file_lock, atomic_replace
 from .timing import rate, frames_filter, tempo_filter
@@ -25,7 +26,7 @@ EXTENSIONS = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS | AUDIO_EXTENSIONS
 
 
 def _probe(source):
-    ffprobe = shutil.which("ffprobe")
+    ffprobe = find_tool("ffprobe")
     if not ffprobe:
         raise ValueError("Install ffprobe for native media review")
     result = subprocess.run(
@@ -54,7 +55,7 @@ def _review_probe(path, fps):
         # -shortest can leave buffered AAC packets beyond the final video frame.
         pending = path.with_name(path.stem+'-'+uid()+'.mp4')
         try:
-            subprocess.run([shutil.which('ffmpeg'), '-v', 'error', '-y', '-i', str(path), '-map', '0', '-c', 'copy', '-t', str(duration), '-movflags', '+faststart', str(pending)], check=True, capture_output=True, timeout=300)
+            subprocess.run([find_tool('ffmpeg'), '-v', 'error', '-y', '-i', str(path), '-map', '0', '-c', 'copy', '-t', str(duration), '-movflags', '+faststart', str(pending)], check=True, capture_output=True, timeout=300)
             pending.replace(path)
         finally:
             pending.unlink(missing_ok=True)
@@ -223,7 +224,7 @@ class Media:
         result.update(workflow_metadata(probe))
         previews = self.cache / "previews"
         previews.mkdir(exist_ok=True)
-        ffmpeg = shutil.which("ffmpeg")
+        ffmpeg = find_tool("ffmpeg")
         if not ffmpeg:
             raise ValueError("Install ffmpeg for native media review")
         if video:
@@ -265,7 +266,7 @@ class Media:
             raise ValueError("The file has no video stream")
         fps = fps or _rate(video["avg_frame_rate"])
         whole = self.describe(source, source.name, fps)
-        ffmpeg = shutil.which("ffmpeg")
+        ffmpeg = find_tool("ffmpeg")
         proxy = self.root / whole["file"]
         cuts = detect_cuts(scene_scores(ffmpeg, proxy, self.cache / 'previews' / 'cut-scores'), fps) if detect else []
         folder = self.cache / "shots" / uid()
@@ -512,7 +513,7 @@ class Media:
                     with Image.open(source["path"]) as image:
                         ImageOps.exif_transpose(image).save(pending)
                 else:
-                    ffmpeg = shutil.which("ffmpeg")
+                    ffmpeg = find_tool("ffmpeg")
                     if not ffmpeg:
                         raise ValueError("Install ffmpeg to bake original shot inputs")
                     command = [ffmpeg, "-v", "error", "-y", "-i", str(source["path"]), "-map", "0:v:0"]
@@ -536,7 +537,7 @@ class Media:
         return {"path": source, "offset": metadata.get("sourceRange", {}).get("start", 0), "fps": native}
 
     def bake_audio(self, segments, fps, frames):
-        ffmpeg = shutil.which("ffmpeg")
+        ffmpeg = find_tool("ffmpeg")
         if not ffmpeg:
             raise ValueError("Install ffmpeg to prepare generation audio")
         if fps <= 0 or frames <= 0:
@@ -598,7 +599,7 @@ class Media:
             file = self.preview(metadata, 960, 540, fps)['file']
             offset = metadata.get('sourceRange', {}).get('start', 0)
             start, end = start+offset, end+offset
-        scores = scene_scores(shutil.which("ffmpeg"), self.resolve(file), self.cache / 'previews' / 'cut-scores')
+        scores = scene_scores(find_tool("ffmpeg"), self.resolve(file), self.cache / 'previews' / 'cut-scores')
         return detect_cuts(scores[int(start):int(end)], fps)
 
     def preview_path(self, metadata, width, height, fps):
@@ -624,7 +625,7 @@ class Media:
                         canvas.paste(picture, ((width - picture.width) // 2, (height - picture.height) // 2))
                         canvas.save(pending)
                 else:
-                    ffmpeg = shutil.which("ffmpeg")
+                    ffmpeg = find_tool("ffmpeg")
                     if not ffmpeg:
                         raise ValueError("Install ffmpeg for video playback")
                     native = rate(source['fps'] or _video_stream(_probe(source['path']))['avg_frame_rate'], fps)
@@ -646,7 +647,7 @@ class Media:
         folder = self.root / "exports"
         folder.mkdir(exist_ok=True)
         output = folder / f"spool-frame-{frame:06d}-{uid()[:8]}.png"
-        command = [shutil.which("ffmpeg"), "-v", "error", "-y"]
+        command = [find_tool("ffmpeg"), "-v", "error", "-y"]
         if metadata["kind"] == "video":
             command += ["-i", str(original['path']), "-vf", f"trim=start_frame={original['offset']+frame},setpts=PTS-STARTPTS"]
         else:

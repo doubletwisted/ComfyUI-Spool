@@ -92,7 +92,10 @@ the key in `COMFY_API_KEY` (the host keeps no saved key), and set
 `SPOOL_CLOUD_SMOKE_TARGET=local` to run it as Partner Nodes on the host.
 
 `controlnet-comfy` needs a host started with `--partner-nodes`, and
-`comfy-link-placeholder` one started with `--deadline`.
+`comfy-link-placeholder` one started with `--deadline`. The `-mac` checks
+(`take-file-actions-mac`, `clip-folder-mac`) report a Mac platform and a host
+that names Finder, so the macOS labels are checked from Windows too; they are
+not a substitute for a real Mac.
 
 To test Python editing changes without restarting the host, start the editing API
 in another terminal and point the browser checks at it. Its schemas come from the

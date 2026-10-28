@@ -47,6 +47,19 @@ First public release.
   explicit project, clip, capability and budget limits, plus the
   `skills/spool-control` agent skill.
 
+### macOS and Linux (experimental)
+
+- `run_spool.command` (macOS) and `run_spool.sh` start the studio without
+  ComfyUI, using a `venv` or `.venv` beside ComfyUI when there is one.
+- **Reveal in Finder** and **Open clip folder** work on macOS, and through
+  `xdg-open` on Linux.
+- ffmpeg, ffprobe and `deadlinecommand` are also found in Homebrew, MacPorts and
+  Deadline's default folders, so ComfyUI Desktop started from the Dock finds them.
+- **Comfy settings** accepts `.sh` and `.command` scripts or executables as the
+  ComfyUI launcher.
+- On a Mac, the studio shows Cmd and Option in tooltips, hints and the shortcut
+  sheet.
+
 ### Documentation
 
 - A user guide, agent and Deadline docs, and contributor notes.

@@ -20,7 +20,7 @@ from .collection import Collector
 from . import commands
 from . import operations, take_workflow, take_files
 from .launcher import ComfyLauncher
-from . import credentials, templates
+from . import credentials, system, templates
 from . import __version__, cloud as cloud_module, requirements
 from .cloud import CloudExecutor
 from .store import Conflict
@@ -410,18 +410,16 @@ def register(server, store, media, executor=None):
     @endpoint
     async def reveal_take(request):
         local_control(request)
-        if os.name != "nt":
-            raise ValueError("Reveal in Explorer requires the Windows host")
         path = await asyncio.to_thread(take_source, request)
-        subprocess.Popen(["explorer.exe", "/select,", str(path)], shell=False)
+        system.show(path, select=True)
         return response({"ok": True})
 
     @routes.post("/spool/api/projects/{project}/clip-folder/{clip}/reveal")
     @endpoint
     async def reveal_clip_folder(request):
         local_control(request)
-        if os.name != "nt":
-            raise ValueError("Open clip folder requires the Windows host")
+        if not system.file_manager():
+            raise ValueError("Opening clip folders needs a desktop with xdg-open")
         def folder():
             selected, _ = services(request)
             clip = selected.clip(request.match_info["project"], request.match_info["clip"])
@@ -432,7 +430,7 @@ def register(server, store, media, executor=None):
             path.mkdir(parents=True, exist_ok=True)
             return path
         path = await asyncio.to_thread(folder)
-        subprocess.Popen(["explorer.exe", str(path)], shell=False)
+        system.show(path)
         return response({"ok": True})
 
     @routes.post("/spool/api/projects/{project}/use-take/{clip}")
@@ -562,7 +560,8 @@ def register(server, store, media, executor=None):
         store, media = await asyncio.to_thread(services, request)
         types = request.query.get("types")
         value = await asyncio.to_thread(store.host, include_definitions=types != "")
-        value["clipFolderReveal"] = os.name == "nt"
+        value["fileManager"] = system.file_manager()
+        value["clipFolderReveal"] = value["fileManager"] is not None
         value.update(credentials.key_status())
         value['cloudExecution'] = cloud_module.available()
         value['requirements'] = requirements.report()

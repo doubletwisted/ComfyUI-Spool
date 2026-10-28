@@ -1,10 +1,10 @@
 """Private sequence export; the Media owner supplies storage, probing and formats."""
 import math
-import shutil
 import subprocess
 import tempfile
 import uuid
 from pathlib import Path
+from .system import find_tool
 from .timing import rate, frames_filter, tempo_filter
 
 
@@ -15,7 +15,7 @@ def run_ffmpeg(command, message):
 
 
 def export_sequence(data, *, root, resolve, probe, image_extensions, sources=None):
-    ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
+    ffmpeg, ffprobe = find_tool("ffmpeg"), find_tool("ffprobe")
     clips = data.get("clips", [])
     fps = float(data.get("fps", 24))
     audio_offset = int(data.get("audioOffset", 0)) / fps

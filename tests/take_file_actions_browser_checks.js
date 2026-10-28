@@ -5,7 +5,9 @@
  const original=JSON.stringify(n.state),revision=n.revision,selection=JSON.stringify(n.view.takeSelection),card=d.querySelector('#takeList [data-take="one"]');
  const open=()=>{card.dispatchEvent(new w.MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:w.innerWidth-10,clientY:w.innerHeight-10}));return d.getElementById('native-clip-menu');};
  let menu=open(),buttons=[...menu.querySelectorAll('button')],a=buttons[0].getBoundingClientRect(),b=buttons[1].getBoundingClientRect(),r=menu.getBoundingClientRect();
- check('Right-click offers only Reveal in Explorer and Download',!menu.hidden&&buttons.length===2&&buttons[0].textContent==='Reveal in Explorer'&&buttons[1].textContent==='Download');
+ const mac=w.navigator.platform==='MacIntel',manager=mac?'Finder':'Explorer';
+ check('Right-click offers only Reveal in '+manager+' and Download',!menu.hidden&&buttons.length===2&&buttons[0].textContent==='Reveal in '+manager&&buttons[1].textContent==='Download');
+ check('Shortcut labels name '+(mac?'Cmd and Option':'Ctrl and Alt'),d.getElementById('undo').title.includes(mac?'Cmd+Z':'Ctrl+Z')&&d.getElementById('timelineHint').textContent.startsWith(mac?'Option-drag':'Alt-drag')&&d.getElementById('archiveTakes').title.includes(mac?'Cmd+Z':'Ctrl+Z'));
  check('File actions sit side by side and stay within the editor',Math.abs(a.top-b.top)<1&&a.right<=b.left&&r.left>=0&&r.right<=w.innerWidth&&r.bottom<=w.innerHeight);
  buttons[0].focus();w.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));check('Arrow keys navigate the horizontal actions',d.activeElement===buttons[1]);
  w.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));check('Escape closes the take menu',menu.hidden);

@@ -1,4 +1,5 @@
 import asyncio
+import os
 import tempfile
 import time
 import unittest
@@ -20,7 +21,7 @@ class LauncherTests(unittest.IsolatedAsyncioTestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        self.file = self.root / 'Comfy startup.bat'
+        self.file = self.root / ('Comfy startup.bat' if os.name == 'nt' else 'Comfy startup.sh')
         self.file.write_text('test fixture', encoding='utf-8')
         self.store = Store(self.root / 'store')
         self.launcher = ComfyLauncher(self.store)
@@ -78,9 +79,24 @@ class LauncherTests(unittest.IsolatedAsyncioTestCase):
             spawn.assert_called_once()
             self.assertEqual(spawn.call_args.kwargs['cwd'], self.file.parent.resolve())
             self.assertEqual(spawn.call_args.kwargs['env']['SPOOL_STORAGE'], str(self.store.root))
-            if isinstance(spawn.call_args.args[0], str):
+            if os.name == 'nt':
                 self.assertIn('/d /s /c ""' + str(self.file.resolve()) + '""', spawn.call_args.args[0])
                 self.assertTrue(spawn.call_args.kwargs['creationflags'] & 0x08000000)
+            else:
+                self.assertEqual(spawn.call_args.args[0], ['/bin/sh', str(self.file.resolve())])
+                self.assertTrue(spawn.call_args.kwargs['start_new_session'])
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX startup files')
+    async def test_posix_startup_file_must_be_a_script_or_executable(self):
+        program = self.root / 'comfy'
+        program.write_text('#!/bin/sh\n', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'ComfyUI Desktop'):
+            self.launcher.save(self.settings(startupFile=str(program)))
+        program.chmod(0o755)
+        self.launcher.save(self.settings(startupFile=str(program)))
+        with patch.object(self.launcher, 'probe', AsyncMock(return_value=('stopped', None))), patch('spool.launcher.subprocess.Popen', return_value=Mock(poll=lambda: None)) as spawn:
+            await self.launcher.start()
+        self.assertEqual(spawn.call_args.args[0], [str(program.resolve())])
 
     async def test_boot_timeout_and_failed_spawn_expose_log_and_allow_manual_retry(self):
         self.launcher.save(self.settings())

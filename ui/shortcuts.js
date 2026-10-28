@@ -1,5 +1,6 @@
 // The studio's keyboard and pointer shortcuts, grouped for the shortcut sheet.
 // Keep in step with the editor's keydown handler in ui/editor.js.
+import {keyText} from './keys.js';
 export const SHORTCUTS=Object.freeze([
  ['Playback and review',[
   [['Space'],'Play or pause'],
@@ -41,7 +42,7 @@ export const SHORTCUTS=Object.freeze([
  ]],
 ]);
 
-const esc=value=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=value=>keyText(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 export function shortcutSheet(){
  return '<div class="shortcut-sheet">'+SHORTCUTS.map(([group,rows])=>'<section><h3>'+esc(group)+'</h3><dl>'+rows.map(([keys,action,join='/'])=>

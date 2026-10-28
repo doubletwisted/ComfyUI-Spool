@@ -24,14 +24,15 @@ Your workflows stay as they are: Spool needs no custom nodes in the graph.
 ![The Spool studio: a three-shot sequence, with two takes of the selected shot below the viewer and its workflow inputs on the right](docs/images/studio.webp)
 
 > [!NOTE]
-> Spool 0.1.0 is an early release, developed and tested on Windows. Expect rough
-> edges, and please [report them](https://github.com/doubletwisted/ComfyUI-Spool/issues/new?template=bug_report.yml).
+> Spool 0.1.0 is an early release, developed and tested on Windows. macOS and
+> Linux support is experimental. Expect rough edges, and please [report them](https://github.com/doubletwisted/ComfyUI-Spool/issues/new?template=bug_report.yml).
 
 ## Requirements
 
 - ComfyUI 0.39.0 or newer (tested with 0.42.1 and frontend 1.55.18)
 - Python 3.11 or newer
-- `ffmpeg` and `ffprobe` on the PATH of the process running ComfyUI
+- `ffmpeg` and `ffprobe` on the PATH of the process running ComfyUI (on macOS,
+  Spool also finds a Homebrew or MacPorts install)
 - For Comfy Cloud: a Comfy API key
 
 If something is missing, the studio shows **Setup needed** in its top bar and
@@ -52,7 +53,8 @@ python -m pip install -r Spool/requirements.txt
 ```
 
 On the Windows portable build, use `python_embeded\python.exe` instead of
-`python`. Restart ComfyUI and reload the browser tab.
+`python`; with ComfyUI Desktop on macOS, use `.venv/bin/python` in its ComfyUI
+folder. Restart ComfyUI and reload the browser tab.
 
 ## Quick start
 
@@ -125,8 +127,8 @@ is stored outside every project. See [Projects and storage](docs/guide/projects.
 <details>
 <summary>Can I edit while ComfyUI is stopped?</summary>
 
-Yes. Double-click `run_spool.bat` in the Spool folder, or run
-`python -m spool --open` there. Editing, import and export work without ComfyUI,
+Yes. Double-click `run_spool.bat` (Windows) or `run_spool.command` (macOS) in
+the Spool folder, or run `python -m spool --open` there. Editing, import and export work without ComfyUI,
 and Spool can start your ComfyUI for you. See
 [Running without ComfyUI](docs/guide/projects.md#running-without-comfyui).
 </details>
@@ -144,8 +146,12 @@ workflow's saved settings, editable through **Edit in Comfy**. See
 <details>
 <summary>Does it work on macOS or Linux?</summary>
 
-It is untested there. Spool is developed on Windows, and **Reveal in Explorer**
-and **Open clip folder** are Windows only.
+Experimentally. Spool is developed and tested on Windows and has not yet been
+used on macOS or Linux for real work.
+**Reveal in Finder** and **Open clip folder** use Finder on macOS and `xdg-open`
+on Linux, and the studio shows Cmd and Option in its shortcuts on a Mac. Deadline
+farms that mix macOS and Windows machines are not supported. Please
+[report what you find](https://github.com/doubletwisted/ComfyUI-Spool/issues/new?template=bug_report.yml).
 </details>
 
 <details>

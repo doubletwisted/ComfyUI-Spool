@@ -41,19 +41,24 @@ download it in the meantime.
 ## Adding takes from outside
 
 **Open clip folder** in the Takes header opens the selected clip's output folder
-in Windows Explorer, even before its first render. Copy finished videos or images
-there and they appear as **New** takes once the files stop changing (about five
-seconds). Their embedded metadata, or a `.json` workflow with the same name,
+in Explorer, Finder or your Linux file manager, even before its first render.
+Copy finished videos or images there and they appear as **New** takes once the
+files stop changing (about five seconds). Their embedded metadata, or a `.json` workflow with the same name,
 supplies the workflow. Adding a take this way never changes the edit.
 
-Deleting or renaming files in Explorer is not an edit and cannot be undone in
-Spool.
+Right-click a take and choose **Reveal in Explorer** (**Reveal in Finder** on
+macOS, **Show in folder** on Linux) to find its file. Deleting or renaming files
+there is not an edit and cannot be undone in Spool.
 
 ## Running without ComfyUI
 
-On Windows, double-click `run_spool.bat` in the Spool folder. It uses the Python
-of the ComfyUI portable build, or a `venv` beside ComfyUI, and opens the studio
-at `http://127.0.0.1:8190/spool/`. Elsewhere, run this from the Spool folder:
+On Windows, double-click `run_spool.bat` in the Spool folder. On macOS,
+double-click `run_spool.command`; on Linux, run `sh run_spool.sh`. They use the
+Python of the ComfyUI portable build (Windows), or a `venv` or `.venv` beside
+ComfyUI as ComfyUI Desktop makes, and open the studio at
+`http://127.0.0.1:8190/spool/`. If macOS will not open a downloaded
+`run_spool.command`, Control-click it and choose **Open**, or run
+`sh run_spool.sh` in Terminal. You can also run this from the Spool folder:
 
 ```powershell
 python -m spool --open
@@ -67,8 +72,11 @@ folder as the ComfyUI extension (`ComfyUI/user/spool`). Options: `--open`, `--po
 Editing, import, export and queueing work while ComfyUI is stopped. Queued renders
 wait until a ComfyUI with Spool starts.
 
-**Project → Comfy settings…** stores your ComfyUI launcher (a `.bat`, `.cmd` or
-executable) and its address. **Save and connect** starts ComfyUI when it is not
+**Project → Comfy settings…** stores your ComfyUI launcher and its address. On
+Windows the launcher is a `.bat`, `.cmd` or `.exe`; on macOS and Linux it is a
+`.sh` or `.command` script or an executable file. ComfyUI Desktop cannot be
+started this way: start it yourself and enter its address (by default
+`http://127.0.0.1:8000`). **Save and connect** starts ComfyUI when it is not
 running and reuses it when it is. The top bar shows **Start Comfy**, **Starting
 Comfy…** or **Comfy connected**, and the dialog shows startup logs. **Start Comfy
 automatically** is off by default. Closing Spool leaves ComfyUI running.

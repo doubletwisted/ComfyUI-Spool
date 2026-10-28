@@ -51,8 +51,9 @@ executor. `__main__.py` runs the same routes standalone (`python -m spool`).
 - **Media:** `media.py` (probing, proxies, staging, playback copies), `timing.py`
   (source-frame clocks), `cuts.py` (hard-cut detection), `export.py` (MP4),
   `interchange.py` (OpenTimelineIO JSON, written without the OTIO package).
-- **Host:** `launcher.py` (starts a configured ComfyUI), `credentials.py` (Cloud
-  key), `requirements.py` (reported requirements), `wire.py` (exact integers).
+- **Host:** `launcher.py` (starts a configured ComfyUI), `system.py` (what
+  differs between Windows, macOS and Linux: finding ffmpeg and `deadlinecommand`,
+  showing files in the file manager), `credentials.py` (Cloud key), `requirements.py` (reported requirements), `wire.py` (exact integers).
 
 Storage and project-folder work runs off ComfyUI's event loop through
 `asyncio.to_thread`. Live SQLite stays on the local disk; project folders hold

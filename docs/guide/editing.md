@@ -30,7 +30,8 @@ under the clip. **A2** is the soundtrack lane for independent audio.
   selects a range on one track, **Ctrl+A** selects every clip.
 - Drag across empty timeline space to box-select; hold Ctrl to add to the
   selection. **Esc** clears it.
-- On macOS, Cmd works wherever Ctrl is listed.
+- On macOS, the studio lists Cmd and Option where other systems show Ctrl and
+  Alt; Ctrl and Cmd both work.
 
 Selection belongs to the browser tab. It survives a reload but is not part of the
 saved project.
@@ -100,8 +101,9 @@ still in progress appear below the list with their stage and progress.
   removes their files after a confirmation and cannot be undone. The take in the
   edit is always kept, and files used elsewhere are protected.
 - Drag a take thumbnail onto a video track to turn it into its own clip.
-- Right-click a take for **Reveal in Explorer** or **Download** (the original
-  file, not the review copy).
+- Right-click a take for **Reveal in Explorer** (**Reveal in Finder** on macOS,
+  **Show in folder** on Linux) or **Download** (the original file, not the
+  review copy).
 
 The amber bar in Source marks the part of the take the edit uses, which can be
 shorter than the take.

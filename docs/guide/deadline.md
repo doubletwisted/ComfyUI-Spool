@@ -9,9 +9,12 @@ plugin update can need a matching Spool update.
 
 1. Install ComfyUI-Deadline-Plugin on the ComfyUI that runs Spool, and its
    Deadline plugin in your repository, as that project describes. Spool finds
-   `deadlinecommand` on PATH, or in Deadline 10's default Windows location.
-2. Keep the Spool project on storage the workers can read and write. Spool stages
-   each submission inside the project folder.
+   `deadlinecommand` on PATH, in the folder named by `DEADLINE_PATH`, or in
+   Deadline 10's default location on Windows, macOS or Linux.
+2. Keep the Spool project on storage the workers can read and write, at the same
+   path on the workers as on the Spool computer. Spool stages each submission
+   inside the project folder and does not use Deadline's path mapping, so a farm
+   that mixes macOS and Windows machines is not supported.
 3. Select the clip, click **Edit in Comfy**, add one **Submit to Deadline** node and
    set its pool, group and worker restrictions. Click **Apply to clip**.
 4. **Generate**. The inspector names the route as **Deadline**.

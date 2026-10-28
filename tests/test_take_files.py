@@ -240,17 +240,17 @@ class TakeFileRoutes(unittest.IsolatedAsyncioTestCase):
             native.assert_not_called()
 
     async def test_reveal_selects_original_and_rejects_cross_origin(self):
-        with patch("spool.routes.subprocess.Popen") as launch:
+        with patch("spool.system.show") as launch:
             result = await self.client.post(self.path + "/reveal", json={})
             self.assertEqual(result.status, 200, await result.text())
-            launch.assert_called_once_with(["explorer.exe", "/select,", str(self.original)], shell=False)
+            launch.assert_called_once_with(self.original, select=True)
             launch.reset_mock()
             result = await self.client.post(self.path + "/reveal", headers={"Origin": "https://elsewhere.invalid"}, json={})
             self.assertEqual(result.status, 403)
             launch.assert_not_called()
 
     async def test_unknown_take_missing_original_and_traversal_are_rejected(self):
-        with patch("spool.routes.subprocess.Popen") as launch:
+        with patch("spool.system.show") as launch:
             self.assertEqual((await self.client.get(self.path.replace("/take-file/shot/take", "/take-file/shot/unknown"))).status, 404)
             self.original.unlink()
             self.assertEqual((await self.client.get(self.path)).status, 400)
@@ -269,18 +269,26 @@ class TakeFileRoutes(unittest.IsolatedAsyncioTestCase):
         saved = self.store.save(self.project["id"], self.project["revision"], document)
         empty_folder = self.store.root / saved["document"]["clips"][1]["outputFolder"]
         empty_folder.rmdir()
-        with patch("spool.routes.subprocess.Popen") as launch:
+        with patch("spool.system.show") as launch:
             for clip_id, folder in (("shot", self.store.root / original_folder), ("empty", empty_folder)):
                 result = await self.client.post("/spool/api/projects/" + self.project["id"] + "/clip-folder/" + clip_id + "/reveal", json={})
                 self.assertEqual(result.status, 200, await result.text())
-                launch.assert_called_with(["explorer.exe", str(folder.resolve())], shell=False)
+                launch.assert_called_with(folder.resolve())
                 self.assertTrue(folder.is_dir())
         self.assertEqual(self.store.get(self.project["id"]), saved)
-        self.assertTrue((await (await self.client.get("/spool/api/capabilities?types=")).json())["clipFolderReveal"])
+        with patch("spool.system.file_manager", return_value="Finder"):
+            capabilities = await (await self.client.get("/spool/api/capabilities?types=")).json()
+        self.assertEqual((capabilities["fileManager"], capabilities["clipFolderReveal"]), ("Finder", True))
+        with patch("spool.system.file_manager", return_value=None), patch("spool.system.show") as launch:
+            capabilities = await (await self.client.get("/spool/api/capabilities?types=")).json()
+            self.assertEqual((capabilities["fileManager"], capabilities["clipFolderReveal"]), (None, False))
+            result = await self.client.post("/spool/api/projects/" + self.project["id"] + "/clip-folder/shot/reveal", json={})
+            self.assertEqual(result.status, 400)
+            launch.assert_not_called()
 
     async def test_open_clip_folder_rejects_unknown_clip_cross_origin_and_invalid_folder(self):
         path = "/spool/api/projects/" + self.project["id"] + "/clip-folder/shot/reveal"
-        with patch("spool.routes.subprocess.Popen") as launch:
+        with patch("spool.system.show") as launch:
             self.assertEqual((await self.client.post(path.replace("/shot/", "/unknown/"), json={})).status, 400)
             self.assertEqual((await self.client.post(path, headers={"Origin": "https://elsewhere.invalid"}, json={})).status, 403)
             for folder in ("output", "input/images", "../outside", "output/../../outside"):

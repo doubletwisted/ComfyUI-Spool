@@ -11,6 +11,9 @@ from aiohttp import ClientSession, ClientConnectorError, ClientError, ClientTime
 
 from .store import Conflict, encode, uid
 
+# Scripts that run through /bin/sh when they are not marked executable.
+SCRIPTS = ('.sh', '.command')
+
 
 def local_url(value):
     if not isinstance(value, str):
@@ -41,8 +44,11 @@ class ComfyLauncher:
             raise ValueError('Choose whether automatic startup is enabled')
         if settings['startupFile']:
             path = Path(settings['startupFile'])
-            if not path.is_absolute() or not path.is_file() or (os.name == 'nt' and path.suffix.lower() not in ('.bat', '.cmd', '.exe')):
+            if os.name == 'nt' and (not path.is_absolute() or not path.is_file() or path.suffix.lower() not in ('.bat', '.cmd', '.exe')):
                 raise ValueError('Choose an existing absolute startup file path (.bat, .cmd or .exe)')
+            if os.name != 'nt' and (not path.is_absolute() or not path.is_file() or not (os.access(path, os.X_OK) or path.suffix.lower() in SCRIPTS)):
+                raise ValueError('Choose an existing absolute startup file path: a .sh or .command script, or an executable file. '
+                                 'ComfyUI Desktop starts on its own; start it and enter its address instead.')
             if path.suffix.lower() in ('.bat', '.cmd') and any(c in str(path) for c in '&|<>^%!"\r\n'):
                 raise ValueError('The batch file path contains shell control characters; use a simpler path')
             settings['startupFile'] = str(path.resolve())
@@ -125,10 +131,13 @@ class ComfyLauncher:
             command = [str(path)]
             if os.name == 'nt' and path.suffix.lower() in ('.bat', '.cmd'):
                 command = '"' + os.environ.get('COMSPEC', 'cmd.exe') + '" /d /s /c ""' + str(path) + '""'
+            elif os.name != 'nt' and not os.access(path, os.X_OK):
+                command = ['/bin/sh', str(path)]
             try:
                 with log_path.open('ab') as log:
+                    # Its own process group or session, so stopping Spool's terminal leaves Comfy running.
                     self.process = subprocess.Popen(command, cwd=path.parent, env={**os.environ, 'SPOOL_STORAGE': str(self.store.root)},
-                        stdin=subprocess.DEVNULL, stdout=log, stderr=log, creationflags=0x08000200 if os.name == 'nt' else 0)
+                        stdin=subprocess.DEVNULL, stdout=log, stderr=log, creationflags=0x08000200 if os.name == 'nt' else 0, start_new_session=os.name != 'nt')
             except OSError as error:
                 self.store.set_setting('comfy_launch', {'id': identity, 'state': 'error', 'error': str(error), 'log': str(log_path)})
                 raise ValueError('Comfy could not start: ' + str(error)) from error

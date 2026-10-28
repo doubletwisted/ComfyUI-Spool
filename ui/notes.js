@@ -1,3 +1,4 @@
+import {keyText} from './keys.js';
 export function clipNotes(clip){
  if(!clip)return [];
  if(Array.isArray(clip.notes))return clip.notes;
@@ -7,7 +8,7 @@ export function clipNotes(clip){
 export function createNotes(root,{selected,record,save,notify=()=>{}}){
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const check='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
- root.innerHTML='<div class="notes-heading"><h3>Notes <span id="notesOpenCount"></span></h3></div><div id="notesOpenList"></div><form class="notes-composer" id="notesForm"><label class="sr-only" for="clipNotes">New note</label><textarea id="clipNotes" rows="2" placeholder="Add a note for this clip — you or an agent can act on it…" aria-label="New note"></textarea><div class="notes-compose-actions"><span>Ctrl + Enter to add</span><button type="submit" class="outline" id="addClipNote">Add note</button></div></form><details class="notes-history" id="notesHistory"><summary>Addressed <span id="notesHistoryCount"></span></summary><div id="notesHistoryList"></div></details><span class="sr-only" id="notesAnnouncement" aria-live="polite"></span>';
+ root.innerHTML='<div class="notes-heading"><h3>Notes <span id="notesOpenCount"></span></h3></div><div id="notesOpenList"></div><form class="notes-composer" id="notesForm"><label class="sr-only" for="clipNotes">New note</label><textarea id="clipNotes" rows="2" placeholder="Add a note for this clip — you or an agent can act on it…" aria-label="New note"></textarea><div class="notes-compose-actions"><span>'+keyText('Ctrl')+' + Enter to add</span><button type="submit" class="outline" id="addClipNote">Add note</button></div></form><details class="notes-history" id="notesHistory"><summary>Addressed <span id="notesHistoryCount"></span></summary><div id="notesHistoryList"></div></details><span class="sr-only" id="notesAnnouncement" aria-live="polite"></span>';
  const $=id=>root.querySelector('#'+id),field=$('clipNotes');
  let owner=null,listSignature='',timer;
  const who=actor=>actor?.startsWith('agent:')?'Agent':'You';

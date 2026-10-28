@@ -12,6 +12,7 @@
   n.selectClip('drag-clip-0');await n.flush();
   const before=JSON.stringify(n.state),revision=n.revision,button=$('openClipFolder');
   check('Open clip folder is available beside the takes',visible(button)&&!button.disabled&&button.textContent==='Open clip folder'&&button.closest('.takes-head'));
+  const manager=navigator.platform==='MacIntel'?'Finder':'Explorer';check('The folder button names the host file manager, '+manager,button.title.startsWith('Open in '+manager+'.'));
   const bounds=button.getBoundingClientRect();check('Folder button stays inside narrow and desktop layouts',bounds.left>=0&&bounds.right<=innerWidth&&bounds.height>=22);
   button.click();await wait(()=>opened.length===1);
   check('Opening uses the selected clip identity without a client filesystem path',opened[0].url.endsWith('/projects/'+n.projectKey+'/clip-folder/drag-clip-0/reveal')&&opened[0].options.method==='POST'&&opened[0].options.body==='{}');

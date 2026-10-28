@@ -8,7 +8,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import attempts, farm_protocol, sidecars
+from . import attempts, farm_protocol, sidecars, system
 from .media import contained
 
 
@@ -173,10 +173,7 @@ def fail_job(job_id):
 
 
 def deadline_command(arguments):
-    executable = shutil.which("deadlinecommand") or shutil.which("deadlinecommand.exe")
-    if not executable:
-        executable = "C:/Program Files/Thinkbox/Deadline10/bin/deadlinecommand.exe"
-    result = subprocess.run([executable, *arguments], capture_output=True, text=True, timeout=30,
+    result = subprocess.run([system.deadline_command(), *arguments], capture_output=True, text=True, timeout=30,
                             creationflags=0x08000000 if os.name == 'nt' else 0)
     if result.returncode:
         raise RuntimeError(result.stderr or result.stdout)

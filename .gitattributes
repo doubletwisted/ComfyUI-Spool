@@ -13,3 +13,5 @@ ui/builtin-captures.json linguist-generated=true
 tests/ export-ignore
 .native-test/ export-ignore
 *.bat text eol=crlf
+*.sh text eol=lf
+*.command text eol=lf

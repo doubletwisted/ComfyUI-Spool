@@ -68,7 +68,7 @@ class RequirementsTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await (await client.get('/spool/api/health')).json())['version'], packaged)
 
     def test_missing_tools_and_old_python_are_explained(self):
-        with patch('spool.requirements.shutil.which', return_value=None), patch.object(requirements, 'MINIMUM_PYTHON', (99, 0)):
+        with patch('spool.requirements.find_tool', return_value=None), patch.object(requirements, 'MINIMUM_PYTHON', (99, 0)):
             report = requirements.report()
         self.assertFalse(report['ffmpeg'] or report['ffprobe'])
         self.assertTrue(any('Python 99.0' in issue for issue in report['missing']))

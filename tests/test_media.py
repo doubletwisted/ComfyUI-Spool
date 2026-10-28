@@ -64,7 +64,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(workflow_metadata({'format': {'tags': {'comment': 'ordinary footage'}}}), {})
 
     def test_missing_ffprobe_fails_with_actionable_error(self):
-        with patch('spool.media.shutil.which', return_value=None), self.assertRaisesRegex(ValueError, 'Install ffprobe'):
+        with patch('spool.media.find_tool', return_value=None), self.assertRaisesRegex(ValueError, 'Install ffprobe'):
             _probe('unused.mp4')
 
 

@@ -214,8 +214,10 @@ const CHECKS = {
   'take-cleanup':{fixture:takeCleanupFixture,modes:['full'],takeFiles:true,file:'take_cleanup_browser_checks.js'},
   'take-file-actions':{fixture:takeCleanupFixture,modes:['full'],file:'take_file_actions_browser_checks.js'},
   'take-file-actions-narrow':{fixture:takeCleanupFixture,modes:['full'],width:360,height:800,file:'take_file_actions_browser_checks.js'},
+  'take-file-actions-mac':{fixture:takeCleanupFixture,modes:['full'],mac:true,file:'take_file_actions_browser_checks.js'},
   'clip-folder':{fixture:clipFolderFixture,modes:['full'],file:'clip_folder_browser_checks.js'},
   'clip-folder-narrow':{fixture:clipFolderFixture,modes:['full'],width:360,height:800,file:'clip_folder_browser_checks.js'},
+  'clip-folder-mac':{fixture:clipFolderFixture,modes:['full'],mac:true,file:'clip_folder_browser_checks.js'},
   'take-cleanup-narrow':{fixture:takeCleanupFixture,modes:['full'],takeFiles:true,width:360,height:800,file:'take_cleanup_browser_checks.js'},
   'workflow-sidecar':{fixture:sidecarFixture,modes:['full'],userGesture:true,file:'workflow_sidecar_browser_checks.js'},
   'project-folders':{fixture:workflowFixture,modes:['full'],file:'project_folder_browser_checks.js'},
@@ -612,6 +614,11 @@ async function runLibraryDrop(page,evaluate,label){
               const value=await fetch(request.url).then(r=>r.json());value.cloudExecution=false;value.requirements={...value.requirements,ffmpeg:false,cloudSdk:false,missing:['Install ffmpeg and add it to PATH; Spool uses it to review, prepare and export media.'],optional:['Comfy Cloud needs the comfy-sdk Python package. Install it into the Python that runs ComfyUI (python -m pip install comfy-sdk), then restart ComfyUI.']};
               await page.send('Fetch.fulfillRequest',{requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(JSON.stringify(value)).toString('base64')});return;
             }
+            if(check.mac&&new URL(request.url).pathname==='/spool/api/capabilities'){
+              // A macOS host names Finder; the page below also reports a Mac platform.
+              const value=await fetch(request.url).then(r=>r.json());value.fileManager='Finder';value.clipFolderReveal=true;
+              await page.send('Fetch.fulfillRequest',{requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(JSON.stringify(value)).toString('base64')});return;
+            }
             if(check.cloudOnly&&new URL(request.url).pathname==='/spool/api/capabilities'){
               await page.send('Fetch.fulfillRequest',{requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(JSON.stringify({connected:false,definitions:{},cloudDefinitions:{},cloudExecution:true})).toString('base64')});return;
             }
@@ -634,11 +641,12 @@ async function runLibraryDrop(page,evaluate,label){
               await page.send('Fetch.fulfillRequest', { requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: file.endsWith('.css') ? 'text/css' : 'text/javascript' }, { name: 'Cache-Control', value: 'no-store' }], body: fs.readFileSync(file).toString('base64') });
             } else await page.send('Fetch.continueRequest', { requestId });
           });
-          await page.send('Fetch.enable', { patterns: [{ urlPattern: '*/spool/ui/*' }, {urlPattern:'*'+webPrefix+'*'}, ...(apiBase!==base?[{urlPattern:'*/spool/api/*'},{urlPattern:'*/spool/media/*'}]:[]), ...(check.branchTemplates?[{urlPattern:'*/spool/api/templates*'}]:[]), ...(check.templates?[{urlPattern:'*spoolTemplates=embedded*'}]:[]), ...(check.cloudOnly||check.missingRequirements?[{urlPattern:'*/spool/api/capabilities'}]:[]), ...(check.bare ? [{ urlPattern: '*/spool/api/projects' }] : []), ...(check.offline ? [{ urlPattern: '*/spool/api/comfy' }] : [])] });
+          await page.send('Fetch.enable', { patterns: [{ urlPattern: '*/spool/ui/*' }, {urlPattern:'*'+webPrefix+'*'}, ...(apiBase!==base?[{urlPattern:'*/spool/api/*'},{urlPattern:'*/spool/media/*'}]:[]), ...(check.branchTemplates?[{urlPattern:'*/spool/api/templates*'}]:[]), ...(check.templates?[{urlPattern:'*spoolTemplates=embedded*'}]:[]), ...(check.cloudOnly||check.missingRequirements?[{urlPattern:'*/spool/api/capabilities'}]:[]), ...(check.mac?[{urlPattern:'*/spool/api/capabilities*'}]:[]), ...(check.bare ? [{ urlPattern: '*/spool/api/projects' }] : []), ...(check.offline ? [{ urlPattern: '*/spool/api/comfy' }] : [])] });
           await page.send('Page.enable');
           await page.send('Runtime.enable');
           await page.send('Emulation.setDeviceMetricsOverride', { width: check.width || 1440, height: check.height || 1000, deviceScaleFactor: 1, mobile: false });
           await page.send('Page.addScriptToEvaluateOnNewDocument', {source:'window.__templateProfileBaseline='+String(process.env.SPOOL_TEMPLATE_BASELINE==='1')});
+          if (check.mac) await page.send('Page.addScriptToEvaluateOnNewDocument', { source: "Object.defineProperty(Navigator.prototype,'platform',{get:()=>'MacIntel'});Object.defineProperty(Navigator.prototype,'userAgentData',{get:()=>undefined});" });
           if (check.pendingQueue) await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `sessionStorage.setItem('spool-native-${project.id}:queue-request',JSON.stringify({operationId:'ui-queue-retry',revision:0,items:[{clipId:'shot',count:1}]}));` });
           if (check.thumbnails) await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `
             sessionStorage.setItem('spool-native-${project.id}:view',JSON.stringify({zoom:800,selected:'thumb-0'}));
