@@ -1,13 +1,20 @@
 name: Checks
 
-# The architecture gate on every system Spool runs on. Browser and live checks
-# need a ComfyUI host and stay local; see docs/dev/development.md.
+# The architecture gate. Pull requests run it on Linux only, the cheapest
+# runner; run it by hand from the Actions tab for Windows, macOS and Linux.
+# Browser and live checks need a ComfyUI host and stay local; see
+# docs/dev/development.md.
 on:
   pull_request:
+    paths-ignore: ['docs/**', '**.md']
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   gate:
@@ -16,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["windows-latest", "macos-latest", "ubuntu-latest"]') || fromJSON('["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
