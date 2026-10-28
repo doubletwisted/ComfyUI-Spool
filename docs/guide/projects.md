@@ -52,12 +52,6 @@ there is not an edit and cannot be undone in Spool.
 
 ## Running without ComfyUI
 
-On Apple Silicon, the source install has been checked with both standalone
-launchers and real CPU ComfyUI execution. macOS support remains experimental;
-Desktop and downloaded-launcher acceptance are tracked in
-[the Mac follow-up](https://github.com/doubletwisted/ComfyUI-Spool/issues/17).
-Use Chrome for the studio; Safari has only had a basic playback check.
-
 On Windows, double-click `run_spool.bat` in the Spool folder. On macOS,
 double-click `run_spool.command`; on Linux, run `sh run_spool.sh`. They use the
 Python of the ComfyUI portable build (Windows), or a `venv` or `.venv` beside

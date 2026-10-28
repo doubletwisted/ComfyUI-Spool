@@ -151,8 +151,9 @@ workflow's saved settings, editable through **Edit in Comfy**. See
 Experimentally. The Apple Silicon source install has passed real CPU generation,
 collection, media import/export, browser and standalone-launcher checks on an
 M3 Max running macOS 27.0.1. This does not verify Apple GPU/model performance,
-Intel Macs or Linux. See the [Mac validation record](docs/dev/mac-validation.md)
+Intel Macs or Linux. See the [Mac test results](https://github.com/doubletwisted/ComfyUI-Spool/pull/18)
 and the remaining [Desktop and downloaded-launcher checks](https://github.com/doubletwisted/ComfyUI-Spool/issues/17).
+Use Chrome for the studio; Safari has only had a basic playback check.
 **Reveal in Finder** and **Open clip folder** use Finder on macOS and `xdg-open`
 on Linux, and the studio shows Cmd and Option in its shortcuts on a Mac. Deadline
 farms that mix macOS and Windows machines are not supported. Please

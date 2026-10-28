@@ -52,8 +52,6 @@ First public release.
 - Verified an Apple Silicon source install on macOS 27.0.1 with ComfyUI 0.43.0:
   real CPU collection, cut detection, MP4/OTIO export, standalone launchers and
   Finder actions. Desktop and downloaded-launcher acceptance remain experimental.
-- Browser checks use native Cmd shortcuts on macOS, search the virtualized
-  template chooser, and create their own template input on a fresh test host.
 - `run_spool.command` (macOS) and `run_spool.sh` start the studio without
   ComfyUI, using a `venv` or `.venv` beside ComfyUI when there is one.
 - **Reveal in Finder** and **Open clip folder** work on macOS, and through

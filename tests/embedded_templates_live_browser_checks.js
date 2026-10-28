@@ -7,12 +7,12 @@
  const outerApp=compact?(await import('/scripts/app.js')).app:null,originalGraph=outerApp?JSON.stringify(outerApp.rootGraph.serialize()):null;
  if(compact){$('workspaceMenu').click();$('workflowLibraryToggle').click();}
  $('browseComfyTemplates').click();await wait(()=>$('comfyTemplateBrowser')?.classList.contains('ready'));
- const frame=$('comfyTemplateBrowser');await wait(()=>frame.contentDocument.querySelector('[aria-labelledby="global-workflow-template-selector"]')?.textContent.includes('MiniMax'));
+ const frame=$('comfyTemplateBrowser');await wait(()=>frame.contentDocument.querySelector('[aria-labelledby="global-workflow-template-selector"] h3[title]'));
  const native=frame.contentDocument.querySelector('[aria-labelledby="global-workflow-template-selector"]');
  const bounds=native.getBoundingClientRect();check('Native picker fills its frame without cropping',Math.abs(bounds.x)<1&&Math.abs(bounds.y)<1&&bounds.width<=frame.clientWidth+1&&bounds.height<=frame.clientHeight+1);
  const outerBounds=frame.getBoundingClientRect(),mountBounds=$('templateMount').getBoundingClientRect();check('Stable frame host follows the modal body',Math.abs(outerBounds.x-mountBounds.x)<1&&Math.abs(outerBounds.y-mountBounds.y)<1&&Math.abs(outerBounds.height-mountBounds.height)<1&&Math.abs(outerBounds.width-mountBounds.width)<1);
  check('Fallback controls stay hidden behind the native chooser',frame.contentWindow.getComputedStyle(frame.contentDocument.getElementById('spool-template-choice')).display==='none');
- check('Real native chooser runs inside the Spool dialog',$('modalOverlay').contains(frame)&&native.textContent.includes('MiniMax'));
+ check('Real native chooser runs inside the Spool dialog',$('modalOverlay').contains(frame)&&!!native.querySelector('h3[title]'));
  check('Restored Comfy graphs cannot be captured before selecting a template',$('templateUse').disabled&&!frame.contentWindow.spoolDock);
  // The native chooser virtualizes its cards; search rather than assuming LTX
  // appears in the first screen of an evolving installed template catalog.
@@ -34,5 +34,5 @@
  const media=reopened.contentDocument.createElement('video');let paused=false;media.pause=()=>{paused=true;};reopened.contentDocument.body.append(media);
  reopened.contentDocument.querySelector('[aria-labelledby="global-workflow-template-selector"] input').dispatchEvent(new reopened.contentWindow.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await wait(()=>$('modalOverlay').hidden);check('Escape in the native picker cancels without editing',n.state.clips.length===count+1&&reopened.parentElement.hidden);await wait(()=>paused);check('Closing pauses retained media previews',paused);media.remove();
  $('browseComfyTemplates').click();await wait(()=>$('comfyTemplateBrowser')?.classList.contains('ready'));searchLtx($('comfyTemplateBrowser'));await wait(()=>$('comfyTemplateBrowser').contentDocument.querySelector('h3[title="LTX-2.3: Image to Video"]'));
- return {checks,kind:'Real installed template chooser/LTX capture; existing QA image selected; no generation',project:n.projectKey,version,promptNodes:Object.keys(recipe.prompt).length};
+ return {checks,kind:'Real installed template chooser/LTX capture; uploaded QA image selected; no generation',project:n.projectKey,version,promptNodes:Object.keys(recipe.prompt).length};
 })()
