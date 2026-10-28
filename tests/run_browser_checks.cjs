@@ -142,6 +142,18 @@ async function takeHoverFixture(){
 }
 
 async function templateFixture(){const fixture=await workflowFixture(),project=await api('projects/'+fixture.id);return {...fixture,bridge:'native-templates-qa',capture:project.recipes[project.document.clips[0].workflowVersion]};}
+// Writes a named image into the host's ComfyUI input folder. Checks expect an
+// isolated host (tests/run_host.py), whose inputs live in its runtime folder.
+async function uploadInput(name,bytes){
+ const form=new FormData();form.set('image',new Blob([bytes],{type:'image/png'}),name);form.set('overwrite','true');
+ const uploaded=await fetch(base+'/upload/image',{method:'POST',body:form});assert.equal(uploaded.status,200,'Input upload failed: '+name);
+ return (await uploaded.json()).name;
+}
+async function embeddedTemplatesFixture(){
+ const fixture=await workflowFixture(),image=await fetch(apiBase+'/spool/media/'+fixture.id+'/assets/black.png');assert.equal(image.status,200);
+ await uploadInput('spool-template-browser-qa.png',await image.arrayBuffer());
+ return fixture;
+}
 async function workflowPreviewFixture(){
  const fixture=await workflowFixture(),project=await api('projects/'+fixture.id),poster='.spool/previews/library-relative.png';
  const response=await fetch(apiBase+'/spool/media/'+project.id+'/assets/black.png');assert.equal(response.status,200);
@@ -230,7 +242,7 @@ const CHECKS = {
 
   'inspector-menu': { fixture: inspectorMenuFixture, modes: ['full'], file: 'inspector_menu_browser_checks.js' },
   'inspector-menu-narrow': { fixture: inspectorMenuFixture, modes: ['full'], width: 360, height: 800, file: 'inspector_menu_browser_checks.js' },
-  'embedded-templates-live': { fixture: workflowFixture, modes: ['full'], file: 'embedded_templates_live_browser_checks.js' },
+  'embedded-templates-live': { fixture: embeddedTemplatesFixture, modes: ['full'], file: 'embedded_templates_live_browser_checks.js' },
   'workflow-library-narrow': { fixture: templateFixture, modes: ['full'], templates: true, file: 'workflow_library_browser_checks.js', width: 360, height: 800 },
   'take-setup': { fixture: takeSetupFixture, modes: ['full'], file: 'take_setup_browser_checks.js' },
   'render-queue': { fixture: workflowFixture, modes: ['full'], file: 'render_queue_browser_checks.js' },
@@ -360,10 +372,7 @@ async function takeSetupFixture(editable=false) {
   for (const [shot, color] of [['s04', 'red'], ['s15', 'blue']]) {
     const file = path.resolve(evidence, shot + '.png');
     execFileSync('ffmpeg', ['-v','error','-y','-f','lavfi','-i','color=c='+color+':s=96x64','-frames:v','1',file], {windowsHide:true});
-    const form = new FormData();form.append('image', new Blob([fs.readFileSync(file)], {type:'image/png'}), 'take-setup-'+shot+'.png');form.append('overwrite','true');
-    const uploaded = await fetch(base+'/upload/image', {method:'POST',body:form});
-    if (!uploaded.ok) throw Error('CPU source upload failed');
-    files[shot]=(await uploaded.json()).name;
+    files[shot]=await uploadInput('take-setup-'+shot+'.png',fs.readFileSync(file));
   }
   const prompt = shot => ({'105:114':{class_type:'LoadImage',inputs:{image:files[shot]}},save:{class_type:'SaveImage',inputs:{images:['105:114',0],filename_prefix:'old-'+shot}}});
   const workflow = editable?{last_node_id:2,last_link_id:1,version:0.4,groups:[{title:'Recovered layout',bounding:[0,0,700,350],color:'#3f789e',font_size:24,flags:{}}],config:{},nodes:[
@@ -424,7 +433,8 @@ async function runDrag(page, evaluate, spec) {
 }
 
 async function runTakeDeleteKeys(page,evaluate){
- const labels=[];
+ // The studio accepts Ctrl and Cmd on every platform, so trusted keys use both.
+ const labels=[],keys=await evaluate("import('/spool/ui/keys.js').then(k=>({undo:k.keyText('Ctrl+Z')}))"),ctrl=2,cmd=4,shift=8;
  const press=async(key,code,windowsVirtualKeyCode,modifiers=0)=>{const event={key,code,windowsVirtualKeyCode,modifiers};await page.send('Input.dispatchKeyEvent',{...event,type:'rawKeyDown'});await page.send('Input.dispatchKeyEvent',{...event,type:'keyUp'});await evaluate('spoolNative.flush()');};
  const probe=()=>evaluate(`(()=>{const n=spoolNative;return {count:document.querySelectorAll('#takeList [data-take]').length,clip:JSON.stringify(n.state.clips[0]),modal:!document.getElementById('modalOverlay').hidden};})()`);
  await evaluate(`(async()=>{spoolNative.selectClip('shot');await spoolNative.flush();})()`);
@@ -434,14 +444,15 @@ async function runTakeDeleteKeys(page,evaluate){
  await page.send('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,clickCount:1});
  await press('Delete','Delete',46);let value=await probe();assert.equal(value.count,4);assert.equal(value.modal,false);
  labels.push('Trusted Delete on a take checkbox removes the take without opening disk deletion');
- await press('z','KeyZ',90,2);assert.equal((await probe()).clip,before.clip);
+ await press('z','KeyZ',90,ctrl);assert.equal((await probe()).clip,before.clip);
  labels.push('Trusted Ctrl+Z immediately restores the deleted take and exact clip metadata');
- await press('z','KeyZ',90,10);assert.equal((await probe()).count,4);
+ await press('z','KeyZ',90,cmd|shift);assert.equal((await probe()).count,4);
+ labels.push('Trusted Cmd+Shift+Z redoes the take removal');
  await page.send('Page.reload',{ignoreCache:true});
  let ready=false;for(let i=0;i<200;i++){if(await evaluate('!!window.spoolNative')){ready=true;break;}await sleep(50);}assert.ok(ready,'Editor reloaded');
  assert.equal((await probe()).count,4);
- await evaluate(`document.getElementById('editor').focus()`);await press('z','KeyZ',90,2);assert.equal((await probe()).clip,before.clip);
- labels.push('A saved take removal retains its Undo step across a browser reload');
+ await evaluate(`document.getElementById('editor').focus()`);await press('z','KeyZ',90,cmd);assert.equal((await probe()).clip,before.clip);
+ labels.push('A saved take removal retains its '+keys.undo+' Undo step across a browser reload');
  await evaluate(`(()=>{const button=document.getElementById('selectAllTakes');if(spoolNative.view.takeSelection.ids.length){button.click();button.click();}})()`);
  return labels;
 }
@@ -559,8 +570,7 @@ async function runLibraryDrop(page,evaluate,label){
   const bundled=JSON.parse(fs.readFileSync(path.join(__dirname,'../spool/cloud_templates.json'),'utf8'));
   let stagedImage;
   if(addedTemplates.size&&names.some(name=>CHECKS[name].branchTemplates)){
-   const form=new FormData();form.set('image',new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aE2kAAAAASUVORK5CYII=','base64')],{type:'image/png'}),'spool-library-browser-qa.png');form.set('overwrite','true');
-   const uploaded=await fetch(base+'/upload/image',{method:'POST',body:form});assert.equal(uploaded.status,200);stagedImage=(await uploaded.json()).name;
+   stagedImage=await uploadInput('spool-library-browser-qa.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aE2kAAAAASUVORK5CYII=','base64'));
   }
   const child = spawn(executable, ['--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
     '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=' + port, '--user-data-dir=' + path.resolve(evidence, 'profile'), 'about:blank'], { windowsHide: true, stdio: 'ignore' });

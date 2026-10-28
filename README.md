@@ -24,12 +24,14 @@ Your workflows stay as they are: Spool needs no custom nodes in the graph.
 ![The Spool studio: a three-shot sequence, with two takes of the selected shot below the viewer and its workflow inputs on the right](docs/images/studio.webp)
 
 > [!NOTE]
-> Spool 0.1.0 is an early release, developed and tested on Windows. macOS and
-> Linux support is experimental. Expect rough edges, and please [report them](https://github.com/doubletwisted/ComfyUI-Spool/issues/new?template=bug_report.yml).
+> Spool 0.1.0 is an early release, tested on Windows and Apple Silicon macOS.
+> macOS support remains experimental while Desktop and downloaded-launcher checks
+> are completed; Linux is untested. Expect rough edges, and please [report them](https://github.com/doubletwisted/ComfyUI-Spool/issues/new?template=bug_report.yml).
 
 ## Requirements
 
-- ComfyUI 0.39.0 or newer (tested with 0.42.1 and frontend 1.55.18)
+- ComfyUI 0.39.0 or newer (tested with 0.42.1 / frontend 1.55.18 on Windows,
+  and 0.43.0 / frontend 1.57.4 on Apple Silicon)
 - Python 3.11 or newer
 - `ffmpeg` and `ffprobe` on the PATH of the process running ComfyUI (on macOS,
   Spool also finds a Homebrew or MacPorts install)
@@ -146,8 +148,12 @@ workflow's saved settings, editable through **Edit in Comfy**. See
 <details>
 <summary>Does it work on macOS or Linux?</summary>
 
-Experimentally. Spool is developed and tested on Windows and has not yet been
-used on macOS or Linux for real work.
+Experimentally. The Apple Silicon source install has passed real CPU generation,
+collection, media import/export, browser and standalone-launcher checks on an
+M3 Max running macOS 27.0.1. This does not verify Apple GPU/model performance,
+Intel Macs or Linux. See the [Mac test results](https://github.com/doubletwisted/ComfyUI-Spool/pull/18)
+and the remaining [Desktop and downloaded-launcher checks](https://github.com/doubletwisted/ComfyUI-Spool/issues/17).
+Use Chrome for the studio; Safari has only had a basic playback check.
 **Reveal in Finder** and **Open clip folder** use Finder on macOS and `xdg-open`
 on Linux, and the studio shows Cmd and Option in its shortcuts on a Mac. Deadline
 farms that mix macOS and Windows machines are not supported. Please

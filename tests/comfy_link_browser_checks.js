@@ -20,7 +20,8 @@
   const manager=app.extensionManager.workflow,first=manager.activeWorkflow,path=first.path;
   const toolbar=comfy.document.querySelector('#spool-workflow-toolbar');
   check('Linked Apply is mounted in the native Comfy toolbar',app.menu.actionsGroup.element.contains(toolbar)&&comfy.getComputedStyle(toolbar).position!=='fixed');
-  check('Apply explains that it saves the clip workflow JSON separately from Ctrl+S',toolbar.querySelector('button').title.includes('workflow JSON')&&toolbar.querySelector('button').title.includes('Ctrl+S'));
+  const {keyText}=await import('/spool/ui/keys.js'),saveKey=keyText('Ctrl+S');
+  check('Apply explains that it saves the clip workflow JSON separately from '+saveKey,toolbar.querySelector('button').title.includes('workflow JSON')&&toolbar.querySelector('button').title.includes(saveKey));
   const image=()=>app.rootGraph.nodes.find(node=>node.type==='LoadImage').widgets.find(widget=>widget.name==='image');
   check('Opened graph uses the current clip input instead of a stale editor widget ('+image().value+' vs '+chosenImage+')',image().value===chosenImage);
   check('Recovery keeps the project and selected take',shot().takeId===chosen&&shot().workflowVersion===initialVersion);
