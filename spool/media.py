@@ -643,11 +643,14 @@ class Media:
         frame = int(frame)
         if metadata["kind"] not in ("video", "image") or not 0 <= frame < metadata["frames"]:
             raise ValueError("Choose a frame inside the footage")
+        ffmpeg = find_tool("ffmpeg")
+        if not ffmpeg:
+            raise ValueError("Install ffmpeg to export frames")
         original = self.original_source(metadata)
         folder = self.root / "exports"
         folder.mkdir(exist_ok=True)
         output = folder / f"spool-frame-{frame:06d}-{uid()[:8]}.png"
-        command = [find_tool("ffmpeg"), "-v", "error", "-y"]
+        command = [ffmpeg, "-v", "error", "-y"]
         if metadata["kind"] == "video":
             command += ["-i", str(original['path']), "-vf", f"trim=start_frame={original['offset']+frame},setpts=PTS-STARTPTS"]
         else:
