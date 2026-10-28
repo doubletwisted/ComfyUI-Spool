@@ -97,6 +97,9 @@ the key in `COMFY_API_KEY` (the host keeps no saved key), and set
 that names Finder, so the macOS labels are checked from Windows too; they are
 not a substitute for a real Mac.
 
+The [Apple Silicon validation record](mac-validation.md) separates native Mac
+and CPU execution evidence from mocked checks, and records the tested versions.
+
 To test Python editing changes without restarting the host, start the editing API
 in another terminal and point the browser checks at it. Its schemas come from the
 host; projects and credentials stay in its runtime folder, and execution is

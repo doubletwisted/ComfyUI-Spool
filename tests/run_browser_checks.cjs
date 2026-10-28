@@ -142,6 +142,12 @@ async function takeHoverFixture(){
 }
 
 async function templateFixture(){const fixture=await workflowFixture(),project=await api('projects/'+fixture.id);return {...fixture,bridge:'native-templates-qa',capture:project.recipes[project.document.clips[0].workflowVersion]};}
+async function embeddedTemplatesFixture(){
+ const fixture=await workflowFixture(),image=await fetch(apiBase+'/spool/media/'+fixture.id+'/assets/black.png');assert.equal(image.status,200);
+ const form=new FormData();form.set('image',new Blob([await image.arrayBuffer()],{type:'image/png'}),'spool-template-browser-qa.png');form.set('overwrite','true');
+ const uploaded=await fetch(base+'/upload/image',{method:'POST',body:form});assert.equal(uploaded.status,200);
+ return fixture;
+}
 async function workflowPreviewFixture(){
  const fixture=await workflowFixture(),project=await api('projects/'+fixture.id),poster='.spool/previews/library-relative.png';
  const response=await fetch(apiBase+'/spool/media/'+project.id+'/assets/black.png');assert.equal(response.status,200);
@@ -230,7 +236,7 @@ const CHECKS = {
 
   'inspector-menu': { fixture: inspectorMenuFixture, modes: ['full'], file: 'inspector_menu_browser_checks.js' },
   'inspector-menu-narrow': { fixture: inspectorMenuFixture, modes: ['full'], width: 360, height: 800, file: 'inspector_menu_browser_checks.js' },
-  'embedded-templates-live': { fixture: workflowFixture, modes: ['full'], file: 'embedded_templates_live_browser_checks.js' },
+  'embedded-templates-live': { fixture: embeddedTemplatesFixture, modes: ['full'], file: 'embedded_templates_live_browser_checks.js' },
   'workflow-library-narrow': { fixture: templateFixture, modes: ['full'], templates: true, file: 'workflow_library_browser_checks.js', width: 360, height: 800 },
   'take-setup': { fixture: takeSetupFixture, modes: ['full'], file: 'take_setup_browser_checks.js' },
   'render-queue': { fixture: workflowFixture, modes: ['full'], file: 'render_queue_browser_checks.js' },
@@ -424,7 +430,7 @@ async function runDrag(page, evaluate, spec) {
 }
 
 async function runTakeDeleteKeys(page,evaluate){
- const labels=[];
+ const labels=[],mac=await evaluate("import('/spool/ui/keys.js').then(k=>k.MAC)"),primary=mac?4:2;
  const press=async(key,code,windowsVirtualKeyCode,modifiers=0)=>{const event={key,code,windowsVirtualKeyCode,modifiers};await page.send('Input.dispatchKeyEvent',{...event,type:'rawKeyDown'});await page.send('Input.dispatchKeyEvent',{...event,type:'keyUp'});await evaluate('spoolNative.flush()');};
  const probe=()=>evaluate(`(()=>{const n=spoolNative;return {count:document.querySelectorAll('#takeList [data-take]').length,clip:JSON.stringify(n.state.clips[0]),modal:!document.getElementById('modalOverlay').hidden};})()`);
  await evaluate(`(async()=>{spoolNative.selectClip('shot');await spoolNative.flush();})()`);
@@ -434,13 +440,13 @@ async function runTakeDeleteKeys(page,evaluate){
  await page.send('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,clickCount:1});
  await press('Delete','Delete',46);let value=await probe();assert.equal(value.count,4);assert.equal(value.modal,false);
  labels.push('Trusted Delete on a take checkbox removes the take without opening disk deletion');
- await press('z','KeyZ',90,2);assert.equal((await probe()).clip,before.clip);
- labels.push('Trusted Ctrl+Z immediately restores the deleted take and exact clip metadata');
- await press('z','KeyZ',90,10);assert.equal((await probe()).count,4);
+ await press('z','KeyZ',90,primary);assert.equal((await probe()).clip,before.clip);
+ labels.push('Trusted '+(mac?'Cmd':'Ctrl')+'+Z immediately restores the deleted take and exact clip metadata');
+ await press('z','KeyZ',90,primary|8);assert.equal((await probe()).count,4);
  await page.send('Page.reload',{ignoreCache:true});
  let ready=false;for(let i=0;i<200;i++){if(await evaluate('!!window.spoolNative')){ready=true;break;}await sleep(50);}assert.ok(ready,'Editor reloaded');
  assert.equal((await probe()).count,4);
- await evaluate(`document.getElementById('editor').focus()`);await press('z','KeyZ',90,2);assert.equal((await probe()).clip,before.clip);
+ await evaluate(`document.getElementById('editor').focus()`);await press('z','KeyZ',90,primary);assert.equal((await probe()).clip,before.clip);
  labels.push('A saved take removal retains its Undo step across a browser reload');
  await evaluate(`(()=>{const button=document.getElementById('selectAllTakes');if(spoolNative.view.takeSelection.ids.length){button.click();button.click();}})()`);
  return labels;
