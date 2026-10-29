@@ -108,6 +108,8 @@ broken.dispose();
 const { createProjectEdit } = await import(
   'data:text/javascript;base64,' + Buffer.from(fs.readFileSync('ui/project-edit.js', 'utf8')).toString('base64')
 );
+let hold = null,
+  release;
 let reads = 0,
   gesture = false,
   focused = false,
@@ -127,7 +129,9 @@ const edit = createProjectEdit({
   notify() {},
   request: async () => {
     reads++;
-    return structuredClone(remote);
+    const value = structuredClone(remote);
+    if (hold) await hold;
+    return value;
   },
 });
 const fake = { close() {} };
@@ -141,14 +145,24 @@ const guarded = createProjectSync({
     latest = tick();
   },
 });
-const tick = async () => {
-  if (guarded.due(false)) guarded.didPoll(await edit.poll());
-};
+// Mirrors pollNative: one read at a time, and a hint during a read joins that read.
+let inflight = null;
+const tick = () =>
+  (inflight ??= (async () => {
+    if (!guarded.due(false)) return;
+    const seen = guarded.mark();
+    guarded.didPoll(await edit.poll(), seen);
+  })().finally(() => {
+    inflight = null;
+  }));
 guarded.start();
-const push = async () => {
+const hint = () =>
   fake.onmessage({ data: JSON.stringify({ ...contract, data: { ...contract.data, projectId: 'p' } }) });
+const push = async () => {
+  hint();
   await latest;
 };
+push.send = async () => hint();
 gesture = true;
 await push();
 assert.equal(reads, 0, 'Push cannot poll through a gesture');
@@ -174,6 +188,19 @@ assert.equal(authored.project, 'remote', 'A gesture defers the hinted read');
 gesture = false;
 await tick();
 assert.equal(authored.project, 'after gesture', 'A deferred hint is read on the next tick without another hint');
+hold = new Promise(resolve => (release = resolve));
+guarded.requestPoll();
+const inFlight = tick(); // reads revision 3 before the next change
+remote.revision = 4;
+remote.document.project = 'during read';
+await push.send();
+hold = null;
+release();
+await inFlight;
+assert.equal(authored.project, 'after gesture', 'The read that started before the hint returns the older state');
+assert.ok(guarded.due(false), 'A hint that arrived during a read stays pending after that read');
+await tick();
+assert.equal(authored.project, 'during read', 'The next tick reads the change the hint announced');
 const beforeDraft = reads;
 authored.project = 'unsaved draft';
 await push();

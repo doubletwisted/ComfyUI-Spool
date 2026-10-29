@@ -12,9 +12,11 @@ export function createProjectSync({
     stopped = false,
     retryAt = 0,
     lastPoll = now(),
-    pending = false;
+    pending = false,
+    hints = 0;
   function invalidate() {
     pending = true;
+    hints++;
     refresh();
   }
   function connect() {
@@ -53,16 +55,21 @@ export function createProjectSync({
   return {
     requestPoll() {
       pending = true;
+      hints++;
     },
     due(active) {
       connect();
       return pending || now() - lastPoll >= (connected ? 30000 : active ? 1200 : 15000);
     },
+    // Taken before a poll; a hint that arrives while it runs is not acknowledged by it.
+    mark() {
+      return hints;
+    },
     // A poll that local editing skipped or deferred keeps its hint for the next tick.
-    didPoll(settled = true) {
+    didPoll(settled = true, seen = hints) {
       if (!settled) return;
       lastPoll = now();
-      pending = false;
+      if (seen === hints) pending = false;
     },
     start: connect,
     dispose() {
