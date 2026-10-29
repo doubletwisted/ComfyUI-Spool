@@ -125,9 +125,18 @@ export function keyInputs(prompt, definitions, result) {
     const d = definition(id),
       type = d?.output?.[slot],
       key = JSON.stringify([id, slot]);
-    if (type !== 'COMFY_MATCHTYPE_V3') return type;
+    if (type !== 'COMFY_MATCHTYPE_V3' && type !== '*') return type;
     if (seen.has(key)) return null;
     seen.add(key);
+    if (type === '*') {
+      // A pass-through (GPU cleanup, "anything" nodes) outputs what its one wildcard input carries.
+      const passed = Object.entries(prompt[id].inputs).filter(
+        ([name, value]) => Array.isArray(value) && inputSchema(definitions, prompt[id].class_type, name)?.[0] === '*',
+      );
+      if (passed.length !== 1) return null;
+      const [from, fromSlot] = passed[0][1];
+      return typeof from === 'string' && Number.isInteger(fromSlot) ? outputType(from, fromSlot, seen) : null;
+    }
     const template = d.output_matchtypes?.[slot],
       types = [];
     if (!template) return null;

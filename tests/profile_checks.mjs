@@ -44,6 +44,16 @@ check(
   'Exact uint64 value and opaque address survive',
   c.find(x => x.role === 'seed').value.__spool_int__ === '18446744073709551615',
 );
+// GPU cleanup and similar pass-through nodes take and return any type ('*').
+const passing = { ...d, 'easy cleanGpuUsed': { input: { required: { anything: ['*', {}] } }, output: ['*'] } },
+  through = structuredClone(p);
+through.cleanup = { class_type: 'easy cleanGpuUsed', inputs: { anything: ['sampler', 0] } };
+through.decode.inputs.samples = ['cleanup', 0];
+check(
+  'A wildcard pass-through between sampler and decoder keeps every input reachable',
+  JSON.stringify(keyInputs(through, passing, { nodeId: 'save' }).map(x => x.role)) ===
+    JSON.stringify(c.map(x => x.role)),
+);
 p.sampler.inputs.negative = ['positive', 0];
 check(
   'Shared positive/negative never receives a misleading prompt role',
