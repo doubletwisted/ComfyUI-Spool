@@ -1,4 +1,5 @@
 """Authored documents, take ownership and generated-take projection; no storage I/O."""
+
 import copy
 import json
 from . import attempts, timing
@@ -6,9 +7,40 @@ from . import attempts, timing
 # One field list decides what a project document carries; ui/ledger.js mirrors it and
 # tests/fixtures/document_fields.json pins both. Edit fields are the authored edit, records
 # are saved but not compared, and view fields belong to one editor tab.
-EDIT_FIELDS = ("project", "brief", "fps", "fpsExplicit", "resolution", "exportRange", "clips", "tailGap", "videoTracks", "videoTailGaps", "disabledVideoTracks", "audioClips", "audioTracks", "hiddenMediaIds", "deletedTakeIds", "deletedMediaIds")
+EDIT_FIELDS = (
+    "project",
+    "brief",
+    "fps",
+    "fpsExplicit",
+    "resolution",
+    "exportRange",
+    "clips",
+    "tailGap",
+    "videoTracks",
+    "videoTailGaps",
+    "disabledVideoTracks",
+    "audioClips",
+    "audioTracks",
+    "hiddenMediaIds",
+    "deletedTakeIds",
+    "deletedMediaIds",
+)
 RECORD_FIELDS = ("jobs", "recoverableResults", "media", "importedWorkflows", "clearedRenderIds")
-VIEW_FIELDS = ("selected", "selectedAudio", "selection", "takeSelection", "frame", "zoom", "snap", "muted", "loop", "trimSingle", "viewerZoom", "previewQuality", "activeVideoTrack")
+VIEW_FIELDS = (
+    "selected",
+    "selectedAudio",
+    "selection",
+    "takeSelection",
+    "frame",
+    "zoom",
+    "snap",
+    "muted",
+    "loop",
+    "trimSingle",
+    "viewerZoom",
+    "previewQuality",
+    "activeVideoTrack",
+)
 SERVER_OWNED = ("jobs", "recoverableResults")
 # A saved document never carries view state or the server-owned execution records.
 VIEW_KEYS = SERVER_OWNED + VIEW_FIELDS
@@ -104,7 +136,9 @@ def compose(document, evidence, in_place=False):
 
 def authored(document):
     working = {key: value for key, value in document.items() if key not in VIEW_KEYS}
-    working["clips"] = [{**clip, "takes": [t for t in clip.get("takes", []) if not t.get("generated")]} for clip in document["clips"]]
+    working["clips"] = [
+        {**clip, "takes": [t for t in clip.get("takes", []) if not t.get("generated")]} for clip in document["clips"]
+    ]
     result = copy.deepcopy(working)
     ids = [c["id"] for c in result["clips"]]
     if len(ids) != len(set(ids)):
@@ -114,6 +148,7 @@ def authored(document):
 
 def editor_project(project):
     """Routine editor responses omit render evidence available on demand."""
+
     def media(record):
         working = {key: value for key, value in record.items() if key not in EVIDENCE_KEYS}
         if any(key in record for key in EVIDENCE_KEYS):
@@ -130,17 +165,42 @@ def editor_project(project):
         return working
 
     document = project["document"]
-    return {**project, "document": {**document, "clips": [{**clip, "takes": [take(t) for t in clip.get("takes", [])]} for clip in document["clips"]]}}
-
+    return {
+        **project,
+        "document": {
+            **document,
+            "clips": [{**clip, "takes": [take(t) for t in clip.get("takes", [])]} for clip in document["clips"]],
+        },
+    }
 
 
 def owns(clip, attempt):
-    return attempt["take_id"] in clip.get("takeSourceTakeIds", []) or clip["id"] == attempt["clip_id"] or attempt["clip_id"] in clip.get("takeSourceIds", []) or clip.get("takeOwnerId") == attempt["clip_id"] or attempt["take_id"] == clip.get("takeId")
+    return (
+        attempt["take_id"] in clip.get("takeSourceTakeIds", [])
+        or clip["id"] == attempt["clip_id"]
+        or attempt["clip_id"] in clip.get("takeSourceIds", [])
+        or clip.get("takeOwnerId") == attempt["clip_id"]
+        or attempt["take_id"] == clip.get("takeId")
+    )
 
 
 def job(attempt, request):
-    seeds = [{"label": b.get("label", "Seed"), "value": request.get("inputValues", {}).get(b["key"])} for b in request["capture"].get("bindings", []) if b.get("role") == "seed"]
-    result = {"id": attempt["id"], "clipId": attempt["clip_id"], "name": request["clipName"], "status": attempt["status"], "progress": 100 if attempt["status"] == "complete" else 0, "seed": "frozen", "error": attempt["error"], "promptId": attempt["prompt_id"], "target": attempts.target_of(request)}
+    seeds = [
+        {"label": b.get("label", "Seed"), "value": request.get("inputValues", {}).get(b["key"])}
+        for b in request["capture"].get("bindings", [])
+        if b.get("role") == "seed"
+    ]
+    result = {
+        "id": attempt["id"],
+        "clipId": attempt["clip_id"],
+        "name": request["clipName"],
+        "status": attempt["status"],
+        "progress": 100 if attempt["status"] == "complete" else 0,
+        "seed": "frozen",
+        "error": attempt["error"],
+        "promptId": attempt["prompt_id"],
+        "target": attempts.target_of(request),
+    }
     if "created" in attempt:
         result.update({"takeNumber": request.get("takeNumber"), "createdAt": attempt["created"], "seeds": seeds})
     return result
@@ -159,11 +219,30 @@ def attach(document, attempts):
             continue
         result = json.loads(attempt["result"])
         if not any(owns(c, attempt) for c in document["clips"]):
-            document.setdefault("recoverableResults", []).append({"takeId": attempt["take_id"], "clipId": attempt["clip_id"], "clipName": request["clipName"], "media": result["primary"], "attemptId": attempt["id"]})
+            document.setdefault("recoverableResults", []).append(
+                {
+                    "takeId": attempt["take_id"],
+                    "clipId": attempt["clip_id"],
+                    "clipName": request["clipName"],
+                    "media": result["primary"],
+                    "attemptId": attempt["id"],
+                }
+            )
         for clip in document["clips"]:
             if owns(clip, attempt):
-                clip["takes"].append({"id": attempt["take_id"], "number": request.get("takeNumber", ordinals[owner]), "revision": request["clipRevision"], "seed": "frozen", "generated": True,
-                                      "media": result["primary"], "artifacts": result["artifacts"], "request": request, "workflowSnapshot": request["capture"]})
+                clip["takes"].append(
+                    {
+                        "id": attempt["take_id"],
+                        "number": request.get("takeNumber", ordinals[owner]),
+                        "revision": request["clipRevision"],
+                        "seed": "frozen",
+                        "generated": True,
+                        "media": result["primary"],
+                        "artifacts": result["artifacts"],
+                        "request": request,
+                        "workflowSnapshot": request["capture"],
+                    }
+                )
     return timing.interpret(document, media_records(document))
 
 

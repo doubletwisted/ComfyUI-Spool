@@ -1,4 +1,5 @@
 """Discover completed files in clip folders without changing the chosen take."""
+
 import json
 import logging
 import subprocess
@@ -53,7 +54,9 @@ class FolderTakes:
                     if override:
                         metadata["workflowData"] = media.prepare_workflow(override)
                     elif metadata.get("workflow") or metadata.get("prompt"):
-                        metadata["workflowData"] = media.prepare_workflow({key: metadata[key] for key in ("workflow", "prompt") if key in metadata})
+                        metadata["workflowData"] = media.prepare_workflow(
+                            {key: metadata[key] for key in ("workflow", "prompt") if key in metadata}
+                        )
                     if (path.stat().st_size, path.stat().st_mtime_ns) != signature:
                         continue
                 except (ValueError, OSError, subprocess.SubprocessError):
@@ -63,7 +66,14 @@ class FolderTakes:
                 identity = str(uuid.uuid5(uuid.UUID(project_id), relative))
                 metadata["id"] = "media-" + identity
                 for clip in clips:
-                    number = max([t.get("number", 0) for t in clip.get("takes", [])] + [a["request"].get("takeNumber", 0) for a in attempts if a["clip_id"] == clip["id"]] + [0]) + 1
+                    number = (
+                        max(
+                            [t.get("number", 0) for t in clip.get("takes", [])]
+                            + [a["request"].get("takeNumber", 0) for a in attempts if a["clip_id"] == clip["id"]]
+                            + [0]
+                        )
+                        + 1
+                    )
                     take = {"id": "take-" + identity, "number": number, "media": metadata}
                     clip.setdefault("takes", []).append(take)
                 ready.append((relative, "take-" + identity))

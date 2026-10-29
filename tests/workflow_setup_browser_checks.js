@@ -1,40 +1,128 @@
-(async()=>{
- const n=window.spoolNative,checks=[],check=(label,value)=>{if(!value)throw Error(label);checks.push(label);};
- const field=id=>n.dialogRoot.querySelector('#'+id)||document.getElementById(id);
- const wait=async predicate=>{const end=performance.now()+15000;while(!predicate()){if(performance.now()>end)throw Error('Workflow setup timed out');await new Promise(r=>setTimeout(r,30));}};
- n.selectClip('shot');await n.flush();
- check('Captured workflow is ready without a library selection',!field('generate').disabled&&!field('inspectorContent').querySelector('.workflow-problem'));
- check('Captured workflow is presented without another selector',!field('clipWorkflow')&&field('inspectorContent').querySelector('.clip-workflow-heading').textContent.includes('Clip workflow'));
- const original=n.revision;
- await n.configureCapture('saved');check('Exact mapping opens the real setup dialog',!!field('captureSave')&&!!field('nativeSaver'));
- field('captureCancel').click();check('Cancelling mapping leaves project unchanged',n.revision===original&&field('modalOverlay').hidden);
- await n.configureCapture('saved');
- const boxes=[...field('modal').querySelectorAll('[data-bind]')],width=boxes.find(b=>b.closest('label').textContent.includes('/ width'));
- check('Exact mapping lists literal workflow controls',!!width);width.checked=true;
- field('modal').querySelector('[data-bind-label="'+width.dataset.bind+'"]').value='Image width';field('captureSave').click();
- await wait(()=>n.revision>original&&field('modalOverlay').hidden&&!document.getElementById('editor').inert);await n.flush();
- check('Exact mapping persists and releases editor interactivity',n.state.clips.find(c=>c.id==='shot').bindings.some(b=>b.label==='Image width'));
- const add=()=>{const button=document.querySelector('#workflowList [data-template="library"],#binGrid [data-add="library"]');if(!button)throw Error('Workflow library button unavailable');button.click();};
- const count=n.state.clips.length;add();await wait(()=>!field('modalOverlay').hidden&&!!field('keyCaptureSaved'));
- check('Multi-output workflow requires a choice',field('keyCaptureSaved').disabled);
- field('keyCaptureCancel').click();check('Cancelling library capture adds no shot',n.state.clips.length===count);
- add();await wait(()=>!field('modalOverlay').hidden&&!!field('captureOutput'));
- field('captureOutput').value='1';field('captureOutput').dispatchEvent(new Event('change',{bubbles:true}));
- check('Choosing an output enables capture',!field('keyCaptureSaved').disabled);field('keyCaptureSaved').click();
- await wait(()=>n.state.clips.length===count+1&&!!n.state.clips.at(-1).workflowVersion&&field('modalOverlay').hidden&&!document.getElementById('editor').inert);await n.flush();
- const added=n.state.clips.at(-1),recipe=await fetch('/spool/api/workflows/'+added.workflowVersion).then(r=>r.json());
- check('Library capture saves the explicit second output',recipe.result.nodeId==='second'&&added.workflow==='library');
- check('Original shot retains its exact mapping',n.state.clips.find(c=>c.id==='shot').bindings.some(b=>b.label==='Image width'));
- n.undo();await n.flush();check('One Undo removes a project workflow shot and its capture',n.state.clips.length===count);
- n.redo();await n.flush();check('Redo restores the complete project workflow shot',n.state.clips.at(-1).workflowVersion===added.workflowVersion);
- const repeat=async output=>{const before=n.state.clips.length;add();await wait(()=>!field('modalOverlay').hidden&&!!field('captureOutput'));field('captureOutput').value=output;field('captureOutput').dispatchEvent(new Event('change',{bubbles:true}));field('keyCaptureSaved').click();await wait(()=>n.state.clips.length===before+1&&n.state.clips.at(-1).workflowVersion&&!document.getElementById('inspector').inert);await n.flush();return n.state.clips.at(-1);};
- const cached=await repeat('1');
- check('A repeated project workflow reuses the explicitly selected result',cached.workflowVersion===added.workflowVersion&&cached.id!==added.id&&cached.takeId!==added.takeId);
- const changed=await repeat('0'),changedRecipe=await fetch('/spool/api/workflows/'+changed.workflowVersion).then(r=>r.json());
- check('Choosing a different output captures a new recipe',changed.workflowVersion!==cached.workflowVersion&&changedRecipe.result.nodeId==='save');
- const selected=cached.takeId;await n.queueClips([cached]);
- for(let i=0;i<200&&!n.state.clips.find(c=>c.id===cached.id).takes.some(t=>t.generated);i++){await new Promise(r=>setTimeout(r,30));await n.poll();}
- const collected=n.state.clips.find(c=>c.id===cached.id);
- check('A reused recipe executes and collects into its new clip',collected.takes.filter(t=>t.generated).length===1&&collected.takeId===selected);
- return {checks};
-})()
+(async () => {
+  const n = window.spoolNative,
+    checks = [],
+    check = (label, value) => {
+      if (!value) throw Error(label);
+      checks.push(label);
+    };
+  const field = id => n.dialogRoot.querySelector('#' + id) || document.getElementById(id);
+  const wait = async predicate => {
+    const end = performance.now() + 15000;
+    while (!predicate()) {
+      if (performance.now() > end) throw Error('Workflow setup timed out');
+      await new Promise(r => setTimeout(r, 30));
+    }
+  };
+  n.selectClip('shot');
+  await n.flush();
+  check(
+    'Captured workflow is ready without a library selection',
+    !field('generate').disabled && !field('inspectorContent').querySelector('.workflow-problem'),
+  );
+  check(
+    'Captured workflow is presented without another selector',
+    !field('clipWorkflow') &&
+      field('inspectorContent').querySelector('.clip-workflow-heading').textContent.includes('Clip workflow'),
+  );
+  const original = n.revision;
+  await n.configureCapture('saved');
+  check('Exact mapping opens the real setup dialog', !!field('captureSave') && !!field('nativeSaver'));
+  field('captureCancel').click();
+  check('Cancelling mapping leaves project unchanged', n.revision === original && field('modalOverlay').hidden);
+  await n.configureCapture('saved');
+  const boxes = [...field('modal').querySelectorAll('[data-bind]')],
+    width = boxes.find(b => b.closest('label').textContent.includes('/ width'));
+  check('Exact mapping lists literal workflow controls', !!width);
+  width.checked = true;
+  field('modal').querySelector('[data-bind-label="' + width.dataset.bind + '"]').value = 'Image width';
+  field('captureSave').click();
+  await wait(() => n.revision > original && field('modalOverlay').hidden && !document.getElementById('editor').inert);
+  await n.flush();
+  check(
+    'Exact mapping persists and releases editor interactivity',
+    n.state.clips.find(c => c.id === 'shot').bindings.some(b => b.label === 'Image width'),
+  );
+  const add = () => {
+    const button = document.querySelector('#workflowList [data-template="library"],#binGrid [data-add="library"]');
+    if (!button) throw Error('Workflow library button unavailable');
+    button.click();
+  };
+  const count = n.state.clips.length;
+  add();
+  await wait(() => !field('modalOverlay').hidden && !!field('keyCaptureSaved'));
+  check('Multi-output workflow requires a choice', field('keyCaptureSaved').disabled);
+  field('keyCaptureCancel').click();
+  check('Cancelling library capture adds no shot', n.state.clips.length === count);
+  add();
+  await wait(() => !field('modalOverlay').hidden && !!field('captureOutput'));
+  field('captureOutput').value = '1';
+  field('captureOutput').dispatchEvent(new Event('change', { bubbles: true }));
+  check('Choosing an output enables capture', !field('keyCaptureSaved').disabled);
+  field('keyCaptureSaved').click();
+  await wait(
+    () =>
+      n.state.clips.length === count + 1 &&
+      !!n.state.clips.at(-1).workflowVersion &&
+      field('modalOverlay').hidden &&
+      !document.getElementById('editor').inert,
+  );
+  await n.flush();
+  const added = n.state.clips.at(-1),
+    recipe = await fetch('/spool/api/workflows/' + added.workflowVersion).then(r => r.json());
+  check(
+    'Library capture saves the explicit second output',
+    recipe.result.nodeId === 'second' && added.workflow === 'library',
+  );
+  check(
+    'Original shot retains its exact mapping',
+    n.state.clips.find(c => c.id === 'shot').bindings.some(b => b.label === 'Image width'),
+  );
+  n.undo();
+  await n.flush();
+  check('One Undo removes a project workflow shot and its capture', n.state.clips.length === count);
+  n.redo();
+  await n.flush();
+  check(
+    'Redo restores the complete project workflow shot',
+    n.state.clips.at(-1).workflowVersion === added.workflowVersion,
+  );
+  const repeat = async output => {
+    const before = n.state.clips.length;
+    add();
+    await wait(() => !field('modalOverlay').hidden && !!field('captureOutput'));
+    field('captureOutput').value = output;
+    field('captureOutput').dispatchEvent(new Event('change', { bubbles: true }));
+    field('keyCaptureSaved').click();
+    await wait(
+      () =>
+        n.state.clips.length === before + 1 &&
+        n.state.clips.at(-1).workflowVersion &&
+        !document.getElementById('inspector').inert,
+    );
+    await n.flush();
+    return n.state.clips.at(-1);
+  };
+  const cached = await repeat('1');
+  check(
+    'A repeated project workflow reuses the explicitly selected result',
+    cached.workflowVersion === added.workflowVersion && cached.id !== added.id && cached.takeId !== added.takeId,
+  );
+  const changed = await repeat('0'),
+    changedRecipe = await fetch('/spool/api/workflows/' + changed.workflowVersion).then(r => r.json());
+  check(
+    'Choosing a different output captures a new recipe',
+    changed.workflowVersion !== cached.workflowVersion && changedRecipe.result.nodeId === 'save',
+  );
+  const selected = cached.takeId;
+  await n.queueClips([cached]);
+  for (let i = 0; i < 200 && !n.state.clips.find(c => c.id === cached.id).takes.some(t => t.generated); i++) {
+    await new Promise(r => setTimeout(r, 30));
+    await n.poll();
+  }
+  const collected = n.state.clips.find(c => c.id === cached.id);
+  check(
+    'A reused recipe executes and collects into its new clip',
+    collected.takes.filter(t => t.generated).length === 1 && collected.takeId === selected,
+  );
+  return { checks };
+})();

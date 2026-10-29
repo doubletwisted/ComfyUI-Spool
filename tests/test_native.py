@@ -29,24 +29,42 @@ Store, Conflict = store_module.Store, store_module.Conflict
 
 
 def clip(identity="clip-a"):
-    return {"id": identity, "name": identity, "revision": 1, "count": 1, "in": 0, "out": 24, "takeId": "original",
-            "takes": [{"id": "original", "number": 1, "media": {"file": "assets/black.png", "kind": "image", "frames": 120}}]}
+    return {
+        "id": identity,
+        "name": identity,
+        "revision": 1,
+        "count": 1,
+        "in": 0,
+        "out": 24,
+        "takeId": "original",
+        "takes": [
+            {"id": "original", "number": 1, "media": {"file": "assets/black.png", "kind": "image", "frames": 120}}
+        ],
+    }
 
 
 def capture():
-    return {"workflow": {"nodes": [{"id": 194, "type": "Subgraph"}]}, "prompt": {
-        "194:45": {"class_type": "LoadImage", "inputs": {"image": "original.png"}},
-        "194:46": {"class_type": "SaveImage", "inputs": {"images": ["194:45", 0], "filename_prefix": "saved"}}},
-        "bindings": [], "result": {"nodeId": "194:46", "group": "images", "index": 0}}
+    return {
+        "workflow": {"nodes": [{"id": 194, "type": "Subgraph"}]},
+        "prompt": {
+            "194:45": {"class_type": "LoadImage", "inputs": {"image": "original.png"}},
+            "194:46": {"class_type": "SaveImage", "inputs": {"images": ["194:45", 0], "filename_prefix": "saved"}},
+        },
+        "bindings": [],
+        "result": {"nodeId": "194:46", "group": "images", "index": 0},
+    }
 
 
 class Queue:
     def __init__(self):
         self.pending, self.running, self.history = [], [], {}
+
     def put(self, item):
         self.pending.append(item)
+
     def get_current_queue(self):
         return self.running, self.pending
+
     def get_history(self, prompt_id):
         return {prompt_id: self.history[prompt_id]} if prompt_id in self.history else {}
 
@@ -67,9 +85,16 @@ class BackendTests(unittest.TestCase):
         self.base = capture()
         self.project = self.store.capture(self.project["id"], 0, "clip-a", self.base)
         self.queue = Queue()
-        self.server = types.SimpleNamespace(number=0, prompt_queue=self.queue, node_replace_manager=types.SimpleNamespace(apply_replacements=lambda prompt: None), trigger_on_prompt=lambda value: value)
+        self.server = types.SimpleNamespace(
+            number=0,
+            prompt_queue=self.queue,
+            node_replace_manager=types.SimpleNamespace(apply_replacements=lambda prompt: None),
+            trigger_on_prompt=lambda value: value,
+        )
+
         async def validate(identity, prompt, targets):
             return True, None, ["194:46"], {}
+
         self.executor = execution_module.LocalExecutor(self.store, self.media, self.server, validate)
 
     def tearDown(self):
@@ -79,32 +104,38 @@ class BackendTests(unittest.TestCase):
         return asyncio.run(self.executor.queue(self.project["id"], self.project["revision"], ["clip-a"], 1))
 
     def test_cloud_key_is_private_execution_data_and_never_saved_in_project(self):
-        with patch.object(execution_module, 'cloud_key', return_value='comfyui-private-fixture'):
+        with patch.object(execution_module, "cloud_key", return_value="comfyui-private-fixture"):
             result = self.submit()
-        self.assertEqual(self.queue.pending[0][5], {'api_key_comfy_org': 'comfyui-private-fixture'})
-        self.assertNotIn('api_key_comfy_org', self.queue.pending[0][3])
-        attempt_id = result['document']['jobs'][0]['id']
-        self.assertNotIn('comfyui-private-fixture', json.dumps(self.store.dispatch_record(attempt_id)))
-        self.assertNotIn('comfyui-private-fixture', json.dumps(result))
-        self.assertNotIn('comfyui-private-fixture', json.dumps(self.store.attempt(attempt_id)['request']))
+        self.assertEqual(self.queue.pending[0][5], {"api_key_comfy_org": "comfyui-private-fixture"})
+        self.assertNotIn("api_key_comfy_org", self.queue.pending[0][3])
+        attempt_id = result["document"]["jobs"][0]["id"]
+        self.assertNotIn("comfyui-private-fixture", json.dumps(self.store.dispatch_record(attempt_id)))
+        self.assertNotIn("comfyui-private-fixture", json.dumps(result))
+        self.assertNotIn("comfyui-private-fixture", json.dumps(self.store.attempt(attempt_id)["request"]))
 
     def test_result_only_workflow_validates_and_queues_only_selected_saver(self):
         captured = capture()
-        captured['resultOnly'] = True
-        self.project = self.store.capture(self.project['id'], self.project['revision'], 'clip-a', captured)
+        captured["resultOnly"] = True
+        self.project = self.store.capture(self.project["id"], self.project["revision"], "clip-a", captured)
         targets_seen = []
+
         async def validate(identity, prompt, targets):
             targets_seen.append(targets)
             return True, None, targets, {}
+
         self.executor.validate = validate
         self.submit()
-        self.assertEqual(targets_seen, [['194:46']])
-        self.assertEqual(self.queue.pending[0][4], ['194:46'])
+        self.assertEqual(targets_seen, [["194:46"]])
+        self.assertEqual(self.queue.pending[0][4], ["194:46"])
 
     def success(self, attempt_id, file_type="temp", filename="result.png"):
         Image.new("RGB", (8, 8), "blue").save(self.root / file_type / filename)
         attempt = self.store.attempt(attempt_id)
-        self.queue.history[attempt["prompt_id"]] = {"prompt": [0, attempt["prompt_id"], attempt["request"]["prompt"]], "status": {"completed": True, "status_str": "success"}, "outputs": {"194:46": {"images": [{"filename": filename, "subfolder": "", "type": file_type}]}}}
+        self.queue.history[attempt["prompt_id"]] = {
+            "prompt": [0, attempt["prompt_id"], attempt["request"]["prompt"]],
+            "status": {"completed": True, "status_str": "success"},
+            "outputs": {"194:46": {"images": [{"filename": filename, "subfolder": "", "type": file_type}]}},
+        }
         self.queue.pending = [x for x in self.queue.pending if x[1] != attempt["prompt_id"]]
         return attempt
 
@@ -115,9 +146,11 @@ class BackendTests(unittest.TestCase):
         encoded = store_module.encode(document)
         db = sqlite3.connect(directory / "spool.sqlite3")
         try:
-            db.executescript("CREATE TABLE projects(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, document TEXT NOT NULL);"
-                             "CREATE TABLE revisions(project_id TEXT, revision INTEGER, document TEXT NOT NULL, PRIMARY KEY(project_id,revision));"
-                             "PRAGMA user_version=3;")
+            db.executescript(
+                "CREATE TABLE projects(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, document TEXT NOT NULL);"
+                "CREATE TABLE revisions(project_id TEXT, revision INTEGER, document TEXT NOT NULL, PRIMARY KEY(project_id,revision));"
+                "PRAGMA user_version=3;"
+            )
             db.execute("INSERT INTO projects VALUES('p',1,?)", (encoded,))
             for revision in range(rows):
                 db.execute("INSERT INTO revisions VALUES('p',?,?)", (revision, encoded))
@@ -149,24 +182,45 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(saved["revision"], self.project["revision"] + 1)
         with self.store.connect() as db:
             self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], store_module.SCHEMA_VERSION)
-            self.assertEqual(db.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='revisions'").fetchone()[0], 0)
+            self.assertEqual(
+                db.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='revisions'").fetchone()[0],
+                0,
+            )
 
     def test_scan_attempts_reads_attempts_without_decoding_a_document(self):
         # The 2 s receipt scan used to call list() and get() per project: on the real
         # store that decoded every project document 30 times a minute, forever.
         document = store_module.empty_project()
-        document["media"] = [{"id": "media-1", "kind": "video", "name": "shot.mp4", "file": "uploads/a.mp4", "frames": 24, "probe": {"streams": []}}]
+        document["media"] = [
+            {
+                "id": "media-1",
+                "kind": "video",
+                "name": "shot.mp4",
+                "file": "uploads/a.mp4",
+                "frames": 24,
+                "probe": {"streams": []},
+            }
+        ]
         project = self.store.create(document)
         self.assertEqual(self.store.scan_attempts(), [])
-        attempt = self.store.intent(project["id"], document["clips"][0] if document["clips"] else {"id": "c", "name": "c", "takes": []},
-                                    {"target": "local", "capture": {"prompt": {"1": {"class_type": "KSampler", "inputs": {}}}}, "inputValues": {}})
+        attempt = self.store.intent(
+            project["id"],
+            document["clips"][0] if document["clips"] else {"id": "c", "name": "c", "takes": []},
+            {
+                "target": "local",
+                "capture": {"prompt": {"1": {"class_type": "KSampler", "inputs": {}}}},
+                "inputValues": {},
+            },
+        )
         rows = self.store.scan_attempts()
         self.assertEqual([row["id"] for row in rows], [attempt["id"]])
         self.assertEqual(rows[0]["request"]["target"], "local")
 
     def test_narrow_reads_answer_without_the_ledger_or_recipes(self):
         document = store_module.empty_project()
-        document["media"] = [{"id": "media-1", "kind": "video", "name": "shot.mp4", "file": "uploads/a.mp4", "frames": 24}]
+        document["media"] = [
+            {"id": "media-1", "kind": "video", "name": "shot.mp4", "file": "uploads/a.mp4", "frames": 24}
+        ]
         document["clips"] = [clip()]
         project = self.store.create(document)
         self.assertTrue(self.store.exists(project["id"]))
@@ -194,7 +248,9 @@ class BackendTests(unittest.TestCase):
         upload = self.store.root / "uploads" / "original.mp4"
         upload.write_bytes(b"upload" * 100)
         document = store_module.empty_project()
-        document["media"] = [{"id": "media-1", "kind": "video", "name": "shot.mp4", "file": "previews/shot-abc.mp4", "frames": 24}]
+        document["media"] = [
+            {"id": "media-1", "kind": "video", "name": "shot.mp4", "file": "previews/shot-abc.mp4", "frames": 24}
+        ]
         self.store.create(document)
         report = self.store.prune()
         self.assertEqual(report["unreferenced"], 1)
@@ -215,22 +271,33 @@ class BackendTests(unittest.TestCase):
         self.assertTrue(fresh.is_file())
 
     def test_prune_evicts_disposable_cut_scores_but_preserves_source(self):
-        scores = self.store.root / 'previews' / 'cut-scores' / 'scan.json'
+        scores = self.store.root / "previews" / "cut-scores" / "scan.json"
         scores.parent.mkdir(parents=True)
         scores.write_text('{"scores":[0,0.5]}')
-        source = self.store.root / 'uploads' / 'source.mp4'
+        source = self.store.root / "uploads" / "source.mp4"
         source.parent.mkdir()
-        source.write_bytes(b'original footage')
+        source.write_bytes(b"original footage")
         report = self.store.prune()
-        self.assertEqual(report['unreferenced'], 1)
+        self.assertEqual(report["unreferenced"], 1)
         self.assertTrue(scores.is_file())
-        self.assertEqual(self.store.prune(confirm=True, budget=0, grace=0)['evicted'], ['previews/cut-scores/scan.json'])
+        self.assertEqual(
+            self.store.prune(confirm=True, budget=0, grace=0)["evicted"], ["previews/cut-scores/scan.json"]
+        )
         self.assertTrue(source.is_file())
 
     def test_project_listing_does_not_decode_documents(self):
         document = store_module.empty_project()
         document["project"] = "Listing QA"
-        document["media"] = [{"id": "m", "kind": "video", "name": "a.mp4", "file": "uploads/a.mp4", "frames": 24, "probe": {"streams": []}}]
+        document["media"] = [
+            {
+                "id": "m",
+                "kind": "video",
+                "name": "a.mp4",
+                "file": "uploads/a.mp4",
+                "frames": 24,
+                "probe": {"streams": []},
+            }
+        ]
         created = self.store.create(document)
         listed = self.store.list()
         entry = next(item for item in listed if item["id"] == created["id"])
@@ -240,8 +307,10 @@ class BackendTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in listed][-1], created["id"], "newest project last")
         # A document without a name falls back rather than breaking the dialog.
         with self.store.connect() as db:
-            db.execute("UPDATE projects SET document=? WHERE id=?", ("{\"clips\":[]}", created["id"]))
-        self.assertEqual(next(item for item in self.store.list() if item["id"] == created["id"])["name"], "Untitled Spool project")
+            db.execute("UPDATE projects SET document=? WHERE id=?", ('{"clips":[]}', created["id"]))
+        self.assertEqual(
+            next(item for item in self.store.list() if item["id"] == created["id"])["name"], "Untitled Spool project"
+        )
 
     def test_narrow_reads_include_generated_takes_and_their_media(self):
         # Generated takes live in the attempt ledger, not in the stored document, so a
@@ -256,19 +325,53 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(len(generated), 1)
         take_id = generated[0]["id"]
         stored = self.store.document(self.project["id"])
-        self.assertEqual([t for c in stored["clips"] for t in c["takes"] if t.get("generated")], [], "the stored document holds no generated takes")
+        self.assertEqual(
+            [t for c in stored["clips"] for t in c["takes"] if t.get("generated")],
+            [],
+            "the stored document holds no generated takes",
+        )
         clip = self.store.clip(self.project["id"], "clip-a")
         self.assertIn(take_id, [t["id"] for t in clip["takes"]])
         media = self.store.take_media(self.project["id"])
         self.assertIn(generated[0]["media"]["file"], [m["file"] for m in media])
-        self.assertEqual(self.store.media_record(self.project["id"], generated[0]["media"]["id"])["file"], generated[0]["media"]["file"])
+        self.assertEqual(
+            self.store.media_record(self.project["id"], generated[0]["media"]["id"])["file"],
+            generated[0]["media"]["file"],
+        )
 
     def test_evidence_merges_across_records_and_saves(self):
         # Two records can share a media id, and a save can carry only part of the
         # payload; neither may drop evidence that is already stored.
         document = store_module.empty_project()
-        document["media"] = [{"id": "media-1", "kind": "video", "name": "a.mp4", "file": "uploads/a.mp4", "frames": 24, "probe": {"streams": []}}]
-        document["clips"] = [{**clip(), "takes": [{"id": "original", "number": 1, "media": {"id": "media-1", "kind": "video", "name": "a.mp4", "file": "uploads/a.mp4", "frames": 24, "workflow": {"nodes": [{"id": 1}]}}}]}]
+        document["media"] = [
+            {
+                "id": "media-1",
+                "kind": "video",
+                "name": "a.mp4",
+                "file": "uploads/a.mp4",
+                "frames": 24,
+                "probe": {"streams": []},
+            }
+        ]
+        document["clips"] = [
+            {
+                **clip(),
+                "takes": [
+                    {
+                        "id": "original",
+                        "number": 1,
+                        "media": {
+                            "id": "media-1",
+                            "kind": "video",
+                            "name": "a.mp4",
+                            "file": "uploads/a.mp4",
+                            "frames": 24,
+                            "workflow": {"nodes": [{"id": 1}]},
+                        },
+                    }
+                ],
+            }
+        ]
         project = self.store.create(document)
         held = self.store.evidence(project["id"], "media-1")
         self.assertEqual(sorted(held), ["mediaId", "probe", "workflow"], "both records contribute to one entry")
@@ -283,8 +386,10 @@ class BackendTests(unittest.TestCase):
             if record["id"] == "media-1":
                 record["workflow"] = {"save": {"class_type": "SaveImage", "inputs": {}}}
         again = self.store.save(project["id"], saved["revision"], saved["document"])
-        self.assertFalse(any(record.get("embeddedGraph") for record in ledger_module.media_records(again["document"])),
-                         "a graph replaced by API-only metadata no longer advertises an editable graph")
+        self.assertFalse(
+            any(record.get("embeddedGraph") for record in ledger_module.media_records(again["document"])),
+            "a graph replaced by API-only metadata no longer advertises an editable graph",
+        )
         self.assertFalse(ledger_module.embedded_graph({"workflow": None}))
         self.assertFalse(ledger_module.embedded_graph({"workflow": "text"}))
         self.assertFalse(ledger_module.embedded_graph({"workflowData": {"nodes": []}}))
@@ -294,12 +399,23 @@ class BackendTests(unittest.TestCase):
         old = self.root / "retry-store"
         old.mkdir()
         document = store_module.empty_project()
-        document["media"] = [{"id": "media-1", "kind": "video", "name": "a.mp4", "file": "uploads/a.mp4", "frames": 24, "probe": {"streams": []}}]
+        document["media"] = [
+            {
+                "id": "media-1",
+                "kind": "video",
+                "name": "a.mp4",
+                "file": "uploads/a.mp4",
+                "frames": 24,
+                "probe": {"streams": []},
+            }
+        ]
         db = sqlite3.connect(old / "spool.sqlite3")
         try:
-            db.executescript("CREATE TABLE projects(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, document TEXT NOT NULL);"
-                             "CREATE TABLE revisions(project_id TEXT, revision INTEGER, document TEXT NOT NULL, PRIMARY KEY(project_id,revision));"
-                             "PRAGMA user_version=3;")
+            db.executescript(
+                "CREATE TABLE projects(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, document TEXT NOT NULL);"
+                "CREATE TABLE revisions(project_id TEXT, revision INTEGER, document TEXT NOT NULL, PRIMARY KEY(project_id,revision));"
+                "PRAGMA user_version=3;"
+            )
             db.execute("INSERT INTO projects VALUES('p',4,?)", (store_module.encode(document),))
             db.commit()
         finally:
@@ -329,8 +445,10 @@ class BackendTests(unittest.TestCase):
         old.mkdir()
         db = sqlite3.connect(old / "spool.sqlite3")
         try:
-            db.executescript("CREATE TABLE revisions(project_id TEXT, revision INTEGER, document TEXT NOT NULL, PRIMARY KEY(project_id,revision));"
-                             "PRAGMA user_version=3;")
+            db.executescript(
+                "CREATE TABLE revisions(project_id TEXT, revision INTEGER, document TEXT NOT NULL, PRIMARY KEY(project_id,revision));"
+                "PRAGMA user_version=3;"
+            )
             db.execute("INSERT INTO revisions VALUES('p',0,?)", ("y" * 5000,))
             db.commit()
         finally:
@@ -340,17 +458,32 @@ class BackendTests(unittest.TestCase):
         self.assertEqual([(r["table"], r["rows"]) for r in report["retired"]], [("revisions", 1)])
         self.assertEqual(report["retired"][0]["payloadBytes"], 5000)
         with store.connect() as db:
-            self.assertEqual(db.execute("SELECT count(*) FROM revisions").fetchone()[0], 1, "a report must not drop the table")
+            self.assertEqual(
+                db.execute("SELECT count(*) FROM revisions").fetchone()[0], 1, "a report must not drop the table"
+            )
             self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 3)
 
     def test_media_evidence_leaves_the_working_document_and_returns_on_demand(self):
         # A probe and an embedded graph are evidence, not edit state. They used to
         # ride inside every copy, save, poll and undo snapshot of the document.
-        evidence = {"probe": {"streams": [{"codec_type": "video"}]}, "workflow": {"nodes": [{"id": 7}]},
-                    "prompt": {"1": {"class_type": "KSampler"}}, "provenance": {"source": "container tag"},
-                    "workflowData": {"workflow": {"nodes": []}}}
-        record = {"id": "media-1", "kind": "video", "name": "shot.mp4", "file": "uploads/a.mp4", "frames": 240,
-                  "width": 1920, "height": 1080, "audio": True, **evidence}
+        evidence = {
+            "probe": {"streams": [{"codec_type": "video"}]},
+            "workflow": {"nodes": [{"id": 7}]},
+            "prompt": {"1": {"class_type": "KSampler"}},
+            "provenance": {"source": "container tag"},
+            "workflowData": {"workflow": {"nodes": []}},
+        }
+        record = {
+            "id": "media-1",
+            "kind": "video",
+            "name": "shot.mp4",
+            "file": "uploads/a.mp4",
+            "frames": 240,
+            "width": 1920,
+            "height": 1080,
+            "audio": True,
+            **evidence,
+        }
         document = store_module.empty_project()
         document["media"] = [dict(record)]
         document["clips"] = [{**clip(), "takes": [{"id": "original", "number": 1, "media": dict(record)}]}]
@@ -369,7 +502,16 @@ class BackendTests(unittest.TestCase):
 
     def test_a_slim_save_keeps_evidence_and_a_legacy_save_refreshes_it(self):
         document = store_module.empty_project()
-        document["media"] = [{"id": "media-1", "kind": "video", "name": "shot.mp4", "file": "uploads/a.mp4", "frames": 24, "probe": {"streams": []}}]
+        document["media"] = [
+            {
+                "id": "media-1",
+                "kind": "video",
+                "name": "shot.mp4",
+                "file": "uploads/a.mp4",
+                "frames": 24,
+                "probe": {"streams": []},
+            }
+        ]
         project = self.store.create(document)
         saved = self.store.save(project["id"], project["revision"], self.store.get(project["id"])["document"])
         self.assertEqual(self.store.evidence(project["id"], "media-1")["probe"], {"streams": []})
@@ -381,8 +523,17 @@ class BackendTests(unittest.TestCase):
 
     def test_export_carries_evidence_and_import_splits_it_again(self):
         document = store_module.empty_project()
-        document["media"] = [{"id": "media-1", "kind": "video", "name": "shot.mp4", "file": "uploads/a.mp4", "frames": 24,
-                              "probe": {"streams": [{"codec_type": "video"}]}, "workflow": {"nodes": [{"id": 3}]}}]
+        document["media"] = [
+            {
+                "id": "media-1",
+                "kind": "video",
+                "name": "shot.mp4",
+                "file": "uploads/a.mp4",
+                "frames": 24,
+                "probe": {"streams": [{"codec_type": "video"}]},
+                "workflow": {"nodes": [{"id": 3}]},
+            }
+        ]
         project = self.store.create(document)
         exported = self.store.export_project(project["id"])["document"]
         self.assertEqual(exported["media"][0]["probe"], {"streams": [{"codec_type": "video"}]})
@@ -395,11 +546,22 @@ class BackendTests(unittest.TestCase):
         old = self.root / "evidence-store"
         old.mkdir()
         document = store_module.empty_project()
-        document["media"] = [{"id": "media-1", "kind": "video", "name": "shot.mp4", "file": "uploads/a.mp4", "frames": 24, "probe": {"streams": []}}]
+        document["media"] = [
+            {
+                "id": "media-1",
+                "kind": "video",
+                "name": "shot.mp4",
+                "file": "uploads/a.mp4",
+                "frames": 24,
+                "probe": {"streams": []},
+            }
+        ]
         db = sqlite3.connect(old / "spool.sqlite3")
         try:
-            db.executescript("CREATE TABLE projects(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, document TEXT NOT NULL);"
-                             "PRAGMA user_version=4;")
+            db.executescript(
+                "CREATE TABLE projects(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, document TEXT NOT NULL);"
+                "PRAGMA user_version=4;"
+            )
             db.execute("INSERT INTO projects VALUES('p',7,?)", (store_module.encode(document),))
             db.commit()
         finally:
@@ -414,7 +576,10 @@ class BackendTests(unittest.TestCase):
         old = self.build_v3_store(self.root / "old-store")
         reopened = Store(old)
         with reopened.connect() as db:
-            self.assertEqual(db.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='revisions'").fetchone()[0], 0)
+            self.assertEqual(
+                db.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='revisions'").fetchone()[0],
+                0,
+            )
             self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], store_module.SCHEMA_VERSION)
         self.assertEqual(reopened.get("p")["document"]["clips"][0]["id"], "clip-a")
         report = reopened.reclaim(confirm=True)
@@ -441,8 +606,10 @@ class BackendTests(unittest.TestCase):
         old.mkdir()
         db = sqlite3.connect(old / "spool.sqlite3")
         try:
-            db.executescript("CREATE TABLE revisions(project_id TEXT, revision INTEGER, document TEXT NOT NULL, PRIMARY KEY(project_id,revision));"
-                             "PRAGMA user_version=3;")
+            db.executescript(
+                "CREATE TABLE revisions(project_id TEXT, revision INTEGER, document TEXT NOT NULL, PRIMARY KEY(project_id,revision));"
+                "PRAGMA user_version=3;"
+            )
             db.execute("INSERT INTO revisions VALUES('p',0,?)", ("x" * 200000,))
             db.commit()
         finally:
@@ -517,6 +684,7 @@ class BackendTests(unittest.TestCase):
     def test_partial_validation_cannot_queue_wrong_primary(self):
         async def validate(*args):
             return True, None, ["other"], {"194:46": {"errors": ["invalid primary"]}}
+
         self.executor.validate = validate
         p = self.submit()
         self.assertEqual(p["document"]["jobs"][0]["status"], "failed")
@@ -528,6 +696,7 @@ class BackendTests(unittest.TestCase):
             value["prompt"]["194:46"]["inputs"]["changed"] = "hook"
             value["partial_execution_targets"] = ["194:46"]
             return value
+
         self.server.trigger_on_prompt = hook
         p = self.submit()
         identity = p["document"]["jobs"][0]["id"]
@@ -537,7 +706,12 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(observed["partial_execution_targets"], ["194:46"])
 
     def test_deadline_and_meta_batch_rejected_before_hooks(self):
-        for node_type, inputs in [("DeadlineSubmit", {}), ("SaveAndSubmitNode", {}), ("VHS_BatchManager", {}), ("VHS_VideoCombine", {"meta_batch": ["batch", 0]})]:
+        for node_type, inputs in [
+            ("DeadlineSubmit", {}),
+            ("SaveAndSubmitNode", {}),
+            ("VHS_BatchManager", {}),
+            ("VHS_VideoCombine", {"meta_batch": ["batch", 0]}),
+        ]:
             changed = copy.deepcopy(self.base)
             changed["prompt"]["launcher"] = {"class_type": node_type, "inputs": inputs}
             self.project = self.store.capture(self.project["id"], self.project["revision"], "clip-a", changed)
@@ -574,7 +748,9 @@ class BackendTests(unittest.TestCase):
         changed["bindings"] = [{"key": "seed", "nodeId": "194:45", "input": "seed"}]
         self.project = self.store.capture(self.project["id"], self.project["revision"], "clip-a", changed)
         p = self.submit()
-        self.assertEqual(self.store.attempt(p["document"]["jobs"][0]["id"])["request"]["prompt"]["194:45"]["inputs"]["seed"], value)
+        self.assertEqual(
+            self.store.attempt(p["document"]["jobs"][0]["id"])["request"]["prompt"]["194:45"]["inputs"]["seed"], value
+        )
 
     def test_duplicate_edit_references_keep_origin(self):
         p = self.submit()
@@ -594,9 +770,17 @@ class BackendTests(unittest.TestCase):
         p = self.submit()
         attempt = self.success(p["document"]["jobs"][0]["id"])
         artifacts, primary = self.media.collect(attempt, self.queue.history[attempt["prompt_id"]])
-        receipts_module.write(self.store.root / "artifacts" / attempt["id"], attempt, artifacts, primary, self.queue.history[attempt["prompt_id"]])
+        receipts_module.write(
+            self.store.root / "artifacts" / attempt["id"],
+            attempt,
+            artifacts,
+            primary,
+            self.queue.history[attempt["prompt_id"]],
+        )
         self.queue.history.clear()
-        reopened = execution_module.LocalExecutor(Store(self.store.root), self.media, self.server, self.executor.validate)
+        reopened = execution_module.LocalExecutor(
+            Store(self.store.root), self.media, self.server, self.executor.validate
+        )
         asyncio.run(reopened.reconcile())
         self.assertEqual(self.store.attempt(attempt["id"])["status"], "complete")
 
@@ -611,11 +795,20 @@ class BackendTests(unittest.TestCase):
         # Both observers can confirm the same accepted execution. Its boolean is
         # idempotent acceptance, not a claim that this caller inserted the row.
         review, together = self.media.review_receipt, Barrier(2)
+
         def concurrent_review(*args):
             together.wait(timeout=5)
             return review(*args)
-        with patch.object(self.media, 'review_receipt', side_effect=concurrent_review), ThreadPoolExecutor(max_workers=2) as pool:
-            accepted = list(pool.map(lambda _: execution_module.Collector(Store(self.store.root), self.media).ingest(attempt), range(2)))
+
+        with (
+            patch.object(self.media, "review_receipt", side_effect=concurrent_review),
+            ThreadPoolExecutor(max_workers=2) as pool,
+        ):
+            accepted = list(
+                pool.map(
+                    lambda _: execution_module.Collector(Store(self.store.root), self.media).ingest(attempt), range(2)
+                )
+            )
         self.assertEqual(accepted, [True, True])
         before = self.store.attempt(attempt["id"])["result"]
         asyncio.run(self.executor.reconcile())
@@ -624,7 +817,9 @@ class BackendTests(unittest.TestCase):
         result = json.loads(before)
         self.assertEqual(result["primary"]["id"], result["primary"]["artifactId"])
         with self.store.connect() as db:
-            self.assertEqual(db.execute("SELECT count(*) FROM executions WHERE attempt_id=?", (attempt["id"],)).fetchone()[0], 1)
+            self.assertEqual(
+                db.execute("SELECT count(*) FROM executions WHERE attempt_id=?", (attempt["id"],)).fetchone()[0], 1
+            )
         self.assertEqual(len(self.store.get(p["id"])["document"]["clips"][0]["takes"]), 2)
 
     def test_duplicate_of_fork_retains_each_source_and_future_arrivals(self):
@@ -660,19 +855,25 @@ class BackendTests(unittest.TestCase):
             c["workflowVersion"] = c["id"]
         document["media"] = [{"id": "evidence", "kind": "image", "probe": {"streams": []}}]
         backup = {"document": document, "recipes": {"first": capture(), "second": {"prompt": {}}}}
+
         def counts():
             with self.store.connect() as db:
-                return [db.execute("SELECT count(*) FROM " + table).fetchone()[0]
-                        for table in ("projects", "workflows", "media_evidence")]
+                return [
+                    db.execute("SELECT count(*) FROM " + table).fetchone()[0]
+                    for table in ("projects", "workflows", "media_evidence")
+                ]
+
         before = counts()
         with self.assertRaises(ValueError):
             self.store.import_project(backup)
         self.assertEqual(counts(), before)
         backup["recipes"]["second"] = capture()
         write = self.store._write_document
+
         def interrupted(*args):
             write(*args)
             raise OSError("interrupted after writing evidence")
+
         with patch.object(self.store, "_write_document", side_effect=interrupted), self.assertRaises(OSError):
             self.store.import_project(backup)
         self.assertEqual(counts(), before)
@@ -708,16 +909,20 @@ class BackendTests(unittest.TestCase):
         changed = copy.deepcopy(self.base)
         changed["prompt"]["194:45"]["inputs"]["seed"] = 7
         changed["bindings"] = [{"key": "seed", "nodeId": "194:45", "input": "seed"}]
-        self.project = self.store.capture(self.project["id"], self.project["revision"], "clip-a", changed, {"seed": 7.0})
+        self.project = self.store.capture(
+            self.project["id"], self.project["revision"], "clip-a", changed, {"seed": 7.0}
+        )
         with self.assertRaisesRegex(ValueError, "literal type"):
             self.submit()
         self.assertEqual(self.queue.pending, [])
 
     def test_hooks_cannot_change_frozen_files_or_isolated_saver_path(self):
         for node_id, name, value in [("194:45", "image", "original.png"), ("194:46", "filename_prefix", "fixed")]:
+
             def hook(payload):
                 payload["prompt"][node_id]["inputs"][name] = value
                 return payload
+
             self.server.trigger_on_prompt = hook
             p = self.submit()
             job = p["document"]["jobs"][-1]
@@ -725,17 +930,42 @@ class BackendTests(unittest.TestCase):
             self.assertEqual(self.store.dispatch_record(job["id"])["payload"]["prompt"][node_id]["inputs"][name], value)
         self.assertEqual(self.queue.pending, [])
 
-    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "Synthetic video adapter check requires ffmpeg/ffprobe")
+    @unittest.skipUnless(
+        shutil.which("ffmpeg") and shutil.which("ffprobe"), "Synthetic video adapter check requires ffmpeg/ffprobe"
+    )
     def test_vhs_gifs_video_adapter_collects_exact_synthetic_record(self):
         changed = copy.deepcopy(self.base)
-        changed["prompt"]["194:46"] = {"class_type": "VHS_VideoCombine", "inputs": {"images": ["194:45", 0], "filename_prefix": "VHS", "format": "video/h264-mp4"}}
+        changed["prompt"]["194:46"] = {
+            "class_type": "VHS_VideoCombine",
+            "inputs": {"images": ["194:45", 0], "filename_prefix": "VHS", "format": "video/h264-mp4"},
+        }
         changed["result"]["group"] = "gifs"
         self.project = self.store.capture(self.project["id"], self.project["revision"], "clip-a", changed)
         p = self.submit()
         attempt = self.store.attempt(p["document"]["jobs"][0]["id"])
         source = self.root / "output" / "vhs.mp4"
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=blue:s=16x16:r=24:d=0.25", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source)], check=True)
-        self.queue.history[attempt["prompt_id"]] = {"status": {"completed": True, "status_str": "success"}, "outputs": {"194:46": {"gifs": [{"filename": "vhs.mp4", "subfolder": "", "type": "output"}]}}}
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=blue:s=16x16:r=24:d=0.25",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                str(source),
+            ],
+            check=True,
+        )
+        self.queue.history[attempt["prompt_id"]] = {
+            "status": {"completed": True, "status_str": "success"},
+            "outputs": {"194:46": {"gifs": [{"filename": "vhs.mp4", "subfolder": "", "type": "output"}]}},
+        }
         self.queue.pending.clear()
         asyncio.run(self.executor.reconcile())
         asyncio.run(self.executor.reconcile())

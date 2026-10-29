@@ -1,4 +1,5 @@
 """Receipt recovery does not depend on a live Comfy queue or history."""
+
 import asyncio
 import logging
 import subprocess
@@ -19,7 +20,9 @@ class Collector:
         for job in project["document"]["jobs"]:
             if job.get("target") != attempts.DEADLINE or job["status"] in attempts.TERMINAL:
                 continue
-            observed = next((farm.observations[job["id"]] for farm in self.farms.values() if job["id"] in farm.observations), None)
+            observed = next(
+                (farm.observations[job["id"]] for farm in self.farms.values() if job["id"] in farm.observations), None
+            )
             if observed:
                 job["farmProgress"] = dict(observed)
         return project

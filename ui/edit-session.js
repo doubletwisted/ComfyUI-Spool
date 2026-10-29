@@ -5,7 +5,7 @@
 // their own `before` copy and record it when they finish.
 export const SCOPES = Object.freeze(['all', 'inspector', 'timeline', 'audio', 'range', 'none']);
 
-export function createEditSession({history, current, reset, recorded, repaint, save}) {
+export function createEditSession({ history, current, reset, recorded, repaint, save }) {
   // Record the step for an edit that continues after this call, such as typing a
   // note. The caller changes the document and saves when the edit settles.
   function record(label) {
@@ -25,5 +25,5 @@ export function createEditSession({history, current, reset, recorded, repaint, s
     save();
     return result;
   }
-  return {apply, record};
+  return { apply, record };
 }

@@ -29,49 +29,68 @@ class QueueOperationTests(unittest.TestCase):
         document = empty_project()
         document["clips"] = [{"id": "shot", "name": "Shot", "revision": 1, "takes": [], "takeId": "original"}]
         project = self.store.create(document)
-        self.recipe = {"prompt": {"load": {"class_type": "LoadImage", "inputs": {"image": "source.png"}},
-                                  "save": {"class_type": "SaveImage", "inputs": {"images": ["load", 0], "filename_prefix": "ordinary"}}},
-                       "bindings": [], "result": {"nodeId": "save", "group": "images", "index": 0}}
+        self.recipe = {
+            "prompt": {
+                "load": {"class_type": "LoadImage", "inputs": {"image": "source.png"}},
+                "save": {"class_type": "SaveImage", "inputs": {"images": ["load", 0], "filename_prefix": "ordinary"}},
+            },
+            "bindings": [],
+            "result": {"nodeId": "save", "group": "images", "index": 0},
+        }
         self.project = self.store.capture(project["id"], 0, "shot", self.recipe)
         self.items = [{"clipId": "shot", "count": 2}]
 
     def test_standalone_recovers_receipt_without_host(self):
         from spool.collection import Collector
         from spool import receipts
+
         project = self.accept()
-        attempt = self.store.attempt(project['document']['jobs'][0]['id'])
-        Image.new('RGB', (8, 8), 'blue').save(self.root / 'output' / 'finished.png')
-        history = {'status': {'completed': True, 'status_str': 'success'}, 'outputs': {'save': {'images': [{'filename': 'finished.png'}]}}}
+        attempt = self.store.attempt(project["document"]["jobs"][0]["id"])
+        Image.new("RGB", (8, 8), "blue").save(self.root / "output" / "finished.png")
+        history = {
+            "status": {"completed": True, "status_str": "success"},
+            "outputs": {"save": {"images": [{"filename": "finished.png"}]}},
+        }
         artifacts, primary = self.media.collect(attempt, history, False)
-        receipts.write(self.store.root / 'artifacts' / attempt['id'], attempt, artifacts, primary, history)
-        Collector(self.store, self.media).scan(); Collector(self.store, self.media).scan()
-        saved = self.store.get(project['id'])
-        self.assertEqual(saved['document']['jobs'][0]['status'], 'complete')
-        self.assertEqual(len(saved['document']['clips'][0]['takes']), 1)
-        self.assertEqual(saved['document']['clips'][0]['takeId'], 'original')
+        receipts.write(self.store.root / "artifacts" / attempt["id"], attempt, artifacts, primary, history)
+        Collector(self.store, self.media).scan()
+        Collector(self.store, self.media).scan()
+        saved = self.store.get(project["id"])
+        self.assertEqual(saved["document"]["jobs"][0]["status"], "complete")
+        self.assertEqual(len(saved["document"]["clips"][0]["takes"]), 1)
+        self.assertEqual(saved["document"]["clips"][0]["takeId"], "original")
 
     def test_graph_handoff_preserves_identity_and_consumes_once(self):
-        value = self.store.handoff(self.project['id'], {'revision': self.project['revision'], 'clipId': 'shot', 'action': 'capture'})
-        self.assertEqual(value['payload']['workflowVersion'], self.project['document']['clips'][0]['workflowVersion'])
-        self.store.finish_handoff(value['id'], {'prompt': self.recipe['prompt']})
+        value = self.store.handoff(
+            self.project["id"], {"revision": self.project["revision"], "clipId": "shot", "action": "capture"}
+        )
+        self.assertEqual(value["payload"]["workflowVersion"], self.project["document"]["clips"][0]["workflowVersion"])
+        self.store.finish_handoff(value["id"], {"prompt": self.recipe["prompt"]})
         with self.assertRaises(Conflict):
-            self.store.finish_handoff(value['id'], {'prompt': {}})
+            self.store.finish_handoff(value["id"], {"prompt": {}})
 
     def test_prepare_handoff_supports_new_shot_and_rejects_stale_graph_request(self):
-        data = {'revision': self.project['revision'], 'action': 'prepare', 'workflow': {'nodes': []}, 'name': 'New workflow'}
-        value = self.store.handoff(self.project['id'], data)
-        self.assertEqual(value['payload']['workflow'], {'nodes': []})
-        self.assertEqual(self.store.get(self.project['id'])['document']['jobs'], [])
+        data = {
+            "revision": self.project["revision"],
+            "action": "prepare",
+            "workflow": {"nodes": []},
+            "name": "New workflow",
+        }
+        value = self.store.handoff(self.project["id"], data)
+        self.assertEqual(value["payload"]["workflow"], {"nodes": []})
+        self.assertEqual(self.store.get(self.project["id"])["document"]["jobs"], [])
         with self.assertRaises(Conflict):
-            self.store.handoff(self.project['id'], {**data, 'revision': -1})
+            self.store.handoff(self.project["id"], {**data, "revision": -1})
         with self.assertRaises(ValueError):
-            self.store.handoff(self.project['id'], {**data, 'workflow': {}})
+            self.store.handoff(self.project["id"], {**data, "workflow": {}})
 
     def tearDown(self):
         self.temp.cleanup()
 
     def accept(self, operation="op-1", store=None):
-        return requests.accept(store or self.store, self.media, self.project["id"], self.project["revision"], self.items, operation)
+        return requests.accept(
+            store or self.store, self.media, self.project["id"], self.project["revision"], self.items, operation
+        )
 
     def test_retry_after_response_loss_and_later_edit_preserves_batch(self):
         accepted = self.accept()
@@ -113,12 +132,29 @@ class QueueOperationTests(unittest.TestCase):
 
     def test_repeated_shot_input_is_baked_once_per_batch(self):
         document = copy.deepcopy(self.project["document"])
-        document["clips"][0].update({"in": 0, "out": 24, "takes": [{"id": "original", "media": {"id": "source", "kind": "image", "file": "assets/black.png", "frames": 120}}]})
+        document["clips"][0].update(
+            {
+                "in": 0,
+                "out": 24,
+                "takes": [
+                    {
+                        "id": "original",
+                        "media": {"id": "source", "kind": "image", "file": "assets/black.png", "frames": 120},
+                    }
+                ],
+            }
+        )
         project = self.store.save(self.project["id"], self.project["revision"], document)
-        recipe = {**self.recipe, "bindings": [{"key": "image", "nodeId": "load", "input": "image", "asset": True, "slot": "image"}]}
+        recipe = {
+            **self.recipe,
+            "bindings": [{"key": "image", "nodeId": "load", "input": "image", "asset": True, "slot": "image"}],
+        }
         project = self.store.capture(project["id"], project["revision"], "shot", recipe)
         items = [{"clipId": "shot", "count": 16, "shotInputs": [{"key": "image", "source": "original"}]}]
-        with patch.object(self.media, "bake_shot", wraps=self.media.bake_shot) as bake, patch.object(self.media, "freeze_asset", wraps=self.media.freeze_asset) as freeze:
+        with (
+            patch.object(self.media, "bake_shot", wraps=self.media.bake_shot) as bake,
+            patch.object(self.media, "freeze_asset", wraps=self.media.freeze_asset) as freeze,
+        ):
             prepared = requests.prepare(self.store, self.media, project, items)
         self.assertEqual((bake.call_count, freeze.call_count), (1, 1))
         self.assertEqual(len({r["shotInputs"][0]["file"] for _, r in prepared}), 1)
@@ -133,31 +169,48 @@ class QueueOperationTests(unittest.TestCase):
     def test_operation_id_cannot_change_payload_or_project(self):
         self.accept()
         with self.assertRaises(Conflict):
-            requests.accept(self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "shot", "count": 1}], "op-1")
+            requests.accept(
+                self.store,
+                self.media,
+                self.project["id"],
+                self.project["revision"],
+                [{"clipId": "shot", "count": 1}],
+                "op-1",
+            )
         other = self.store.create()
         with self.assertRaises(Conflict):
             requests.accept(self.store, self.media, other["id"], other["revision"], self.items, "op-1")
 
     def test_revision_rechecked_after_freezing(self):
         freeze = self.media.freeze_asset
+
         def delayed(value):
             current = self.store.get(self.project["id"])
             self.store.save(current["id"], current["revision"], current["document"])
             return freeze(value)
+
         with patch.object(self.media, "freeze_asset", side_effect=delayed), self.assertRaises(Conflict):
             self.accept()
         self.assertEqual(self.store.pending(), [])
-        self.assertIsNone(self.store.operation("op-1", self.project["id"], {"revision": self.project["revision"], "items": self.items, "actor": "human"}))
+        self.assertIsNone(
+            self.store.operation(
+                "op-1",
+                self.project["id"],
+                {"revision": self.project["revision"], "items": self.items, "actor": "human"},
+            )
+        )
 
     def test_batch_insertion_rolls_back_on_second_attempt_failure(self):
         insert = self.store._intent
         count = 0
+
         def interrupted(*args):
             nonlocal count
             count += 1
             if count == 2:
                 raise OSError("simulated interruption")
             return insert(*args)
+
         with patch.object(self.store, "_intent", side_effect=interrupted), self.assertRaises(OSError):
             self.accept()
         self.assertEqual(self.store.pending(), [])
@@ -166,7 +219,9 @@ class QueueOperationTests(unittest.TestCase):
     def test_conditional_claim_has_one_owner(self):
         identity = self.accept()["document"]["jobs"][0]["id"]
         with ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(lambda session: Store(self.store.root).claim(identity, session), ["host-a", "host-b"]))
+            results = list(
+                pool.map(lambda session: Store(self.store.root).claim(identity, session), ["host-a", "host-b"])
+            )
         self.assertEqual(sum(results), 1)
         self.assertIn(self.store.owner(identity), {"host-a", "host-b"})
 
@@ -182,45 +237,50 @@ class QueueOperationTests(unittest.TestCase):
         second.close()
 
     def test_folder_mismatch_cannot_freeze_for_another_host(self):
-        self.store.publish_host({"roots": {kind: str(self.root / "different" / kind) for kind in self.media.host_roots}}, "host-a")
+        self.store.publish_host(
+            {"roots": {kind: str(self.root / "different" / kind) for kind in self.media.host_roots}}, "host-a"
+        )
         with self.assertRaisesRegex(Conflict, "different media folders"):
             self.accept()
         self.assertEqual(self.store.pending(), [])
 
     def test_input_preview_checks_files_without_attempts_or_freeze_copies(self):
-        document = self.project['document']
-        document['clips'][0].update({'in': 12, 'out': 48})
-        self.project = self.store.save(self.project['id'], self.project['revision'], document)
+        document = self.project["document"]
+        document["clips"][0].update({"in": 12, "out": 48})
+        self.project = self.store.save(self.project["id"], self.project["revision"], document)
         before = copy.deepcopy(self.project)
-        preview = requests.preview(self.store, self.media, self.project['id'], self.project['revision'], 'shot')
-        self.assertEqual(preview['assets'][0]['frozen'], 'source.png')
-        self.assertEqual(preview['shotSeconds'], 1.5)
-        self.assertEqual(self.store.get(self.project['id']), before)
-        self.assertFalse((self.media.host_roots['input'] / 'spool-frozen').exists())
+        preview = requests.preview(self.store, self.media, self.project["id"], self.project["revision"], "shot")
+        self.assertEqual(preview["assets"][0]["frozen"], "source.png")
+        self.assertEqual(preview["shotSeconds"], 1.5)
+        self.assertEqual(self.store.get(self.project["id"]), before)
+        self.assertFalse((self.media.host_roots["input"] / "spool-frozen").exists())
         with self.assertRaises(Conflict):
-            requests.preview(self.store, self.media, self.project['id'], self.project['revision'] - 1, 'shot')
-        (self.media.host_roots['input'] / 'source.png').unlink()
+            requests.preview(self.store, self.media, self.project["id"], self.project["revision"] - 1, "shot")
+        (self.media.host_roots["input"] / "source.png").unlink()
         with self.assertRaises(OSError):
-            requests.preview(self.store, self.media, self.project['id'], self.project['revision'], 'shot')
+            requests.preview(self.store, self.media, self.project["id"], self.project["revision"], "shot")
         self.assertEqual(self.store.pending(), [])
 
     def test_progress_only_annotates_matching_local_attempt_without_persistence(self):
         project = self.accept()
-        identity = project['document']['jobs'][0]['id']
+        identity = project["document"]["jobs"][0]["id"]
         self.store.transition(identity, attempts.QUEUED)
-        project = self.store.get(self.project['id'])
-        observed = {'promptId': project['document']['jobs'][0]['promptId'], 'nodes': [{'id': 'save', 'value': 2, 'max': 8}]}
+        project = self.store.get(self.project["id"])
+        observed = {
+            "promptId": project["document"]["jobs"][0]["promptId"],
+            "nodes": [{"id": "save", "value": 2, "max": 8}],
+        }
         executor = LocalExecutor(self.store, self.media, None, None, progress=lambda: observed)
         result = executor.annotate_progress(copy.deepcopy(project))
-        self.assertEqual(result['document']['jobs'][0]['nodeProgress'][0]['label'], 'SaveImage')
-        self.assertNotIn('nodeProgress', result['document']['jobs'][1])
-        self.assertEqual(self.store.get(self.project['id']), project)
-        observed['promptId'] = 'unrelated-prompt'
+        self.assertEqual(result["document"]["jobs"][0]["nodeProgress"][0]["label"], "SaveImage")
+        self.assertNotIn("nodeProgress", result["document"]["jobs"][1])
+        self.assertEqual(self.store.get(self.project["id"]), project)
+        observed["promptId"] = "unrelated-prompt"
         self.assertEqual(executor.annotate_progress(copy.deepcopy(project)), project)
         self.store.transition(identity, attempts.FAILED, error="fixture failure")
-        finished = self.store.get(self.project['id'])['document']['jobs'][0]['finishedAt']
+        finished = self.store.get(self.project["id"])["document"]["jobs"][0]["finishedAt"]
         self.assertIsNotNone(finished)
-        self.assertEqual(self.store.get(self.project['id'])['document']['jobs'][0]['finishedAt'], finished)
+        self.assertEqual(self.store.get(self.project["id"])["document"]["jobs"][0]["finishedAt"], finished)
 
     def test_legacy_database_is_backed_up_and_migrated_without_data_loss(self):
         db = sqlite3.connect(self.store.path)
@@ -244,10 +304,16 @@ class QueueOperationTests(unittest.TestCase):
         asset = attempt["request"]["assets"][0]
         (self.media.host_roots["input"] / asset["frozen"]).write_bytes(b"changed")
         queued = []
-        server = SimpleNamespace(number=0, prompt_queue=SimpleNamespace(put=queued.append),
-                                 node_replace_manager=SimpleNamespace(apply_replacements=lambda prompt: None), trigger_on_prompt=lambda p: p)
+        server = SimpleNamespace(
+            number=0,
+            prompt_queue=SimpleNamespace(put=queued.append),
+            node_replace_manager=SimpleNamespace(apply_replacements=lambda prompt: None),
+            trigger_on_prompt=lambda p: p,
+        )
+
         async def validate(*args):
             return True, None, ["save"], {}
+
         executor = LocalExecutor(self.store, self.media, server, validate)
         asyncio.run(executor.dispatch(attempt))
         self.assertEqual(queued, [])

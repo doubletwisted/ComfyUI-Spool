@@ -1,4 +1,5 @@
 """Small typed commands shared by human controls and external agents."""
+
 import copy
 import json
 import subprocess
@@ -9,13 +10,19 @@ from .workflow_inputs import input_problem
 
 
 def scope_check(project_id, scope, capability, clip_ids=(), takes=0):
-    if not isinstance(scope, dict) or scope.get("projectId") != project_id or capability not in scope.get("capabilities", []):
+    if (
+        not isinstance(scope, dict)
+        or scope.get("projectId") != project_id
+        or capability not in scope.get("capabilities", [])
+    ):
         raise ValueError("Command requires explicit project scope and capability: " + capability)
     if set(clip_ids) - set(scope.get("clipIds", [])):
         raise ValueError("Command includes a shot outside its declared scope")
     if takes and (type(scope.get("maxTakes")) is not int or takes > scope["maxTakes"]):
         raise ValueError("Experiment exceeds the declared take budget")
-    if scope.get("maxConcurrent") is not None and (type(scope["maxConcurrent"]) is not int or scope["maxConcurrent"] < 1):
+    if scope.get("maxConcurrent") is not None and (
+        type(scope["maxConcurrent"]) is not int or scope["maxConcurrent"] < 1
+    ):
         raise ValueError("Concurrency limit must be a positive integer")
 
 
@@ -28,26 +35,80 @@ def status(store, project_id, clip_id=None, limit=50, offset=0):
         shots = [c for c in shots if c["id"] == clip_id]
         if not shots:
             raise KeyError("Shot not found")
+
     def inputs(c):
         """The recipe's input rules and, as beside Generate, the first missing media input."""
         recipe = project["recipes"].get(c.get("workflowVersion"))
         if not recipe:
             return {"inputRules": [], "inputProblem": None}
         bindings = c.get("bindings", [])
-        values = {b["key"]: recipe["prompt"].get(b["nodeId"], {}).get("inputs", {}).get(b["input"]) for b in bindings if b.get("asset")}
+        values = {
+            b["key"]: recipe["prompt"].get(b["nodeId"], {}).get("inputs", {}).get(b["input"])
+            for b in bindings
+            if b.get("asset")
+        }
         values.update(c.get("inputValues", {}))
-        return {"inputRules": recipe.get("inputRules", []), "inputProblem": input_problem(bindings, values, c.get("shotInputs", []), recipe.get("inputRules", []))}
-    values = [{"id": c["id"], "name": c["name"], "notes": notes.entries(c), "workflowVersion": c.get("workflowVersion"),
-               "inputs": c.get("inputValues", {}), "bindings": c.get("bindings", []), **inputs(c), "selectedTakeId": c.get("takeId"), "in": c.get("in"), "out": c.get("out"),
-               "totalTakes": len(c.get("takes", [])),
-               "takes": [{"id": t["id"], "generated": t.get("generated", False), "placeholder": t.get("placeholder", False),
-                          "media": {k: t["media"].get(k) for k in ("id", "kind", "width", "height", "duration", "fps", "frames", "audio", "poster", "file")}} for t in c.get("takes", [])[-50:]]} for c in shots[offset:offset + limit]]
+        return {
+            "inputRules": recipe.get("inputRules", []),
+            "inputProblem": input_problem(bindings, values, c.get("shotInputs", []), recipe.get("inputRules", [])),
+        }
+
+    values = [
+        {
+            "id": c["id"],
+            "name": c["name"],
+            "notes": notes.entries(c),
+            "workflowVersion": c.get("workflowVersion"),
+            "inputs": c.get("inputValues", {}),
+            "bindings": c.get("bindings", []),
+            **inputs(c),
+            "selectedTakeId": c.get("takeId"),
+            "in": c.get("in"),
+            "out": c.get("out"),
+            "totalTakes": len(c.get("takes", [])),
+            "takes": [
+                {
+                    "id": t["id"],
+                    "generated": t.get("generated", False),
+                    "placeholder": t.get("placeholder", False),
+                    "media": {
+                        k: t["media"].get(k)
+                        for k in (
+                            "id",
+                            "kind",
+                            "width",
+                            "height",
+                            "duration",
+                            "fps",
+                            "frames",
+                            "audio",
+                            "poster",
+                            "file",
+                        )
+                    },
+                }
+                for t in c.get("takes", [])[-50:]
+            ],
+        }
+        for c in shots[offset : offset + limit]
+    ]
     experiments, feedback = store.recent_review(project_id)
-    return {"projectId": project_id, "revision": project["revision"], "brief": project["document"].get("brief", ""), "shots": values,
-            "audioClips": [{"id": c["id"], "name": c.get("name", "Audio"), "notes": notes.entries(c)} for c in project["document"].get("audioClips", [])],
-            "totalShots": len(shots), "nextOffset": offset + limit if offset + limit < len(shots) else None,
-            "jobs": project["document"]["jobs"][-50:], "experiments": experiments, "feedback": feedback,
-            "recoverableResults": project["document"].get("recoverableResults", [])[-50:]}
+    return {
+        "projectId": project_id,
+        "revision": project["revision"],
+        "brief": project["document"].get("brief", ""),
+        "shots": values,
+        "audioClips": [
+            {"id": c["id"], "name": c.get("name", "Audio"), "notes": notes.entries(c)}
+            for c in project["document"].get("audioClips", [])
+        ],
+        "totalShots": len(shots),
+        "nextOffset": offset + limit if offset + limit < len(shots) else None,
+        "jobs": project["document"]["jobs"][-50:],
+        "experiments": experiments,
+        "feedback": feedback,
+        "recoverableResults": project["document"].get("recoverableResults", [])[-50:],
+    }
 
 
 def prepare_experiment(store, project_id, revision, arguments):
@@ -74,9 +135,19 @@ def prepare_experiment(store, project_id, revision, arguments):
             raise ValueError("Map each variation to a verified bound literal control")
         diffs = []
         for key, value in values.items():
-            b = controls[key]; original = capture["prompt"][b["nodeId"]]["inputs"][b["input"]]
-            numeric_float = b.get("contract", {}).get("inputType") == "FLOAT" and type(original) in (int, float) and type(value) in (int, float)
-            if linked(original) or type(value) is not type(original) and not (type(original) is float and type(value) is int) and not numeric_float:
+            b = controls[key]
+            original = capture["prompt"][b["nodeId"]]["inputs"][b["input"]]
+            numeric_float = (
+                b.get("contract", {}).get("inputType") == "FLOAT"
+                and type(original) in (int, float)
+                and type(value) in (int, float)
+            )
+            if (
+                linked(original)
+                or type(value) is not type(original)
+                and not (type(original) is float and type(value) is int)
+                and not numeric_float
+            ):
                 raise ValueError("Variation does not match its literal input type")
             baseline = clip.get("inputValues", {}).get(key, original)
             if baseline != value:
@@ -88,19 +159,45 @@ def prepare_experiment(store, project_id, revision, arguments):
         if "shotInputs" in variant:
             item["shotInputs"] = copy.deepcopy(variant["shotInputs"])
         items.append(item)
-        resolved.append({"clipId": clip["id"], "workflowVersion": clip["workflowVersion"], "values": {**clip.get("inputValues", {}), **values}, "diffs": diffs, "count": count})
-    return {"intent": arguments.get("intent", ""), "mode": mode, "variants": resolved, "items": items, "takeCount": sum(i["count"] for i in items)}
+        resolved.append(
+            {
+                "clipId": clip["id"],
+                "workflowVersion": clip["workflowVersion"],
+                "values": {**clip.get("inputValues", {}), **values},
+                "diffs": diffs,
+                "count": count,
+            }
+        )
+    return {
+        "intent": arguments.get("intent", ""),
+        "mode": mode,
+        "variants": resolved,
+        "items": items,
+        "takeCount": sum(i["count"] for i in items),
+    }
 
 
 def execute(store, media, project_id, data):
     action, arguments = data["action"], data.get("arguments", {})
     identity, revision, actor = data["operationId"], data["revision"], data["actor"]
-    if not isinstance(identity, str) or not 1 <= len(identity) <= 200 or not isinstance(actor, str) or not 1 <= len(actor) <= 100 or type(revision) is not int:
+    if (
+        not isinstance(identity, str)
+        or not 1 <= len(identity) <= 200
+        or not isinstance(actor, str)
+        or not 1 <= len(actor) <= 100
+        or type(revision) is not int
+    ):
         raise ValueError("Supply operation ID, saved revision and actor")
     scope = data.get("scope")
     if action in ("prepare_experiment", "queue_experiment"):
         # Queue replay is resolved by the exact frozen command envelope below.
-        scope_check(project_id, scope, "queue", [v["clipId"] for v in arguments.get("variants", [])], sum(v.get("count", 1) for v in arguments.get("variants", [])))
+        scope_check(
+            project_id,
+            scope,
+            "queue",
+            [v["clipId"] for v in arguments.get("variants", [])],
+            sum(v.get("count", 1) for v in arguments.get("variants", [])),
+        )
         if action == "prepare_experiment":
             return prepare_experiment(store, project_id, revision, arguments)
         payload = store.operation_payload(identity)
@@ -117,11 +214,27 @@ def execute(store, media, project_id, data):
         frozen = requests.prepare(store, media, project, preview["items"])
         for _, request in frozen:
             request["experimentId"] = identity
-        payload = {"revision": revision, "items": preview["items"], "actor": actor, "experiment": preview, "command": data}
+        payload = {
+            "revision": revision,
+            "items": preview["items"],
+            "actor": actor,
+            "experiment": preview,
+            "command": data,
+        }
         store.accept_queue(identity, project_id, revision, payload, frozen, actor)
         return status(store, project_id)
     note_actions = {"add_note", "edit_note", "address_note", "reopen_note"}
-    capabilities = {"set_inputs": "inputs", "set_shot_inputs": "inputs", "apply_workflow": "workflow", "choose_take": "choose_take", "feedback": "feedback", "brief": "edit", "cancel": "cancel", "recover_submission": "recover", **{action: "notes" for action in note_actions}}
+    capabilities = {
+        "set_inputs": "inputs",
+        "set_shot_inputs": "inputs",
+        "apply_workflow": "workflow",
+        "choose_take": "choose_take",
+        "feedback": "feedback",
+        "brief": "edit",
+        "cancel": "cancel",
+        "recover_submission": "recover",
+        **{action: "notes" for action in note_actions},
+    }
     if action not in capabilities:
         raise ValueError("Unknown typed command")
     clip_id = arguments.get("clipId")
@@ -135,7 +248,11 @@ def execute(store, media, project_id, data):
         attempt = store.attempt(arguments["attemptId"])
         if attempt["project_id"] != project_id or attempt["clip_id"] not in scope.get("clipIds", []):
             raise ValueError("Attempt is outside the cancellation scope")
-        if attempt["status"] not in ("intent", "waiting_for_host", "cancel_requested", "complete", "failed", "cancelled") and attempts.target_of(attempt["request"]) != attempts.CLOUD:
+        if (
+            attempt["status"]
+            not in ("intent", "waiting_for_host", "cancel_requested", "complete", "failed", "cancelled")
+            and attempts.target_of(attempt["request"]) != attempts.CLOUD
+        ):
             submission = store.submission_for(attempt["id"])
             # Local attempts have no submission; the cancel policy decides for them below.
             if attempts.target_of(attempt["request"], submission) == attempts.DEADLINE:
@@ -144,9 +261,14 @@ def execute(store, media, project_id, data):
                 try:
                     owner = farm.job_value(submission["external_id"], "SpoolSubmissionId")
                 except (OSError, RuntimeError, subprocess.SubprocessError) as error:
-                    raise ValueError("Cancellation was not sent; retry Cancel request after the Deadline lookup recovers: " + str(error)) from error
+                    raise ValueError(
+                        "Cancellation was not sent; retry Cancel request after the Deadline lookup recovers: "
+                        + str(error)
+                    ) from error
                 if owner != submission["id"]:
-                    raise ValueError("Cancellation refused: external job ownership did not match; no cancellation was sent")
+                    raise ValueError(
+                        "Cancellation refused: external job ownership did not match; no cancellation was sent"
+                    )
                 cancellation = (submission["id"], submission["external_id"])
     if action == "recover_submission":
         attempt = store.attempt(arguments["attemptId"])
@@ -159,9 +281,13 @@ def execute(store, media, project_id, data):
         if len(found) > 1:
             raise Conflict("Multiple jobs match; operator resolution required")
         if found:
-            if farm.job_value(found[0], "SpoolSubmissionId") != submission["id"] or farm.job_value(found[0], "SpoolAttemptId") != attempt["id"]:
+            if (
+                farm.job_value(found[0], "SpoolSubmissionId") != submission["id"]
+                or farm.job_value(found[0], "SpoolAttemptId") != attempt["id"]
+            ):
                 raise ValueError("Deadline job identity failed ownership verification")
             adopted = found[0]
+
     def apply(db, document):
         nonlocal send_cancellation
         clips = [*document["clips"], *document.get("audioClips", [])] if action in note_actions else document["clips"]
@@ -180,9 +306,18 @@ def execute(store, media, project_id, data):
             if not isinstance(values, dict) or set(values) - set(controls):
                 raise ValueError("Input is not bound in this captured recipe")
             for key, value in values.items():
-                b = controls[key]; original = capture["prompt"][b["nodeId"]]["inputs"][b["input"]]
-                numeric_float = b.get("contract", {}).get("inputType") == "FLOAT" and type(original) in (int, float) and type(value) in (int, float)
-                if type(value) is not type(original) and not (type(original) is float and type(value) is int) and not numeric_float:
+                b = controls[key]
+                original = capture["prompt"][b["nodeId"]]["inputs"][b["input"]]
+                numeric_float = (
+                    b.get("contract", {}).get("inputType") == "FLOAT"
+                    and type(original) in (int, float)
+                    and type(value) in (int, float)
+                )
+                if (
+                    type(value) is not type(original)
+                    and not (type(original) is float and type(value) is int)
+                    and not numeric_float
+                ):
                     raise ValueError("Input literal type changed")
             clip.setdefault("inputValues", {}).update(values)
             emptied = {key for key, value in values.items() if value == "" and controls[key].get("optional")}
@@ -228,7 +363,9 @@ def execute(store, media, project_id, data):
                 if attempt["status"] in attempts.TERMINAL:
                     raise ValueError("This job has already finished")
                 if target == attempts.LOCAL:
-                    raise ValueError("Cancel a running local render from ComfyUI's queue; Spool records the outcome Comfy reports")
+                    raise ValueError(
+                        "Cancel a running local render from ComfyUI's queue; Spool records the outcome Comfy reports"
+                    )
                 raise ValueError("Claimed work needs an owned Deadline job; resolve uncertain submission first")
             if outcome == "cancelled":
                 store.transition(attempt["id"], attempts.CANCELLED, db=db)
@@ -246,14 +383,26 @@ def execute(store, media, project_id, data):
                 send_cancellation = True
             elif claimed and attempt["status"] != "cancel_requested":
                 store.transition(attempt["id"], attempts.CANCEL_REQUESTED, error=note, db=db)
-            return {"attemptId": attempt["id"], "status": "cancel_requested", "jobId": submission["external_id"], "submissionId": submission["id"], "note": note}, False
+            return {
+                "attemptId": attempt["id"],
+                "status": "cancel_requested",
+                "jobId": submission["external_id"],
+                "submissionId": submission["id"],
+                "note": note,
+            }, False
         elif action == "recover_submission":
             if adopted:
                 store.adopt_submission_job(db, submission["id"], adopted)
-            return {"attemptId": attempt["id"], "jobId": adopted, "status": "adopted" if adopted else "submission_uncertain", "note": "No automatic resubmission"}, False
+            return {
+                "attemptId": attempt["id"],
+                "jobId": adopted,
+                "status": "adopted" if adopted else "submission_uncertain",
+                "note": "No automatic resubmission",
+            }, False
         if clip:
             clip["revision"] = clip.get("revision", 0) + 1
         return {"clipId": clip_id, "action": action}, True
+
     result = store.command(identity, project_id, revision, data, apply)
     if send_cancellation:
         try:

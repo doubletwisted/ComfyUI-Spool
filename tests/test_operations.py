@@ -45,12 +45,26 @@ class TakeChoiceTests(unittest.TestCase):
 
 
 class WorkflowAssignmentTests(unittest.TestCase):
-    capture = {"prompt": {"1": {"class_type": "LoadImage", "inputs": {"image": "example.png", "seed": 7}}},
-               "bindings": [{"key": "image", "nodeId": "1", "input": "image", "asset": True}, {"key": "seed", "nodeId": "1", "input": "seed"}]}
+    capture = {
+        "prompt": {"1": {"class_type": "LoadImage", "inputs": {"image": "example.png", "seed": 7}}},
+        "bindings": [
+            {"key": "image", "nodeId": "1", "input": "image", "asset": True},
+            {"key": "seed", "nodeId": "1", "input": "seed"},
+        ],
+    }
 
     def stale_clip(self):
-        return {"id": "a", "workflow": "old-library", "workflowVersion": "old", "executionTarget": "cloud", "seedKey": "old-seed", "seedMode": "increment",
-                "shotInputs": [{"key": "image", "source": "selected"}], "generationBase": {"takeId": "t"}, "inputValues": {"old": 1}}
+        return {
+            "id": "a",
+            "workflow": "old-library",
+            "workflowVersion": "old",
+            "executionTarget": "cloud",
+            "seedKey": "old-seed",
+            "seedMode": "increment",
+            "shotInputs": [{"key": "image", "source": "selected"}],
+            "generationBase": {"takeId": "t"},
+            "inputValues": {"old": 1},
+        }
 
     def test_assignment_resets_what_belonged_to_the_previous_workflow(self):
         clip = self.stale_clip()
@@ -64,7 +78,11 @@ class WorkflowAssignmentTests(unittest.TestCase):
 
     def test_cloud_recipes_run_on_cloud_and_built_ins_ask_for_their_own_sources(self):
         clip = self.stale_clip()
-        capture = {**self.capture, "executionTarget": "cloud", "provenance": {"builtinTemplate": "api_example", "importedWorkflowId": "library-1"}}
+        capture = {
+            **self.capture,
+            "executionTarget": "cloud",
+            "provenance": {"builtinTemplate": "api_example", "importedWorkflowId": "library-1"},
+        }
         operations.assign_workflow(clip, "cloud", capture)
         self.assertEqual(clip["executionTarget"], "cloud")
         self.assertEqual(clip["inputValues"]["image"], "")
@@ -73,8 +91,13 @@ class WorkflowAssignmentTests(unittest.TestCase):
 
 class RestageTests(unittest.TestCase):
     def test_values_that_still_name_the_captured_source_follow_its_staged_copy(self):
-        original = {"prompt": {"1": {"inputs": {"image": "photo.png", "seed": 5}}},
-                    "bindings": [{"key": "image", "nodeId": "1", "input": "image", "asset": True}, {"key": "seed", "nodeId": "1", "input": "seed"}]}
+        original = {
+            "prompt": {"1": {"inputs": {"image": "photo.png", "seed": 5}}},
+            "bindings": [
+                {"key": "image", "nodeId": "1", "input": "image", "asset": True},
+                {"key": "seed", "nodeId": "1", "input": "seed"},
+            ],
+        }
         prepared = {"prompt": {"1": {"inputs": {"image": "spool-projects/p/input/images/photo-1a2b.png", "seed": 5}}}}
         values = {"image": "photo.png", "seed": 5}
         operations.restage(original, prepared, values)

@@ -1,4 +1,5 @@
 """Thin HTTP client; project state and command validation stay in the backend."""
+
 import argparse
 import json
 import sys
@@ -48,8 +49,11 @@ def run():
             parser.error("command requires --file")
         path += "/commands"
         body = json.loads(sys.stdin.read() if str(args.file) == "-" else args.file.read_text(encoding="utf-8"))
-    request = urllib.request.Request(args.url.rstrip("/") + path, data=json.dumps(wire(body)).encode() if body is not None else None,
-                                     headers={"Content-Type": "application/json"})
+    request = urllib.request.Request(
+        args.url.rstrip("/") + path,
+        data=json.dumps(wire(body)).encode() if body is not None else None,
+        headers={"Content-Type": "application/json"},
+    )
     try:
         with urllib.request.urlopen(request, timeout=120) as response:
             value = unwire(json.load(response))

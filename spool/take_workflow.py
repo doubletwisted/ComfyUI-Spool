@@ -1,4 +1,5 @@
 """Continue a take from its executed inputs, independently of the clip's recipe."""
+
 import copy
 import json
 
@@ -18,8 +19,18 @@ def resolve(store, project_id, clip_id, take_id):
     source_file = sidecars.media_path(store.root, media) if media.get("originalFile") or media.get("file") else None
     override = sidecars.read(source_file) if source_file else None
     if override:
-        override["provenance"] = {**override.get("provenance", {}), "source": "Workflow sidecar", "workflowName": override["sidecar"]["name"],
-            "takeBase": {"takeId": take_id, "mediaId": media["id"], "name": media.get("name"), "number": take.get("number"), "source": "Workflow sidecar"}}
+        override["provenance"] = {
+            **override.get("provenance", {}),
+            "source": "Workflow sidecar",
+            "workflowName": override["sidecar"]["name"],
+            "takeBase": {
+                "takeId": take_id,
+                "mediaId": media["id"],
+                "name": media.get("name"),
+                "number": take.get("number"),
+                "source": "Workflow sidecar",
+            },
+        }
         return override
     request = take.get("request") or take.get("importedExecution") or {}
     capture = copy.deepcopy(request.get("capture") or take.get("workflowSnapshot") or {})
@@ -30,7 +41,9 @@ def resolve(store, project_id, clip_id, take_id):
             raise ValueError("Execution evidence belongs to another take")
         result = json.loads(attempt["result"]) if attempt.get("result") else {}
         history = result.get("history", {}).get("prompt", [])
-        prompt = workflow_document(result.get("observedPrompt")) or (workflow_document(history[2]) if len(history) > 2 else None)
+        prompt = workflow_document(result.get("observedPrompt")) or (
+            workflow_document(history[2]) if len(history) > 2 else None
+        )
         if prompt:
             source = "Observed execution"
         else:
@@ -42,7 +55,9 @@ def resolve(store, project_id, clip_id, take_id):
         source = "Frozen take request" if prompt else None
     held = store.evidence(project_id, media["id"]) if media.get("evidence") else media
     if not prompt:
-        prompt = workflow_document(held.get("prompt")) or workflow_document((held.get("workflowData") or {}).get("prompt"))
+        prompt = workflow_document(held.get("prompt")) or workflow_document(
+            (held.get("workflowData") or {}).get("prompt")
+        )
         source = "Embedded take metadata" if prompt else None
     if not prompt:
         prompt = workflow_document(request.get("prompt"))
@@ -58,11 +73,17 @@ def resolve(store, project_id, clip_id, take_id):
             if node["class_type"] in ("DeadlineSubmit", "SaveAndSubmitNode") and identity not in capture["prompt"]:
                 capture["prompt"][identity] = copy.deepcopy(node)
     if not capture.get("result"):
-        savers = [(identity, "gifs" if n["class_type"] == "VHS_VideoCombine" else "images") for identity, n in prompt.items() if n["class_type"] in SAVER_GROUPS]
+        savers = [
+            (identity, "gifs" if n["class_type"] == "VHS_VideoCombine" else "images")
+            for identity, n in prompt.items()
+            if n["class_type"] in SAVER_GROUPS
+        ]
         if len(savers) == 1:
             identity, group = savers[0]
             capture["result"] = {"nodeId": identity, "group": group, "index": 0}
-    capture.setdefault("workflow", copy.deepcopy(held.get("workflow") or (held.get("workflowData") or {}).get("workflow")))
+    capture.setdefault(
+        "workflow", copy.deepcopy(held.get("workflow") or (held.get("workflowData") or {}).get("workflow"))
+    )
     # Editor widgets can be stale after farm submission. Only the API filename
     # participates in recovery; never substitute a different historical widget.
     for _, name, editor, api, editor_value, api_value in sources(capture):
@@ -74,6 +95,15 @@ def resolve(store, project_id, clip_id, take_id):
         capture["workflow"], capture["widgetBindings"] = with_prompt(capture, capture["prompt"])
         capture["preferWorkflow"] = True
     capture.pop("bindings", None)
-    capture["provenance"] = {"source": source, "workflowName": media.get("name", "Take " + str(take.get("number", ""))),
-                             "takeBase": {"takeId": take_id, "mediaId": media["id"], "name": media.get("name"), "number": take.get("number"), "source": source}}
+    capture["provenance"] = {
+        "source": source,
+        "workflowName": media.get("name", "Take " + str(take.get("number", ""))),
+        "takeBase": {
+            "takeId": take_id,
+            "mediaId": media["id"],
+            "name": media.get("name"),
+            "number": take.get("number"),
+            "source": source,
+        },
+    }
     return capture

@@ -1,4 +1,5 @@
 """Named widget addresses in saved graphs, including exposed subgraph inputs."""
+
 import copy
 import json
 
@@ -12,7 +13,13 @@ def nodes(workflow):
             identity = prefix + str(node["id"])
             found[identity] = (node, graph, parents)
             if node["type"] in definitions and node["type"] not in stack:
-                visit(definitions[node["type"]], identity + ":", (*parents, (identity, node, graph)), (*stack, node["type"]))
+                visit(
+                    definitions[node["type"]],
+                    identity + ":",
+                    (*parents, (identity, node, graph)),
+                    (*stack, node["type"]),
+                )
+
     visit(workflow)
     return found
 
@@ -29,7 +36,14 @@ def named_bindings(workflow, prompt):
             widget_name = name
             for _ in range(32):
                 port = next((p for p in node.get("inputs", []) if p["name"] == widget_name), {})
-                link = next((l for l in graph.get("links", []) if (l[0] if isinstance(l, list) else l["id"]) == port.get("link")), None)
+                link = next(
+                    (
+                        l
+                        for l in graph.get("links", [])
+                        if (l[0] if isinstance(l, list) else l["id"]) == port.get("link")
+                    ),
+                    None,
+                )
                 origin = link[1] if isinstance(link, list) else link.get("origin_id") if link else None
                 slot = link[2] if isinstance(link, list) else link.get("origin_slot") if link else None
                 if str(origin) == "-10" and parents:
@@ -50,11 +64,21 @@ def named_bindings(workflow, prompt):
                     # named dictionary's insertion order is only usable when the
                     # entire vector agrees; otherwise require a unique old value.
                     same = lambda left, right: json.dumps(left, sort_keys=True) == json.dumps(right, sort_keys=True)
-                    ordered = len(values) >= len(named) and all(same(value, values[index]) for index, value in enumerate(named.values()))
+                    ordered = len(values) >= len(named) and all(
+                        same(value, values[index]) for index, value in enumerate(named.values())
+                    )
                     matches = [index for index, value in enumerate(values) if same(value, named[widget_name])]
                     index = list(named).index(widget_name) if ordered else matches[0] if len(matches) == 1 else None
                     if index is not None:
-                        result.append({"nodeId": identity, "input": name, "widgetNodeId": target, "widgetName": widget_name, "widgetIndex": index})
+                        result.append(
+                            {
+                                "nodeId": identity,
+                                "input": name,
+                                "widgetNodeId": target,
+                                "widgetName": widget_name,
+                                "widgetIndex": index,
+                            }
+                        )
                 break
     return result
 

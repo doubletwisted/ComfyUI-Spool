@@ -22,7 +22,9 @@ class StoreInterfaceTests(unittest.TestCase):
             edit.event("brief.changed", {"brief": "Moonlit harbour"})
             edit.setting("last-brief", "Moonlit harbour")
         saved = self.store.get(self.project["id"])
-        self.assertEqual((saved["revision"], saved["document"]["brief"]), (self.project["revision"] + 1, "Moonlit harbour"))
+        self.assertEqual(
+            (saved["revision"], saved["document"]["brief"]), (self.project["revision"] + 1, "Moonlit harbour")
+        )
         self.assertEqual(self.store.setting("last-brief"), "Moonlit harbour")
         self.assertEqual(self.store.events(self.project["id"])["events"][-1]["kind"], "brief.changed")
 

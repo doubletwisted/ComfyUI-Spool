@@ -1,4 +1,5 @@
 """The attempt status table and Cancel policy shared with ui/generation.js."""
+
 import json
 import unittest
 from pathlib import Path
@@ -17,7 +18,9 @@ class AttemptStatusTests(unittest.TestCase):
     def test_cancel_policy_matches_the_shared_fixture(self):
         for case in FIXTURE["cancel"]:
             with self.subTest(**case):
-                self.assertEqual(attempts.cancel_action(case["status"], case["target"], case["externalJob"]), case["action"])
+                self.assertEqual(
+                    attempts.cancel_action(case["status"], case["target"], case["externalJob"]), case["action"]
+                )
 
     def test_every_cancel_outcome_is_an_allowed_transition(self):
         for case in FIXTURE["cancel"]:

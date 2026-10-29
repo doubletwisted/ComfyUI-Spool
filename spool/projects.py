@@ -1,4 +1,5 @@
 """Project folders are durable; SQLite working files stay on the editing computer."""
+
 import copy
 import hashlib
 import json
@@ -19,9 +20,17 @@ from .store import Store, Conflict, uid
 
 def folder_name(name):
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", str(name)).strip(" .")[:100]
-    if not name or name.upper().split(".")[0] in {"CON", "PRN", "AUX", "NUL", *["COM" + str(i) for i in range(1, 10)], *["LPT" + str(i) for i in range(1, 10)]}:
+    if not name or name.upper().split(".")[0] in {
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        *["COM" + str(i) for i in range(1, 10)],
+        *["LPT" + str(i) for i in range(1, 10)],
+    }:
         name = "Untitled"
     return name
+
 
 class ProjectStore(Store):
     def __init__(self, folder, workspace):
@@ -69,7 +78,12 @@ class ProjectStore(Store):
             try:
                 with db:
                     yield db
-                changed = db.total_changes != before or db.execute("PRAGMA schema_version").fetchone()[0] != schema or db.execute("PRAGMA user_version").fetchone()[0] != version or db.execute("PRAGMA page_count").fetchone()[0] != pages
+                changed = (
+                    db.total_changes != before
+                    or db.execute("PRAGMA schema_version").fetchone()[0] != schema
+                    or db.execute("PRAGMA user_version").fetchone()[0] != version
+                    or db.execute("PRAGMA page_count").fetchone()[0] != pages
+                )
                 if changed or signature is None:
                     # A failed publication invalidates the local working copy: the
                     # next reader restores the last durable, acknowledged state.
@@ -121,7 +135,9 @@ class ProjectStore(Store):
         for clip in document.get("clips", []):
             if clip.get("takeId") in deleted:
                 raise ValueError("This take was deleted from disk. Reload before editing.")
-            clip["takes"] = [t for t in clip.get("takes", []) if t["id"] not in deleted and t["media"]["id"] not in media_ids]
+            clip["takes"] = [
+                t for t in clip.get("takes", []) if t["id"] not in deleted and t["media"]["id"] not in media_ids
+            ]
         document["media"] = [m for m in document.get("media", []) if m["id"] not in media_ids]
         folders = {c.get("outputFolder") for c in document.get("clips", [])}
         existing_folders = {c.get("outputFolder") for c in previous.get("clips", [])}
@@ -139,7 +155,9 @@ class ProjectStore(Store):
                 path.mkdir(parents=True, exist_ok=True)
         pairing = self.workspace.host(include_definitions=False)["configuration"]
         if pairing:
-            media = Media(self.root, *[pairing["roots"][kind] for kind in ("input", "output", "temp")], project_id=project_id)
+            media = Media(
+                self.root, *[pairing["roots"][kind] for kind in ("input", "output", "temp")], project_id=project_id
+            )
             for clip in document.get("clips", []):
                 for binding in clip.get("bindings", []):
                     value = clip.get("inputValues", {}).get(binding["key"])
@@ -167,6 +185,7 @@ class ProjectStore(Store):
 
 class Workspace(Store):
     """Machine settings and a directory of opened projects, never their edit data."""
+
     def __init__(self, root):
         super().__init__(root, filename="app.sqlite3")
         self.opened = {}
@@ -188,7 +207,10 @@ class Workspace(Store):
         old = next((row for row in folders if row["id"] == project_id), None)
         if old and Path(old["folder"]) != folder and (Path(old["folder"]) / "project.spool").exists():
             raise Conflict("This project is already open from another folder")
-        self.set_setting("project_folders", [row for row in folders if row["id"] != project_id] + [{"id": project_id, "folder": str(folder)}])
+        self.set_setting(
+            "project_folders",
+            [row for row in folders if row["id"] != project_id] + [{"id": project_id, "folder": str(folder)}],
+        )
         self.opened[project_id] = store
         return store.get(project_id)
 
@@ -205,7 +227,9 @@ class Workspace(Store):
             return self.opened[project_id]
 
     def project_stores(self):
-        return [self.for_project(row["id"]) for row in self.folders() if (Path(row["folder"]) / "project.spool").is_file()]
+        return [
+            self.for_project(row["id"]) for row in self.folders() if (Path(row["folder"]) / "project.spool").is_file()
+        ]
 
     def create(self, document=None, folder=None):
         if folder is None:
@@ -226,7 +250,9 @@ class Workspace(Store):
         rows = []
         for held in self.folders():
             if not (Path(held["folder"]) / "project.spool").is_file():
-                rows.append({"id": held["id"], "name": Path(held["folder"]).name, "folder": held["folder"], "unavailable": True})
+                rows.append(
+                    {"id": held["id"], "name": Path(held["folder"]).name, "folder": held["folder"], "unavailable": True}
+                )
                 continue
             rows += [{**row, "folder": held["folder"]} for row in self.for_project(held["id"]).list()]
         return rows

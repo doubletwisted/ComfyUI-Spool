@@ -1,4 +1,5 @@
 """Permanent take deletion, with project ownership checks and crash recovery."""
+
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -12,8 +13,11 @@ from .store import Conflict, encode, uid
 
 
 def paths(root, metadata):
-    found = {Path(value).resolve() if Path(value).is_absolute() else contained(root, value).resolve()
-             for key in ("originalFile", "file", "poster") if (value := metadata.get(key))}
+    found = {
+        Path(value).resolve() if Path(value).is_absolute() else contained(root, value).resolve()
+        for key in ("originalFile", "file", "poster")
+        if (value := metadata.get(key))
+    }
     original = sidecars.media_path(root, metadata)
     if original:
         found.add(original.resolve().with_suffix(".json"))
@@ -25,7 +29,9 @@ def plan(store, document, clip_id, take_ids):
     if not clip or not isinstance(take_ids, list) or not take_ids or any(not isinstance(i, str) for i in take_ids):
         raise ValueError("Select the takes to delete")
     ids = set(take_ids)
-    available = {t["id"]: t for t in clip["takes"] if not t.get("placeholder") and t["id"] not in clip.get("hiddenTakeIds", [])}
+    available = {
+        t["id"]: t for t in clip["takes"] if not t.get("placeholder") and t["id"] not in clip.get("hiddenTakeIds", [])
+    }
     if not ids <= available.keys():
         raise ValueError("Some selected takes are no longer available")
     if clip.get("takeId") in ids:
@@ -56,7 +62,11 @@ def plan(store, document, clip_id, take_ids):
     for identity in ids:
         metadata = available[identity]["media"]
         source = resolved[metadata.get("originalFile") or metadata["file"]]
-        if not source.is_relative_to(root) or source.relative_to(root).parts[0] not in ("output", "input", ".spool") or source.suffix.lower() not in EXTENSIONS:
+        if (
+            not source.is_relative_to(root)
+            or source.relative_to(root).parts[0] not in ("output", "input", ".spool")
+            or source.suffix.lower() not in EXTENSIONS
+        ):
             raise ValueError("Delete from disk only manages media owned by this project; archive this take instead.")
         originals.add(source)
         media_ids.add(metadata["id"])
@@ -70,7 +80,11 @@ def plan(store, document, clip_id, take_ids):
             if other["id"] == clip_id and take["id"] in ids:
                 continue
             if media_paths(take["media"]) & files:
-                raise ValueError("A selected file is also used by another take in " + other.get("name", "this clip") + ". Archive it instead.")
+                raise ValueError(
+                    "A selected file is also used by another take in "
+                    + other.get("name", "this clip")
+                    + ". Archive it instead."
+                )
     for audio in document.get("audioClips", []):
         if media_paths(audio.get("media", {})) & files:
             raise ValueError("A selected file is used by timeline audio. Archive it instead.")
@@ -114,7 +128,9 @@ def finish(root, directory, manifest, committed):
             staged.unlink()
         else:
             if original.exists():
-                raise ValueError("A take file reappeared during deletion. Recovery kept the staged original at " + str(staged))
+                raise ValueError(
+                    "A take file reappeared during deletion. Recovery kept the staged original at " + str(staged)
+                )
             atomic_replace(staged, original)
     (directory / "manifest.json").unlink()
     directory.rmdir()
@@ -146,9 +162,15 @@ def delete(store, project_id, revision, clip_id, take_ids):
     directory = store.root / ".spool/take-deletions" / uid()
     if not directory.resolve().is_relative_to(store.root.resolve()):
         raise ValueError("Take deletion folder escapes the project")
-    manifest = {"projectId": project_id, "takeIds": ids, "files": [
-        {"original": source.relative_to(store.root).as_posix(), "staged": str(index) + source.suffix}
-        for index, source in enumerate(files) if source.is_file()]}
+    manifest = {
+        "projectId": project_id,
+        "takeIds": ids,
+        "files": [
+            {"original": source.relative_to(store.root).as_posix(), "staged": str(index) + source.suffix}
+            for index, source in enumerate(files)
+            if source.is_file()
+        ],
+    }
     try:
         with store.editing(project_id, revision, "This project changed. Reload before deleting takes.") as edit:
             directory.mkdir(parents=True)
@@ -164,7 +186,10 @@ def delete(store, project_id, revision, clip_id, take_ids):
             document["deletedTakeIds"] = sorted(set(document.get("deletedTakeIds", [])) | set(ids))
             document["deletedMediaIds"] = sorted(set(document.get("deletedMediaIds", [])) | set(media_ids))
             edit.save(document)
-            edit.event("takes.deleted_from_disk", {"clipId": clip_id, "takeIds": ids, "files": [e["original"] for e in manifest["files"]]})
+            edit.event(
+                "takes.deleted_from_disk",
+                {"clipId": clip_id, "takeIds": ids, "files": [e["original"] for e in manifest["files"]]},
+            )
     except Exception:
         # Publication can fail after a local SQLite commit. The durable project
         # snapshot decides whether a restart should restore or finish the files.

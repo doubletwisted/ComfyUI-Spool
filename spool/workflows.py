@@ -14,9 +14,14 @@ def workflow_document(value):
             return None
     if not isinstance(value, dict):
         return None
-    if isinstance(value.get("nodes"), list) and all(isinstance(n, dict) and "id" in n and isinstance(n.get("type"), str) for n in value["nodes"]):
+    if isinstance(value.get("nodes"), list) and all(
+        isinstance(n, dict) and "id" in n and isinstance(n.get("type"), str) for n in value["nodes"]
+    ):
         return value
-    if value and all(isinstance(n, dict) and isinstance(n.get("class_type"), str) and isinstance(n.get("inputs"), dict) for n in value.values()):
+    if value and all(
+        isinstance(n, dict) and isinstance(n.get("class_type"), str) and isinstance(n.get("inputs"), dict)
+        for n in value.values()
+    ):
         return value
     return None
 
@@ -65,7 +70,6 @@ def workflow_metadata(probe):
     return result
 
 
-
 def parse_import(raw_text, filename):
     original = json.loads(raw_text)
     direct = workflow_document(original)
@@ -74,5 +78,12 @@ def parse_import(raw_text, filename):
     if graph is None:
         raise ValueError("Import graph JSON, API prompt JSON, or a workflow/prompt wrapper")
     prompt = graph if "nodes" not in graph else workflow_document(wrapper.get("prompt"))
-    return {"id": "workflow-" + uid(), "name": filename,
-            "data": {"workflow": graph, "prompt": prompt, "provenance": {"source": "raw JSON import", "originalDocument": original, "originalText": raw_text}}}
+    return {
+        "id": "workflow-" + uid(),
+        "name": filename,
+        "data": {
+            "workflow": graph,
+            "prompt": prompt,
+            "provenance": {"source": "raw JSON import", "originalDocument": original, "originalText": raw_text},
+        },
+    }

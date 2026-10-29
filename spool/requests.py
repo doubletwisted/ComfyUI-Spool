@@ -1,4 +1,5 @@
 """Freeze generation requests independently of a running Comfy executor."""
+
 import copy
 
 from . import attempts, cloud
@@ -10,14 +11,22 @@ SAVERS = set(SAVER_GROUPS)
 
 
 def validate_shot_input(binding, setting):
-    if not binding or not binding.get("asset") or binding.get("slot") not in ("image", "video", "firstFrame", "lastFrame", "reference", "audio"):
+    if (
+        not binding
+        or not binding.get("asset")
+        or binding.get("slot") not in ("image", "video", "firstFrame", "lastFrame", "reference", "audio")
+    ):
         raise ValueError("Choose a verified image, video or audio binding")
     sources = ("original", "selected", "clip", "track") if binding["slot"] == "audio" else ("original", "selected")
     if setting.get("source") not in sources:
         raise ValueError("Choose a supported source for this generation input")
     if setting["source"] == "clip" and not isinstance(setting.get("clipId"), str):
         raise ValueError("Choose a timeline clip for the audio input")
-    if setting["source"] == "track" and (setting.get("track") not in ("source", "music") or type(setting.get("lane", 1)) is not int or setting.get("lane", 1) < 1):
+    if setting["source"] == "track" and (
+        setting.get("track") not in ("source", "music")
+        or type(setting.get("lane", 1)) is not int
+        or setting.get("lane", 1) < 1
+    ):
         raise ValueError("Choose an audio track to align with this shot")
 
 
@@ -33,10 +42,16 @@ def audio_input_segments(document, clip, setting):
     if source in ("original", "selected", "clip"):
         c = clip
         if source == "clip":
-            c = next((c for c in [*document["clips"], *document.get("audioClips", [])] if c["id"] == setting["clipId"]), None)
+            c = next(
+                (c for c in [*document["clips"], *document.get("audioClips", [])] if c["id"] == setting["clipId"]), None
+            )
         if c is None:
             raise ValueError("The chosen audio source clip was removed")
-        take = next((t for t in c.get("takes", []) if not t.get("generated") and not t.get("placeholder")), None) if source == "original" else next((t for t in c.get("takes", []) if t["id"] == c.get("takeId")), None)
+        take = (
+            next((t for t in c.get("takes", []) if not t.get("generated") and not t.get("placeholder")), None)
+            if source == "original"
+            else next((t for t in c.get("takes", []) if t["id"] == c.get("takeId")), None)
+        )
         metadata = c.get("media") or (take or {}).get("media")
         if not metadata or not metadata.get("audio") and metadata.get("kind") != "audio":
             raise ValueError("The chosen source has no audio. Choose another clip or an aligned audio track.")
@@ -45,25 +60,59 @@ def audio_input_segments(document, clip, setting):
     shot_end = shot_start + clip["out"] - clip["in"]
     track, lane = setting["track"], setting.get("lane", 1)
     mix = document.get("audioTracks", {})
-    audible = not mix.get(track + "Muted") and (not mix.get(("music" if track == "source" else "source") + "Solo") or mix.get(track + "Solo"))
-    candidates = [(c, c["media"], c["start"]) for c in document.get("audioClips", []) if c.get("track", "music") == track and (track != "source" or c.get("sourceLane", 1) == lane)]
+    audible = not mix.get(track + "Muted") and (
+        not mix.get(("music" if track == "source" else "source") + "Solo") or mix.get(track + "Solo")
+    )
+    candidates = [
+        (c, c["media"], c["start"])
+        for c in document.get("audioClips", [])
+        if c.get("track", "music") == track and (track != "source" or c.get("sourceLane", 1) == lane)
+    ]
     if track == "source":
-        candidates += [(c, t["media"], start) for c, t, start in rows if c.get("videoTrack", 1) == lane and lane not in document.get("disabledVideoTracks", []) and not c.get("audioDetached") and t and t["media"].get("audio")]
-    return [{"media": metadata, "in": c["in"], "out": c["out"], "start": start - shot_start, "audio": c.get("audio", {})}
-            for c, metadata, start in candidates if audible and c.get("enabled", True) and not c.get("audio", {}).get("muted") and start < shot_end and start + c["out"] - c["in"] > shot_start]
+        candidates += [
+            (c, t["media"], start)
+            for c, t, start in rows
+            if c.get("videoTrack", 1) == lane
+            and lane not in document.get("disabledVideoTracks", [])
+            and not c.get("audioDetached")
+            and t
+            and t["media"].get("audio")
+        ]
+    return [
+        {"media": metadata, "in": c["in"], "out": c["out"], "start": start - shot_start, "audio": c.get("audio", {})}
+        for c, metadata, start in candidates
+        if audible
+        and c.get("enabled", True)
+        and not c.get("audio", {}).get("muted")
+        and start < shot_end
+        and start + c["out"] - c["in"] > shot_start
+    ]
 
 
 def local_compatibility(prompt, result):
     if any(node["class_type"] in {"DeadlineSubmit", "SaveAndSubmitNode"} for node in prompt.values()):
-        raise ValueError("This recipe contains a DeadlineSubmit launcher. Local Spool execution is unavailable; use a separately captured local workflow.")
-    if any(node["class_type"] == "VHS_BatchManager" or node["inputs"].get("meta_batch") is not None for node in prompt.values()):
+        raise ValueError(
+            "This recipe contains a DeadlineSubmit launcher. Local Spool execution is unavailable; use a separately captured local workflow."
+        )
+    if any(
+        node["class_type"] == "VHS_BatchManager" or node["inputs"].get("meta_batch") is not None
+        for node in prompt.values()
+    ):
         raise ValueError("VHS meta_batch continuation is not supported yet. Use an unbatched workflow.")
     if prompt[result["nodeId"]]["class_type"] not in SAVERS:
-        raise ValueError("Choose SaveImage, PreviewImage, SaveVideo or VHS_VideoCombine with a video format. Animated images are not supported yet.")
+        raise ValueError(
+            "Choose SaveImage, PreviewImage, SaveVideo or VHS_VideoCombine with a video format. Animated images are not supported yet."
+        )
     for node in prompt.values():
         if node["class_type"] == "VHS_VideoCombine" and str(node["inputs"].get("format", "")).startswith("image/"):
-            raise ValueError("Choose a VHS video format such as video/h264-mp4; animated image review is not supported yet.")
-        if "Load" in node["class_type"] and node["class_type"] not in LOADERS and any(name in node["inputs"] for name in ("image", "video", "audio", "file", "path")):
+            raise ValueError(
+                "Choose a VHS video format such as video/h264-mp4; animated image review is not supported yet."
+            )
+        if (
+            "Load" in node["class_type"]
+            and node["class_type"] not in LOADERS
+            and any(name in node["inputs"] for name in ("image", "video", "audio", "file", "path"))
+        ):
             raise ValueError("This media loader has no dependency-freeze adapter: " + node["class_type"])
 
 
@@ -82,12 +131,20 @@ def prepare(store, media, project, items, freeze=True):
         if clip.get("generationBase") and clip["generationBase"]["takeId"] != clip.get("takeId"):
             raise ValueError("Use the take again to update generation settings before queueing")
         capture = store.workflow(clip.get("workflowVersion"))
-        launchers = [node_id for node_id, node in capture["prompt"].items() if node["class_type"] in {"DeadlineSubmit", "SaveAndSubmitNode"}]
+        launchers = [
+            node_id
+            for node_id, node in capture["prompt"].items()
+            if node["class_type"] in {"DeadlineSubmit", "SaveAndSubmitNode"}
+        ]
         if len(launchers) > 1:
             raise ValueError("Choose a workflow with one explicit Deadline submit node")
-        target = attempts.DEADLINE if launchers else clip.get('executionTarget', capture.get('executionTarget', attempts.LOCAL))
+        target = (
+            attempts.DEADLINE
+            if launchers
+            else clip.get("executionTarget", capture.get("executionTarget", attempts.LOCAL))
+        )
         if target not in attempts.TARGETS:
-            raise ValueError('Choose local ComfyUI or Comfy Cloud execution')
+            raise ValueError("Choose local ComfyUI or Comfy Cloud execution")
         if target == attempts.CLOUD and not cloud.available():
             raise ValueError(cloud.UNAVAILABLE)
         local_compatibility({k: v for k, v in capture["prompt"].items() if k not in launchers}, capture["result"])
@@ -116,25 +173,55 @@ def prepare(store, media, project, items, freeze=True):
                 if binding["slot"] == "audio":
                     key = (clip["id"], source, setting.get("clipId"), setting.get("track"), setting.get("lane", 1))
                     if key not in audio_bakes:
-                        audio_bakes[key] = media.bake_audio(audio_input_segments(project["document"], clip, setting), project["document"].get("fps", 24), clip["out"] - clip["in"])
+                        audio_bakes[key] = media.bake_audio(
+                            audio_input_segments(project["document"], clip, setting),
+                            project["document"].get("fps", 24),
+                            clip["out"] - clip["in"],
+                        )
                     baked = audio_bakes[key]
                     values[binding["key"]] = baked["file"]
                     shot_inputs.append({**setting, **baked})
                     continue
-                take = next((t for t in clip.get("takes", []) if t["id"] == clip.get("takeId")), None) if source == "selected" else next((t for t in clip.get("takes", []) if not t.get("generated") and not t.get("placeholder")), None) if source == "original" else None
+                take = (
+                    next((t for t in clip.get("takes", []) if t["id"] == clip.get("takeId")), None)
+                    if source == "selected"
+                    else next(
+                        (t for t in clip.get("takes", []) if not t.get("generated") and not t.get("placeholder")), None
+                    )
+                    if source == "original"
+                    else None
+                )
                 if not take or take.get("placeholder"):
                     raise ValueError("This shot has no usable original or selected take")
-                key = encode([clip["id"], take["id"], binding["slot"], setting.get("frame"), bool(setting.get("audio", False))])
+                key = encode(
+                    [clip["id"], take["id"], binding["slot"], setting.get("frame"), bool(setting.get("audio", False))]
+                )
                 if key not in shot_bakes:
-                    shot_bakes[key] = media.bake_shot(take["media"], clip["in"], clip["out"], project["document"].get("fps", 24), binding["slot"], setting.get("frame"), setting.get("audio", False))
+                    shot_bakes[key] = media.bake_shot(
+                        take["media"],
+                        clip["in"],
+                        clip["out"],
+                        project["document"].get("fps", 24),
+                        binding["slot"],
+                        setting.get("frame"),
+                        setting.get("audio", False),
+                    )
                 baked = shot_bakes[key]
                 values[binding["key"]] = baked["file"]
                 shot_inputs.append({"key": binding["key"], "source": source, "takeId": take["id"], **baked})
             for binding in capture.get("bindings", []):
                 original = prompt[binding["nodeId"]]["inputs"][binding["input"]]
                 value = values.get(binding["key"], original)
-                numeric_float = binding.get('contract', {}).get('inputType') == 'FLOAT' and type(original) in (int, float) and type(value) in (int, float)
-                if type(value) is not type(original) and not (type(original) is float and type(value) is int) and not numeric_float:
+                numeric_float = (
+                    binding.get("contract", {}).get("inputType") == "FLOAT"
+                    and type(original) in (int, float)
+                    and type(value) in (int, float)
+                )
+                if (
+                    type(value) is not type(original)
+                    and not (type(original) is float and type(value) is int)
+                    and not numeric_float
+                ):
                     raise ValueError("Bound value has a different literal type")
                 prompt[binding["nodeId"]]["inputs"][binding["input"]] = value
                 if binding.get("asset"):
@@ -149,7 +236,9 @@ def prepare(store, media, project, items, freeze=True):
                 inputs = prompt[launchers[0]]["inputs"]
                 if any(isinstance(v, list) for v in inputs.values()):
                     raise ValueError("Deadline submit controls must be literal for a Spool request")
-                if not media.project_id and (not isinstance(inputs.get("output_directory"), str) or not inputs["output_directory"]):
+                if not media.project_id and (
+                    not isinstance(inputs.get("output_directory"), str) or not inputs["output_directory"]
+                ):
                     raise ValueError("Choose a farm-visible Deadline output directory")
                 inputs.update({"batch_count": 1, "chunk_size": 1})
             frozen = []
@@ -162,7 +251,11 @@ def prepare(store, media, project, items, freeze=True):
                 if source not in frozen_assets:
                     replacement = media.freeze_asset(original) if freeze else original.removesuffix(" [input]")
                     path = contained(media.host_roots["input"], replacement)
-                    frozen_assets[source] = {"frozen": replacement, "byteSize": path.stat().st_size, "sha256": sha256(path)}
+                    frozen_assets[source] = {
+                        "frozen": replacement,
+                        "byteSize": path.stat().st_size,
+                        "sha256": sha256(path),
+                    }
                 asset = frozen_assets[source]
                 prompt[node_id]["inputs"][name] = asset["frozen"]
                 frozen.append({"nodeId": node_id, "input": name, "source": original, **asset})
@@ -172,9 +265,29 @@ def prepare(store, media, project, items, freeze=True):
             for node in prompt.values():
                 if node["class_type"] in SAVERS and "filename_prefix" in node["inputs"]:
                     node["inputs"]["filename_prefix"] = namespace
-            requests.append((clip, {"capture": capture, "prompt": prompt, "inputValues": values, "shotInputs": shot_inputs, "variantValues": overrides, "variantIndex": variant_index, "repeatIndex": repeat_index,
-                                   "workflowVersion": clip["workflowVersion"], "outputFolder": clip.get("outputFolder"), "assets": frozen, "omittedInputs": omitted, "outputNamespace": namespace,
-                                   "requestedExecutionTargets": None, "sequenceFps": project["document"].get("fps", 24), "target": target, "launcherNodeId": launchers[0] if launchers else None}))
+            requests.append(
+                (
+                    clip,
+                    {
+                        "capture": capture,
+                        "prompt": prompt,
+                        "inputValues": values,
+                        "shotInputs": shot_inputs,
+                        "variantValues": overrides,
+                        "variantIndex": variant_index,
+                        "repeatIndex": repeat_index,
+                        "workflowVersion": clip["workflowVersion"],
+                        "outputFolder": clip.get("outputFolder"),
+                        "assets": frozen,
+                        "omittedInputs": omitted,
+                        "outputNamespace": namespace,
+                        "requestedExecutionTargets": None,
+                        "sequenceFps": project["document"].get("fps", 24),
+                        "target": target,
+                        "launcherNodeId": launchers[0] if launchers else None,
+                    },
+                )
+            )
     return requests
 
 
@@ -188,13 +301,34 @@ def preview(store, media, project_id, revision, clip_id):
     assets = []
     for asset in request["assets"]:
         binding = next((b for b in bindings if b["nodeId"] == asset["nodeId"] and b["input"] == asset["input"]), {})
-        assets.append({**asset, "label": binding.get("label", asset["input"]), "slot": binding.get("slot"),
-                       "type": capture["prompt"][asset["nodeId"]]["class_type"]})
+        assets.append(
+            {
+                **asset,
+                "label": binding.get("label", asset["input"]),
+                "slot": binding.get("slot"),
+                "type": capture["prompt"][asset["nodeId"]]["class_type"],
+            }
+        )
     if store.revision(project_id) != revision:
         raise Conflict("Project changed while preparing inputs; review again")
-    return {"clipId": clip_id, "revision": revision, "target": request["target"], "result": capture["result"], "assets": assets,
-            "shotSeconds": (clip["out"] - clip["in"]) / project["document"].get("fps", 24),
-            "controls": [{"key": b["key"], "label": b.get("label", b["input"]), "role": b.get("role"), "value": request["inputValues"].get(b["key"], capture["prompt"][b["nodeId"]]["inputs"][b["input"]])} for b in bindings if not b.get("asset")]}
+    return {
+        "clipId": clip_id,
+        "revision": revision,
+        "target": request["target"],
+        "result": capture["result"],
+        "assets": assets,
+        "shotSeconds": (clip["out"] - clip["in"]) / project["document"].get("fps", 24),
+        "controls": [
+            {
+                "key": b["key"],
+                "label": b.get("label", b["input"]),
+                "role": b.get("role"),
+                "value": request["inputValues"].get(b["key"], capture["prompt"][b["nodeId"]]["inputs"][b["input"]]),
+            }
+            for b in bindings
+            if not b.get("asset")
+        ],
+    }
 
 
 def accept(store, media, project_id, revision, items, operation_id=None, actor="human", experiment=None, scope=None):

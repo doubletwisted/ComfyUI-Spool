@@ -1,28 +1,129 @@
 // Use an isolated standalone server and the owned 8195 Comfy QA host.
-const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const [modulePath,browserPath,fixture,evidence]=process.argv.slice(2),{chromium}=require(modulePath);
-const standalone=process.env.SPOOL_STANDALONE_BASE||'http://127.0.0.1:8192';
-(async()=>{
- fs.mkdirSync(evidence,{recursive:true});const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--disable-gpu']}),page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[],checks=[];
- page.on('pageerror',e=>errors.push(e.message));
- try{
-  const created=await (await page.request.post(standalone+'/spool/api/projects',{data:{}})).json();
-  await page.goto(standalone+'/spool/?project='+created.id);await page.waitForFunction(()=>!!window.spoolNative);
-  const project=async()=>{await page.locator('#projectMenu').click();await page.locator('#openProjects').click();};
-  await project();await page.locator('#projectSettings').click();await page.locator('#settingsWidth').fill('128');await page.locator('#settingsHeight').fill('72');await page.locator('#settingsFps').fill('30');await page.locator('#settingsSave').click();
-  await page.evaluate(()=>spoolNative.flush());assert.deepEqual(await page.evaluate(()=>({fps:spoolNative.state.fps,size:spoolNative.state.resolution})),{fps:30,size:{width:128,height:72}});checks.push('Settings save real resolution and frame rate');
-  await page.getByRole('button',{name:'Undo',exact:true}).click();await page.evaluate(()=>spoolNative.flush());assert.equal(await page.evaluate(()=>spoolNative.state.resolution),undefined);assert.equal(await page.evaluate(()=>spoolNative.state.fps||24),24);
-  await page.getByRole('button',{name:'Redo',exact:true}).click();await page.evaluate(()=>spoolNative.flush());await page.reload();await page.waitForFunction(()=>!!window.spoolNative);assert.equal(await page.evaluate(()=>spoolNative.state.resolution.width),128);checks.push('Settings undo, redo and reopen preserve values');
-  await project();await page.locator('#projectImportVideo').click();await page.locator('#footagePath').fill('"'+fixture+'"');await page.locator('#footageCuts').uncheck();await page.locator('#footageImport').click();await page.waitForFunction(()=>spoolNative.state.clips.length===1);await page.evaluate(()=>spoolNative.flush());
-  assert.equal(await page.evaluate(()=>spoolNative.state.clips[0].out),100);assert.equal(await page.evaluate(()=>spoolNative.state.audioClips.length),1);checks.push('Import without detection retains one clip and one soundtrack');
-  await project();await page.locator('#projectSettings').click();assert.equal(await page.locator('#settingsFps').getAttribute('readonly'),'');await page.screenshot({path:path.join(evidence,'settings.png')});await page.locator('#settingsCancel').click();
-  await page.locator('#clipLane [data-clip]').first().click({button:'right'});await page.getByRole('menuitem',{name:'Detect cuts…',exact:true}).click();await page.waitForFunction(()=>!document.getElementById('cutsApply').disabled);assert.match(await page.locator('#cutsResult').innerText(),/2 cuts found/);await page.locator('#cutsApply').click();await page.evaluate(()=>spoolNative.flush());
-  assert.deepEqual(await page.evaluate(()=>spoolNative.state.clips.map(c=>[c.in,c.out])),[[0,40],[40,65],[65,100]]);assert.equal(await page.evaluate(()=>spoolNative.state.audioClips.length),1);assert.deepEqual(await page.evaluate(()=>spoolNative.state.clips.map(c=>c.name)),['Shot 01_01','Shot 01_02','Shot 01_03']);checks.push('Detect cuts numbers shots, splits 100 frames exactly and keeps soundtrack');
-  await page.getByRole('button',{name:'Undo',exact:true}).click();await page.evaluate(()=>spoolNative.flush());assert.equal(await page.evaluate(()=>spoolNative.state.clips.length),1);await page.getByRole('button',{name:'Redo',exact:true}).click();await page.evaluate(()=>spoolNative.flush());checks.push('Detected cuts undo as one edit and redo');
-  await page.evaluate(()=>spoolNative.setFrame(40,true));await page.locator('#viewerStage').click({button:'right'});assert.equal(await page.getByRole('menu',{name:'Viewer actions'}).isVisible(),true);await page.screenshot({path:path.join(evidence,'viewer-menu.png')});
-  await page.getByRole('menuitem',{name:'Export frame',exact:true}).click();await page.waitForFunction(()=>document.getElementById('frameResult')?.querySelector('a'));const frameUrl=await page.locator('#frameResult a').getAttribute('href');const frame=await page.request.get(standalone+frameUrl);fs.writeFileSync(path.join(evidence,'frame.png'),await frame.body());checks.push('Viewer exports original PNG at clicked playhead');await page.locator('#closeModal').click();
-  const suppression=await page.evaluate(()=>['viewerStage','timelineToolbar','mediaPanel','projectName'].map(id=>{const node=document.getElementById(id)||document.querySelector('.timeline-toolbar'),event=new MouseEvent('contextmenu',{bubbles:true,cancelable:true});node.dispatchEvent(event);return event.defaultPrevented;}));assert(suppression.every(Boolean));checks.push('Browser context menu suppressed in viewer, empty chrome, media and text field');
-  await page.locator('#export').click();assert.equal(await page.locator('#modal input[readonly]').nth(1).inputValue(),'128 × 72 / 30 fps');await page.locator('#renderExport').click();await page.waitForFunction(()=>document.getElementById('exportResult')?.querySelector('a'));const output=await page.locator('#exportResult a').getAttribute('href');fs.writeFileSync(path.join(evidence,'sequence.mp4'),await (await page.request.get(standalone+output)).body());checks.push('Sequence export uses configured dimensions');await page.locator('#closeModal').click();
-  assert.deepEqual(errors,[]);fs.writeFileSync(path.join(evidence,'checks.json'),JSON.stringify({checks,errors,project:created.id},null,2));console.log(JSON.stringify({passed:checks.length,errors}));
- }catch(error){await page.screenshot({path:path.join(evidence,'failure.png')});console.error(await page.locator('body').innerText());throw error;}finally{await browser.close();}
-})().catch(error=>{console.error(error);process.exitCode=1;});
+const fs = require('node:fs'),
+  path = require('node:path'),
+  assert = require('node:assert/strict');
+const [modulePath, browserPath, fixture, evidence] = process.argv.slice(2),
+  { chromium } = require(modulePath);
+const standalone = process.env.SPOOL_STANDALONE_BASE || 'http://127.0.0.1:8192';
+(async () => {
+  fs.mkdirSync(evidence, { recursive: true });
+  const browser = await chromium.launch({ headless: true, executablePath: browserPath, args: ['--disable-gpu'] }),
+    page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }),
+    errors = [],
+    checks = [];
+  page.on('pageerror', e => errors.push(e.message));
+  try {
+    const created = await (await page.request.post(standalone + '/spool/api/projects', { data: {} })).json();
+    await page.goto(standalone + '/spool/?project=' + created.id);
+    await page.waitForFunction(() => !!window.spoolNative);
+    const project = async () => {
+      await page.locator('#projectMenu').click();
+      await page.locator('#openProjects').click();
+    };
+    await project();
+    await page.locator('#projectSettings').click();
+    await page.locator('#settingsWidth').fill('128');
+    await page.locator('#settingsHeight').fill('72');
+    await page.locator('#settingsFps').fill('30');
+    await page.locator('#settingsSave').click();
+    await page.evaluate(() => spoolNative.flush());
+    assert.deepEqual(await page.evaluate(() => ({ fps: spoolNative.state.fps, size: spoolNative.state.resolution })), {
+      fps: 30,
+      size: { width: 128, height: 72 },
+    });
+    checks.push('Settings save real resolution and frame rate');
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.evaluate(() => spoolNative.flush());
+    assert.equal(await page.evaluate(() => spoolNative.state.resolution), undefined);
+    assert.equal(await page.evaluate(() => spoolNative.state.fps || 24), 24);
+    await page.getByRole('button', { name: 'Redo', exact: true }).click();
+    await page.evaluate(() => spoolNative.flush());
+    await page.reload();
+    await page.waitForFunction(() => !!window.spoolNative);
+    assert.equal(await page.evaluate(() => spoolNative.state.resolution.width), 128);
+    checks.push('Settings undo, redo and reopen preserve values');
+    await project();
+    await page.locator('#projectImportVideo').click();
+    await page.locator('#footagePath').fill('"' + fixture + '"');
+    await page.locator('#footageCuts').uncheck();
+    await page.locator('#footageImport').click();
+    await page.waitForFunction(() => spoolNative.state.clips.length === 1);
+    await page.evaluate(() => spoolNative.flush());
+    assert.equal(await page.evaluate(() => spoolNative.state.clips[0].out), 100);
+    assert.equal(await page.evaluate(() => spoolNative.state.audioClips.length), 1);
+    checks.push('Import without detection retains one clip and one soundtrack');
+    await project();
+    await page.locator('#projectSettings').click();
+    assert.equal(await page.locator('#settingsFps').getAttribute('readonly'), '');
+    await page.screenshot({ path: path.join(evidence, 'settings.png') });
+    await page.locator('#settingsCancel').click();
+    await page.locator('#clipLane [data-clip]').first().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Detect cuts…', exact: true }).click();
+    await page.waitForFunction(() => !document.getElementById('cutsApply').disabled);
+    assert.match(await page.locator('#cutsResult').innerText(), /2 cuts found/);
+    await page.locator('#cutsApply').click();
+    await page.evaluate(() => spoolNative.flush());
+    assert.deepEqual(await page.evaluate(() => spoolNative.state.clips.map(c => [c.in, c.out])), [
+      [0, 40],
+      [40, 65],
+      [65, 100],
+    ]);
+    assert.equal(await page.evaluate(() => spoolNative.state.audioClips.length), 1);
+    assert.deepEqual(await page.evaluate(() => spoolNative.state.clips.map(c => c.name)), [
+      'Shot 01_01',
+      'Shot 01_02',
+      'Shot 01_03',
+    ]);
+    checks.push('Detect cuts numbers shots, splits 100 frames exactly and keeps soundtrack');
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.evaluate(() => spoolNative.flush());
+    assert.equal(await page.evaluate(() => spoolNative.state.clips.length), 1);
+    await page.getByRole('button', { name: 'Redo', exact: true }).click();
+    await page.evaluate(() => spoolNative.flush());
+    checks.push('Detected cuts undo as one edit and redo');
+    await page.evaluate(() => spoolNative.setFrame(40, true));
+    await page.locator('#viewerStage').click({ button: 'right' });
+    assert.equal(await page.getByRole('menu', { name: 'Viewer actions' }).isVisible(), true);
+    await page.screenshot({ path: path.join(evidence, 'viewer-menu.png') });
+    await page.getByRole('menuitem', { name: 'Export frame', exact: true }).click();
+    await page.waitForFunction(() => document.getElementById('frameResult')?.querySelector('a'));
+    const frameUrl = await page.locator('#frameResult a').getAttribute('href');
+    const frame = await page.request.get(standalone + frameUrl);
+    fs.writeFileSync(path.join(evidence, 'frame.png'), await frame.body());
+    checks.push('Viewer exports original PNG at clicked playhead');
+    await page.locator('#closeModal').click();
+    const suppression = await page.evaluate(() =>
+      ['viewerStage', 'timelineToolbar', 'mediaPanel', 'projectName'].map(id => {
+        const node = document.getElementById(id) || document.querySelector('.timeline-toolbar'),
+          event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+        node.dispatchEvent(event);
+        return event.defaultPrevented;
+      }),
+    );
+    assert(suppression.every(Boolean));
+    checks.push('Browser context menu suppressed in viewer, empty chrome, media and text field');
+    await page.locator('#export').click();
+    assert.equal(await page.locator('#modal input[readonly]').nth(1).inputValue(), '128 × 72 / 30 fps');
+    await page.locator('#renderExport').click();
+    await page.waitForFunction(() => document.getElementById('exportResult')?.querySelector('a'));
+    const output = await page.locator('#exportResult a').getAttribute('href');
+    fs.writeFileSync(path.join(evidence, 'sequence.mp4'), await (await page.request.get(standalone + output)).body());
+    checks.push('Sequence export uses configured dimensions');
+    await page.locator('#closeModal').click();
+    assert.deepEqual(errors, []);
+    fs.writeFileSync(
+      path.join(evidence, 'checks.json'),
+      JSON.stringify({ checks, errors, project: created.id }, null, 2),
+    );
+    console.log(JSON.stringify({ passed: checks.length, errors }));
+  } catch (error) {
+    await page.screenshot({ path: path.join(evidence, 'failure.png') });
+    console.error(await page.locator('body').innerText());
+    throw error;
+  } finally {
+    await browser.close();
+  }
+})().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

@@ -19,11 +19,15 @@ from spool.workflow_inputs import compact_groups, input_problem, leave_out
 
 
 def capture(path, api_name="worker/reference.png"):
-    return {"workflow": {"nodes": [{"id": 114, "type": "LoadImage", "widgets_values": [str(path), "image"]}], "links": []},
-            "prompt": {"114": {"class_type": "LoadImage", "inputs": {"image": api_name}},
-                       "92": {"class_type": "SaveImage", "inputs": {"images": ["114", 0], "filename_prefix": "unchanged"}}},
-            "bindings": [{"key": "frame", "nodeId": "114", "input": "image", "asset": True}],
-            "result": {"nodeId": "92", "group": "images", "index": 0}}
+    return {
+        "workflow": {"nodes": [{"id": 114, "type": "LoadImage", "widgets_values": [str(path), "image"]}], "links": []},
+        "prompt": {
+            "114": {"class_type": "LoadImage", "inputs": {"image": api_name}},
+            "92": {"class_type": "SaveImage", "inputs": {"images": ["114", 0], "filename_prefix": "unchanged"}},
+        },
+        "bindings": [{"key": "frame", "nodeId": "114", "input": "image", "asset": True}],
+        "result": {"nodeId": "92", "group": "images", "index": 0},
+    }
 
 
 class WorkflowInputTests(unittest.TestCase):
@@ -90,20 +94,30 @@ class WorkflowInputTests(unittest.TestCase):
 
     def test_existing_relative_and_output_annotated_inputs(self):
         (self.input / "local.png").write_bytes(self.source.read_bytes())
-        prepared = self.media.prepare_workflow({"prompt": {"1": {"class_type": "LoadImage", "inputs": {"image": "local.png"}}}}, True)
+        prepared = self.media.prepare_workflow(
+            {"prompt": {"1": {"class_type": "LoadImage", "inputs": {"image": "local.png"}}}}, True
+        )
         self.assertEqual(prepared["prompt"]["1"]["inputs"]["image"], "local.png")
         self.media.host_roots["output"].mkdir()
         (self.media.host_roots["output"] / "output.png").write_bytes(self.source.read_bytes())
-        output = self.media.prepare_workflow({"prompt": {"1": {"class_type": "LoadImage", "inputs": {"image": "output.png [output]"}}}}, True)
+        output = self.media.prepare_workflow(
+            {"prompt": {"1": {"class_type": "LoadImage", "inputs": {"image": "output.png [output]"}}}}, True
+        )
         self.assertTrue(output["prompt"]["1"]["inputs"]["image"].startswith("spool-imported/"))
 
     def test_subgraph_loader_uses_its_expanded_execution_address(self):
         original = capture(self.source)
         loader = original["workflow"]["nodes"][0]
-        original["workflow"] = {"nodes": [{"id": 105, "type": "subgraph-id"}], "definitions": {"subgraphs": [{"id": "subgraph-id", "nodes": [loader]}]}}
+        original["workflow"] = {
+            "nodes": [{"id": 105, "type": "subgraph-id"}],
+            "definitions": {"subgraphs": [{"id": "subgraph-id", "nodes": [loader]}]},
+        }
         original["prompt"]["105:114"] = original["prompt"].pop("114")
         prepared = self.media.prepare_workflow(original, True)
-        self.assertEqual(prepared["prompt"]["105:114"]["inputs"]["image"], prepared["workflow"]["definitions"]["subgraphs"][0]["nodes"][0]["widgets_values"][0])
+        self.assertEqual(
+            prepared["prompt"]["105:114"]["inputs"]["image"],
+            prepared["workflow"]["definitions"]["subgraphs"][0]["nodes"][0]["widgets_values"][0],
+        )
 
     def test_external_recovery_requires_a_local_caller(self):
         prepared = self.media.prepare_workflow(capture(self.source), allow_external=False)
@@ -126,18 +140,32 @@ class WorkflowInputTests(unittest.TestCase):
 
 class OptionalInputTests(unittest.TestCase):
     """The shared rules for optional and grouped media inputs, and what a request leaves out."""
+
     fixture = json.loads((Path(__file__).parent / "fixtures/optional_inputs.json").read_text(encoding="utf-8"))
 
     def prompt(self):
         loader = lambda: {"class_type": "LoadImage", "inputs": {"image": ""}}
         nodes = {node: loader() for node in ("1", "11", "12", "13", "31")}
-        nodes.update({"21": {"class_type": "LoadVideo", "inputs": {"file": ""}}, "22": {"class_type": "LoadVideo", "inputs": {"file": ""}},
-                      "32": {"class_type": "ImageScale", "inputs": {"image": ["31", 0], "width": 512, "height": 512}},
-                      "40": {"class_type": "PrimitiveStringMultiline", "inputs": {"value": "A walk"}},
-                      "50": {"class_type": "Generator", "inputs": {"first": ["1", 0], "prompt": ["40", 0], "last": ["32", 0], "seed": 4,
-                                                                   **{"image_" + str(i): [n, 0] for i, n in enumerate(("11", "12", "13"), 1)},
-                                                                   **{"video_" + str(i): [n, 0] for i, n in enumerate(("21", "22"), 1)}}},
-                      "60": {"class_type": "SaveVideo", "inputs": {"video": ["50", 0], "filename_prefix": "out"}}})
+        nodes.update(
+            {
+                "21": {"class_type": "LoadVideo", "inputs": {"file": ""}},
+                "22": {"class_type": "LoadVideo", "inputs": {"file": ""}},
+                "32": {"class_type": "ImageScale", "inputs": {"image": ["31", 0], "width": 512, "height": 512}},
+                "40": {"class_type": "PrimitiveStringMultiline", "inputs": {"value": "A walk"}},
+                "50": {
+                    "class_type": "Generator",
+                    "inputs": {
+                        "first": ["1", 0],
+                        "prompt": ["40", 0],
+                        "last": ["32", 0],
+                        "seed": 4,
+                        **{"image_" + str(i): [n, 0] for i, n in enumerate(("11", "12", "13"), 1)},
+                        **{"video_" + str(i): [n, 0] for i, n in enumerate(("21", "22"), 1)},
+                    },
+                },
+                "60": {"class_type": "SaveVideo", "inputs": {"video": ["50", 0], "filename_prefix": "out"}},
+            }
+        )
         return nodes
 
     def test_shared_cases(self):
@@ -152,7 +180,9 @@ class OptionalInputTests(unittest.TestCase):
                 left = {b["nodeId"] for b in bindings if b["key"] in case["omitted"]}
                 self.assertFalse(left & set(prompt))
                 self.assertEqual("32" in prompt, "last" not in case["omitted"])
-                links = [value[0] for node in prompt.values() for value in node["inputs"].values() if isinstance(value, list)]
+                links = [
+                    value[0] for node in prompt.values() for value in node["inputs"].values() if isinstance(value, list)
+                ]
                 self.assertTrue(set(links) <= set(prompt))
 
     def test_a_gap_moves_later_inputs_into_the_first_slots(self):
@@ -164,17 +194,35 @@ class OptionalInputTests(unittest.TestCase):
         self.assertEqual((values["ref1"], values["ref2"], values["ref3"]), ("b.png", "c.png", ""))
 
     def test_the_output_is_never_left_out(self):
-        bindings = [{"key": "save", "nodeId": "60", "input": "filename_prefix", "asset": True, "optional": True, "omit": ["60"]}]
+        bindings = [
+            {"key": "save", "nodeId": "60", "input": "filename_prefix", "asset": True, "optional": True, "omit": ["60"]}
+        ]
         with self.assertRaisesRegex(ValueError, "cannot remove the clip output"):
             leave_out(self.prompt(), bindings, {"save": ""}, [], "60")
 
     def test_an_empty_guide_frame_bypasses_its_node(self):
-        guide = lambda before, image: {"class_type": "MiniMaxH3AddGuide", "inputs": {"positive": [before, 0], "image": [image, 0], "frame_idx": 24}}
-        prompt = {"ref": {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": {}}, "g1": guide("ref", "i1"), "g2": guide("g1", "i2"),
-                  "i1": {"class_type": "LoadImage", "inputs": {"image": ""}}, "i2": {"class_type": "LoadImage", "inputs": {"image": ""}},
-                  "guider": {"class_type": "BasicGuider", "inputs": {"conditioning": ["g2", 0]}},
-                  "save": {"class_type": "SaveVideo", "inputs": {"video": ["guider", 0]}}}
-        frame = lambda key, node, via: {"key": key, "nodeId": node, "input": "image", "asset": True, "optional": True, "omit": [node], "bypass": {via: "positive"}}
+        guide = lambda before, image: {
+            "class_type": "MiniMaxH3AddGuide",
+            "inputs": {"positive": [before, 0], "image": [image, 0], "frame_idx": 24},
+        }
+        prompt = {
+            "ref": {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": {}},
+            "g1": guide("ref", "i1"),
+            "g2": guide("g1", "i2"),
+            "i1": {"class_type": "LoadImage", "inputs": {"image": ""}},
+            "i2": {"class_type": "LoadImage", "inputs": {"image": ""}},
+            "guider": {"class_type": "BasicGuider", "inputs": {"conditioning": ["g2", 0]}},
+            "save": {"class_type": "SaveVideo", "inputs": {"video": ["guider", 0]}},
+        }
+        frame = lambda key, node, via: {
+            "key": key,
+            "nodeId": node,
+            "input": "image",
+            "asset": True,
+            "optional": True,
+            "omit": [node],
+            "bypass": {via: "positive"},
+        }
         bindings = [frame("one", "i1", "g1"), frame("two", "i2", "g2")]
         both = copy.deepcopy(prompt)
         self.assertEqual(leave_out(both, bindings, {}, [], "save"), ["one", "two"])
@@ -182,14 +230,18 @@ class OptionalInputTests(unittest.TestCase):
         self.assertFalse({"g1", "g2", "i1", "i2"} & set(both))
         second = copy.deepcopy(prompt)
         leave_out(second, bindings, {"two": "b.png"}, [], "save")
-        self.assertEqual((second["g2"]["inputs"]["positive"], second["guider"]["inputs"]["conditioning"]), (["ref", 0], ["g2", 0]))
+        self.assertEqual(
+            (second["g2"]["inputs"]["positive"], second["guider"]["inputs"]["conditioning"]), (["ref", 0], ["g2", 0])
+        )
         self.assertFalse({"g1", "i1"} & set(second))
         first = copy.deepcopy(prompt)
         leave_out(first, bindings, {"one": "a.png"}, [], "save")
         self.assertEqual(first["guider"]["inputs"]["conditioning"], ["g1", 0])
 
     def test_nodes_removed_in_comfy_are_ignored(self):
-        bindings = [{"key": "gone", "nodeId": "99", "input": "image", "asset": True, "optional": True, "omit": ["99", "98"]}]
+        bindings = [
+            {"key": "gone", "nodeId": "99", "input": "image", "asset": True, "optional": True, "omit": ["99", "98"]}
+        ]
         prompt = self.prompt()
         self.assertEqual(leave_out(prompt, bindings, {"gone": ""}, [], "60"), ["gone"])
         self.assertEqual(prompt, self.prompt())
@@ -206,7 +258,9 @@ class WorkflowInputRouteTests(unittest.IsolatedAsyncioTestCase):
         self.input = self.root / "input"
         self.input.mkdir()
         self.media = Media(self.store.root, self.input, self.root / "output", self.root / "temp")
-        self.project = self.store.create({"project": "Recovery QA", "clips": [{"id": "shot", "takeId": "original", "revision": 1, "takes": []}]})
+        self.project = self.store.create(
+            {"project": "Recovery QA", "clips": [{"id": "shot", "takeId": "original", "revision": 1, "takes": []}]}
+        )
         server = SimpleNamespace(routes=web.RouteTableDef(), app=web.Application())
         register(server, self.store, self.media)
         # This fixture exercises routes, not background receipt collection.
@@ -218,52 +272,76 @@ class WorkflowInputRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_import_json_capture_override_and_graph_handoff(self):
         original = capture(self.source)
-        response = await self.client.post('/spool/api/projects/' + self.project['id'] + '/import-workflow', data=json.dumps(original), headers={'X-Spool-Revision': '0'})
+        response = await self.client.post(
+            "/spool/api/projects/" + self.project["id"] + "/import-workflow",
+            data=json.dumps(original),
+            headers={"X-Spool-Revision": "0"},
+        )
         self.assertEqual(response.status, 200, await response.text())
-        imported = (await response.json())['workflow']['data']
-        self.assertEqual(imported['provenance']['originalDocument'], original)
-        self.assertTrue(imported['inputRecovery']['recovered'])
-        response = await self.client.post('/spool/api/projects/' + self.project['id'] + '/capture/shot', json={'revision': 1, 'capture': original, 'overrides': {'frame': 'worker/reference.png'}})
+        imported = (await response.json())["workflow"]["data"]
+        self.assertEqual(imported["provenance"]["originalDocument"], original)
+        self.assertTrue(imported["inputRecovery"]["recovered"])
+        response = await self.client.post(
+            "/spool/api/projects/" + self.project["id"] + "/capture/shot",
+            json={"revision": 1, "capture": original, "overrides": {"frame": "worker/reference.png"}},
+        )
         self.assertEqual(response.status, 200, await response.text())
         project = await response.json()
-        frame = project['document']['clips'][0]['inputValues']['frame']
-        self.assertTrue(frame.startswith('spool-imported/'))
-        response = await self.client.post('/spool/api/projects/' + self.project['id'] + '/handoffs', json={'revision': 2, 'clipId': 'shot', 'action': 'open', 'workflow': original['workflow']})
+        frame = project["document"]["clips"][0]["inputValues"]["frame"]
+        self.assertTrue(frame.startswith("spool-imported/"))
+        response = await self.client.post(
+            "/spool/api/projects/" + self.project["id"] + "/handoffs",
+            json={"revision": 2, "clipId": "shot", "action": "open", "workflow": original["workflow"]},
+        )
         self.assertEqual(response.status, 200, await response.text())
-        self.assertEqual((await response.json())['payload']['workflow']['nodes'][0]['widgets_values'][0], frame)
-        self.assertEqual(self.store.get(self.project['id'])['revision'], 2)
+        self.assertEqual((await response.json())["payload"]["workflow"]["nodes"][0]["widgets_values"][0], frame)
+        self.assertEqual(self.store.get(self.project["id"])["revision"], 2)
 
     async def test_bridge_preparation_and_missing_reference_do_not_edit_project(self):
-        response = await self.client.post('/spool/api/prepare-workflow', json=capture(self.source))
+        response = await self.client.post("/spool/api/prepare-workflow", json=capture(self.source))
         self.assertEqual(response.status, 200, await response.text())
         result = await response.json()
-        self.assertEqual(result['inputRecovery']['recovered'][0]['sha256'], hashlib.sha256(self.source.read_bytes()).hexdigest())
+        self.assertEqual(
+            result["inputRecovery"]["recovered"][0]["sha256"], hashlib.sha256(self.source.read_bytes()).hexdigest()
+        )
         self.source.unlink()
-        response = await self.client.post('/spool/api/prepare-workflow', json=capture(self.source))
+        response = await self.client.post("/spool/api/prepare-workflow", json=capture(self.source))
         self.assertEqual(response.status, 400)
-        self.assertIn('Reference file unavailable', (await response.json())['error'])
-        self.assertEqual(self.store.get(self.project['id']), self.project)
+        self.assertIn("Reference file unavailable", (await response.json())["error"])
+        self.assertEqual(self.store.get(self.project["id"]), self.project)
 
     async def test_empty_source_can_open_through_bridge_or_handoff(self):
         graph = capture("", "")
-        response = await self.client.post('/spool/api/prepare-workflow', json=graph)
+        response = await self.client.post("/spool/api/prepare-workflow", json=graph)
         self.assertEqual(response.status, 200, await response.text())
         prepared = await response.json()
-        self.assertEqual(prepared['prompt'], graph['prompt'])
-        response = await self.client.post('/spool/api/projects/' + self.project['id'] + '/handoffs', json={
-            'revision': 0, 'clipId': 'shot', 'action': 'open', 'workflow': graph['workflow'], 'prompt': graph['prompt']})
+        self.assertEqual(prepared["prompt"], graph["prompt"])
+        response = await self.client.post(
+            "/spool/api/projects/" + self.project["id"] + "/handoffs",
+            json={
+                "revision": 0,
+                "clipId": "shot",
+                "action": "open",
+                "workflow": graph["workflow"],
+                "prompt": graph["prompt"],
+            },
+        )
         self.assertEqual(response.status, 200, await response.text())
-        payload = (await response.json())['payload']
-        self.assertEqual(payload['workflow']['nodes'][0]['widgets_values'][0], '')
-        self.assertEqual(payload['prompt']['114']['inputs']['image'], '')
-        self.assertEqual(self.store.get(self.project['id']), self.project)
+        payload = (await response.json())["payload"]
+        self.assertEqual(payload["workflow"]["nodes"][0]["widgets_values"][0], "")
+        self.assertEqual(payload["prompt"]["114"]["inputs"]["image"], "")
+        self.assertEqual(self.store.get(self.project["id"]), self.project)
 
     async def test_cross_origin_request_does_not_copy_external_files(self):
-        response = await self.client.post('/spool/api/prepare-workflow', json=capture(self.source), headers={'Origin': 'http://another-origin.invalid'})
+        response = await self.client.post(
+            "/spool/api/prepare-workflow",
+            json=capture(self.source),
+            headers={"Origin": "http://another-origin.invalid"},
+        )
         self.assertEqual(response.status, 403)
-        self.assertFalse(list(self.input.rglob('*.png')))
-        self.assertEqual(self.store.get(self.project['id']), self.project)
+        self.assertFalse(list(self.input.rglob("*.png")))
+        self.assertEqual(self.store.get(self.project["id"]), self.project)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

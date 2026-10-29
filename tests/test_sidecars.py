@@ -19,13 +19,37 @@ from spool.routes import register
 
 
 def setup(image="first.png", seed=42):
-    graph = {"version": .4, "nodes": [
-        {"id": "load", "type": "LoadImage", "pos": [12, 34], "widgets_values": [image], "widgets_values_named": {"image": image}},
-        {"id": "seed", "type": "PrimitiveInt", "widgets_values": [seed, "fixed"], "widgets_values_named": {"value": seed, "control_after_generate": "fixed"}}], "links": [], "groups": [{"title": "Original layout"}]}
-    prompt = {"load": {"class_type": "LoadImage", "inputs": {"image": image}},
-              "seed": {"class_type": "PrimitiveInt", "inputs": {"value": seed}},
-              "save": {"class_type": "SaveImage", "inputs": {"images": ["load", 0], "filename_prefix": "result"}}}
-    return {"workflow": graph, "prompt": prompt, "result": {"nodeId": "save", "group": "images", "index": 0}, "bindings": []}
+    graph = {
+        "version": 0.4,
+        "nodes": [
+            {
+                "id": "load",
+                "type": "LoadImage",
+                "pos": [12, 34],
+                "widgets_values": [image],
+                "widgets_values_named": {"image": image},
+            },
+            {
+                "id": "seed",
+                "type": "PrimitiveInt",
+                "widgets_values": [seed, "fixed"],
+                "widgets_values_named": {"value": seed, "control_after_generate": "fixed"},
+            },
+        ],
+        "links": [],
+        "groups": [{"title": "Original layout"}],
+    }
+    prompt = {
+        "load": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "seed": {"class_type": "PrimitiveInt", "inputs": {"value": seed}},
+        "save": {"class_type": "SaveImage", "inputs": {"images": ["load", 0], "filename_prefix": "result"}},
+    }
+    return {
+        "workflow": graph,
+        "prompt": prompt,
+        "result": {"nodeId": "save", "group": "images", "index": 0},
+        "bindings": [],
+    }
 
 
 class SidecarTests(unittest.TestCase):
@@ -40,8 +64,35 @@ class SidecarTests(unittest.TestCase):
         Image.new("RGB", (16, 16), "red").save(self.roots[0] / "first.png")
         self.media_base = Media(self.workspace.root, *self.roots)
         self.workspace.publish_host({"roots": {k: str(v) for k, v in self.media_base.host_roots.items()}}, "test")
-        project = self.workspace.create({"project": "Sidecars", "clips": [{"id": "shot", "name": "Shot", "takeId": "take", "in": 0, "out": 24,
-            "takes": [{"id": "take", "number": 1, "media": {"id": "media", "kind": "video", "file": "assets/black.png", "originalFile": "input/video/take.mp4", "frames": 120, "prompt": setup("embedded.png")["prompt"]}}]}], "media": []})
+        project = self.workspace.create(
+            {
+                "project": "Sidecars",
+                "clips": [
+                    {
+                        "id": "shot",
+                        "name": "Shot",
+                        "takeId": "take",
+                        "in": 0,
+                        "out": 24,
+                        "takes": [
+                            {
+                                "id": "take",
+                                "number": 1,
+                                "media": {
+                                    "id": "media",
+                                    "kind": "video",
+                                    "file": "assets/black.png",
+                                    "originalFile": "input/video/take.mp4",
+                                    "frames": 120,
+                                    "prompt": setup("embedded.png")["prompt"],
+                                },
+                            }
+                        ],
+                    }
+                ],
+                "media": [],
+            }
+        )
         self.id = project["id"]
         self.store = self.workspace.for_project(self.id)
         self.media = self.media_base.for_project(self.store, self.id)
@@ -50,7 +101,9 @@ class SidecarTests(unittest.TestCase):
         self.capture = setup()
 
     def write(self, capture=None, **kwargs):
-        return sidecars.write(self.source, capture or self.capture, lock_root=self.store.root / ".spool/locks", **kwargs)
+        return sidecars.write(
+            self.source, capture or self.capture, lock_root=self.store.root / ".spool/locks", **kwargs
+        )
 
     def test_same_stem_json_overrides_metadata_without_changing_evidence(self):
         before = self.store.all_evidence(self.id)
@@ -99,9 +152,19 @@ class SidecarTests(unittest.TestCase):
 
     def test_exposed_subgraph_control_updates_its_parent_widget(self):
         capture = setup()
-        capture["workflow"] = {"nodes": [{"id": 5, "type": "inner", "widgets_values": ["old"], "widgets_values_named": {"prompt": "old"}}], "definitions": {"subgraphs": [
-            {"id": "inner", "inputs": [{"name": "prompt"}], "links": [{"id": 7, "origin_id": -10, "origin_slot": 0, "target_id": 8, "target_slot": 0}],
-             "nodes": [{"id": 8, "type": "CLIPTextEncode", "inputs": [{"name": "text", "link": 7}]}]}]}}
+        capture["workflow"] = {
+            "nodes": [{"id": 5, "type": "inner", "widgets_values": ["old"], "widgets_values_named": {"prompt": "old"}}],
+            "definitions": {
+                "subgraphs": [
+                    {
+                        "id": "inner",
+                        "inputs": [{"name": "prompt"}],
+                        "links": [{"id": 7, "origin_id": -10, "origin_slot": 0, "target_id": 8, "target_slot": 0}],
+                        "nodes": [{"id": 8, "type": "CLIPTextEncode", "inputs": [{"name": "text", "link": 7}]}],
+                    }
+                ]
+            },
+        }
         capture["prompt"] = {"5:8": {"class_type": "CLIPTextEncode", "inputs": {"text": "actual prompt"}}}
         self.assertEqual(named_bindings(capture["workflow"], capture["prompt"])[0]["widgetNodeId"], "5")
         self.write(capture)
@@ -123,7 +186,9 @@ class SidecarTests(unittest.TestCase):
         first["provenance"] = {"takeBase": {"takeId": "take"}}
         prepared = self.media.prepare_workflow(first, True)
         self.assertEqual(prepared["prompt"]["load"]["inputs"]["image"], second["prompt"]["load"]["inputs"]["image"])
-        self.assertEqual(prepared["workflow"]["nodes"][0]["widgets_values"][0], second["prompt"]["load"]["inputs"]["image"])
+        self.assertEqual(
+            prepared["workflow"]["nodes"][0]["widgets_values"][0], second["prompt"]["load"]["inputs"]["image"]
+        )
 
     def test_compare_and_swap_protects_manual_edits_and_retry_never_overwrites(self):
         self.write()
@@ -143,14 +208,24 @@ class SidecarTests(unittest.TestCase):
             async with TestClient(TestServer(server.app)) as client:
                 capture = copy.deepcopy(self.capture)
                 capture["provenance"] = {"spoolLink": {"projectId": self.id, "clipId": "shot", "sidecarSha": ""}}
-                response = await client.post('/spool/api/projects/' + self.id + '/capture/shot', json={"revision": 0, "capture": capture, "resetInputs": True, "saveSidecar": True})
+                response = await client.post(
+                    "/spool/api/projects/" + self.id + "/capture/shot",
+                    json={"revision": 0, "capture": capture, "resetInputs": True, "saveSidecar": True},
+                )
                 self.assertEqual(response.status, 200, await response.text())
                 saved = await response.json()
                 read = sidecars.read(self.source)
-                self.assertEqual(read["sidecar"]["sha256"], saved["recipes"][saved["document"]["clips"][0]["workflowVersion"]]["sidecar"]["sha256"])
-                response = await client.post('/spool/api/projects/' + self.id + '/capture/shot', json={"revision": saved["revision"], "capture": capture, "resetInputs": True, "saveSidecar": True})
+                self.assertEqual(
+                    read["sidecar"]["sha256"],
+                    saved["recipes"][saved["document"]["clips"][0]["workflowVersion"]]["sidecar"]["sha256"],
+                )
+                response = await client.post(
+                    "/spool/api/projects/" + self.id + "/capture/shot",
+                    json={"revision": saved["revision"], "capture": capture, "resetInputs": True, "saveSidecar": True},
+                )
                 self.assertEqual(response.status, 400)
                 self.assertEqual(self.store.revision(self.id), saved["revision"])
+
         asyncio.run(check())
 
     def test_generated_take_gets_an_editable_sidecar_with_frozen_inputs(self):
@@ -159,7 +234,11 @@ class SidecarTests(unittest.TestCase):
         queued = requests.accept(self.store, self.media, self.id, project["revision"], [{"clipId": "shot", "count": 1}])
         attempt = self.store.attempt(queued["document"]["jobs"][0]["id"])
         Image.new("RGB", (16, 16), "red").save(self.roots[1] / "result.png")
-        history = {"prompt": [0, attempt["prompt_id"], attempt["request"]["prompt"]], "status": {"completed": True, "status_str": "success"}, "outputs": {"save": {"images": [{"filename": "result.png", "type": "output"}]}}}
+        history = {
+            "prompt": [0, attempt["prompt_id"], attempt["request"]["prompt"]],
+            "status": {"completed": True, "status_str": "success"},
+            "outputs": {"save": {"images": [{"filename": "result.png", "type": "output"}]}},
+        }
         artifacts, primary = self.media.collect(attempt, history, False)
         receipt = self.media.receipt_path(attempt)
         receipts.write(receipt.parent, attempt, artifacts, primary, history)
@@ -169,25 +248,61 @@ class SidecarTests(unittest.TestCase):
         self.assertEqual(result["workflow"]["nodes"][0]["widgets_values"][0], attempt["request"]["assets"][0]["frozen"])
 
     def test_a_take_made_without_optional_inputs_keeps_them_in_its_workflow(self):
-        loader = lambda node: {"id": node, "type": "LoadImage", "widgets_values": [""], "widgets_values_named": {"image": ""}}
-        graph = {"version": .4, "nodes": [loader("ref1"), loader("ref2"), {"id": "gen", "type": "Reference"}, {"id": "save", "type": "SaveVideo"}], "links": []}
+        loader = lambda node: {
+            "id": node,
+            "type": "LoadImage",
+            "widgets_values": [""],
+            "widgets_values_named": {"image": ""},
+        }
+        graph = {
+            "version": 0.4,
+            "nodes": [
+                loader("ref1"),
+                loader("ref2"),
+                {"id": "gen", "type": "Reference"},
+                {"id": "save", "type": "SaveVideo"},
+            ],
+            "links": [],
+        }
         # The recipe still names a reference that was removed before this run.
-        prompt = {"ref1": {"class_type": "LoadImage", "inputs": {"image": ""}}, "ref2": {"class_type": "LoadImage", "inputs": {"image": "removed-reference.png"}},
-                  "gen": {"class_type": "Reference", "inputs": {"image_1": ["ref1", 0], "image_2": ["ref2", 0], "seed": 1}},
-                  "save": {"class_type": "SaveVideo", "inputs": {"video": ["gen", 0], "filename_prefix": "result"}}}
-        slot = lambda key, node: {"key": key, "nodeId": node, "input": "image", "asset": True, "optional": True, "group": "Images", "omit": [node]}
+        prompt = {
+            "ref1": {"class_type": "LoadImage", "inputs": {"image": ""}},
+            "ref2": {"class_type": "LoadImage", "inputs": {"image": "removed-reference.png"}},
+            "gen": {"class_type": "Reference", "inputs": {"image_1": ["ref1", 0], "image_2": ["ref2", 0], "seed": 1}},
+            "save": {"class_type": "SaveVideo", "inputs": {"video": ["gen", 0], "filename_prefix": "result"}},
+        }
+        slot = lambda key, node: {
+            "key": key,
+            "nodeId": node,
+            "input": "image",
+            "asset": True,
+            "optional": True,
+            "group": "Images",
+            "omit": [node],
+        }
         rules = [{"anyOf": ["Images"], "message": "Add an image."}]
-        capture = {"workflow": graph, "prompt": prompt, "bindings": [slot("one", "ref1"), slot("two", "ref2")], "inputRules": rules,
-                   "result": {"nodeId": "save", "group": "videos", "index": 0}}
+        capture = {
+            "workflow": graph,
+            "prompt": prompt,
+            "bindings": [slot("one", "ref1"), slot("two", "ref2")],
+            "inputRules": rules,
+            "result": {"nodeId": "save", "group": "videos", "index": 0},
+        }
         ran = copy.deepcopy(prompt)
         ran["ref1"]["inputs"]["image"] = "frozen.png"
         ran["gen"]["inputs"]["seed"] = 7
         del ran["ref2"], ran["gen"]["inputs"]["image_2"]
-        attempt = {"id": "attempt", "take_id": "made", "request": {"capture": capture, "prompt": ran, "omittedInputs": ["two"]}}
+        attempt = {
+            "id": "attempt",
+            "take_id": "made",
+            "request": {"capture": capture, "prompt": ran, "omittedInputs": ["two"]},
+        }
         sidecars.write_result(self.store, self.media, attempt, {"primary": {"originalFile": "input/video/take.mp4"}})
         kept = sidecars.read(self.source)
         self.assertEqual(kept["prompt"]["gen"]["inputs"], {"image_1": ["ref1", 0], "image_2": ["ref2", 0], "seed": 7})
-        self.assertEqual((kept["prompt"]["ref1"]["inputs"]["image"], kept["prompt"]["ref2"]["inputs"]["image"]), ("frozen.png", ""))
+        self.assertEqual(
+            (kept["prompt"]["ref1"]["inputs"]["image"], kept["prompt"]["ref2"]["inputs"]["image"]), ("frozen.png", "")
+        )
         self.assertEqual((kept["inputRules"], [b["optional"] for b in kept["bindings"]]), (rules, [True, True]))
 
 

@@ -1,34 +1,506 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Spool — Studio</title>
-<link rel="stylesheet" href="/spool/ui/studio.css">
-<link rel="icon" type="image/svg+xml" href="/spool/ui/spool-icon.svg">
-</head>
-<body class="standalone">
-<main inert class="editor" id="editor" tabindex="0" aria-label="Spool editing workspace">
-<header class="topbar"><div class="bar-left"><span class="brand" role="img" aria-label="Spool"><svg class="brand-wordmark" viewBox="52 -1513 4943 1937" aria-hidden="true"><path d="M692 0H68V-272H692Q720 -272 740 -292Q760 -312 760 -340Q760 -369 740 -378Q720 -387 692 -387H408Q337 -387 275 -414Q213 -441 167 -487.5Q121 -534 94.5 -596Q68 -658 68 -729Q68 -800 94.5 -862Q121 -924 167 -970Q213 -1016 275 -1042.5Q337 -1069 408 -1069H961V-797H408Q380 -797 360 -777Q340 -757 340 -729Q340 -700 360 -679.5Q380 -659 408 -659H692Q762 -659 824 -635.5Q886 -612 932 -570Q978 -528 1005 -469Q1032 -410 1032 -340Q1032 -269 1005 -207.5Q978 -146 932 -99.5Q886 -53 824 -26.5Q762 0 692 0ZM1430 408H1155V-1071H1221L1330 -942Q1367 -977 1411 -1008Q1455 -1039 1502.5 -1061.5Q1550 -1084 1601 -1097Q1652 -1110 1704 -1110Q1817 -1110 1916.5 -1069.5Q2016 -1029 2090.5 -955Q2165 -881 2208 -776.5Q2251 -672 2251 -545Q2251 -413 2208 -307.5Q2165 -202 2090.5 -128.5Q2016 -55 1916.5 -16Q1817 23 1704 23Q1668 23 1632.5 15Q1597 7 1562.5 -6.5Q1528 -20 1494.5 -37Q1461 -54 1430 -72ZM1977 -545Q1977 -613 1955.5 -667Q1934 -721 1897 -758.5Q1860 -796 1810 -816Q1760 -836 1704 -836Q1648 -836 1598.5 -816Q1549 -796 1512 -758.5Q1475 -721 1453.5 -667Q1432 -613 1432 -545Q1432 -480 1453.5 -426Q1475 -372 1512 -334Q1549 -296 1598.5 -275Q1648 -254 1704 -254Q1760 -254 1810 -275Q1860 -296 1897 -334Q1934 -372 1955.5 -426Q1977 -480 1977 -545ZM4979 0H4704V-1497H4979Z"/><path class="brand-reels" d="M3425 -545Q3425 -425 3382 -321.5Q3339 -218 3265 -142.5Q3191 -67 3091.5 -23.5Q2992 20 2878 20Q2765 20 2665.5 -23.5Q2566 -67 2491.5 -142.5Q2417 -218 2374 -321.5Q2331 -425 2331 -545Q2331 -667 2374 -771Q2417 -875 2491.5 -950.5Q2566 -1026 2665.5 -1069Q2765 -1112 2878 -1112Q2992 -1112 3091.5 -1071.5Q3191 -1031 3265 -956.5Q3339 -882 3382 -777.5Q3425 -673 3425 -545ZM3150 -545Q3150 -611 3128.5 -664.5Q3107 -718 3070 -756.5Q3033 -795 2983.5 -815.5Q2934 -836 2878 -836Q2822 -836 2772.5 -815.5Q2723 -795 2686.5 -756.5Q2650 -718 2629 -664.5Q2608 -611 2608 -545Q2608 -483 2629 -430Q2650 -377 2686.5 -338Q2723 -299 2772.5 -276.5Q2822 -254 2878 -254Q2934 -254 2983.5 -275Q3033 -296 3070 -334Q3107 -372 3128.5 -426Q3150 -480 3150 -545ZM4599 -545Q4599 -425 4556 -321.5Q4513 -218 4439 -142.5Q4365 -67 4265.5 -23.5Q4166 20 4052 20Q3939 20 3839.5 -23.5Q3740 -67 3665.5 -142.5Q3591 -218 3548 -321.5Q3505 -425 3505 -545Q3505 -667 3548 -771Q3591 -875 3665.5 -950.5Q3740 -1026 3839.5 -1069Q3939 -1112 4052 -1112Q4166 -1112 4265.5 -1071.5Q4365 -1031 4439 -956.5Q4513 -882 4556 -777.5Q4599 -673 4599 -545ZM4324 -545Q4324 -611 4302.5 -664.5Q4281 -718 4244 -756.5Q4207 -795 4157.5 -815.5Q4108 -836 4052 -836Q3996 -836 3946.5 -815.5Q3897 -795 3860.5 -756.5Q3824 -718 3803 -664.5Q3782 -611 3782 -545Q3782 -483 3803 -430Q3824 -377 3860.5 -338Q3897 -299 3946.5 -276.5Q3996 -254 4052 -254Q4108 -254 4157.5 -275Q4207 -296 4244 -334Q4281 -372 4302.5 -426Q4324 -480 4324 -545Z"/><path class="brand-reels" d="M2879 20H4053V-254H2879Z"/><path class="brand-reels" d="M2732.7 -545a146.3 146.3 0 1 0 292.6 0a146.3 146.3 0 1 0 -292.6 0ZM3906.7 -545a146.3 146.3 0 1 0 292.6 0a146.3 146.3 0 1 0 -292.6 0Z"/></svg></span><button class="iconbutton" id="toggleMedia" title="Media pool" aria-label="Toggle media pool"><span data-icon="bin"></span></button><input class="project-name" id="projectName" aria-label="Project name" value="Untitled project"><span class="save-state"><span class="dot"></span><span id="saveStatus">Loading project?</span> · <span class="project-fps">24</span> fps</span></div><div class="bar-right"><span class="bar-sep"></span><button class="iconbutton" id="openProject" title="Open project file" aria-label="Open project file"><span data-icon="folder"></span></button><button class="iconbutton" id="saveProject" title="Download project file" aria-label="Download project file"><span data-icon="save"></span></button><button class="textbutton" id="reset" title="New project">New project</button><button class="iconbutton" id="toggleInspector" title="Clip inspector" aria-label="Toggle clip inspector"><span data-icon="sliders"></span></button><button class="queue-pill" id="showQueue" title="Generation queue"><span data-icon="queue"></span><span id="queueLabel">Queue</span></button><button class="primary" id="export"><span data-icon="export"></span>Export</button></div></header>
-<div class="workbench" id="workbench">
-<aside class="media-panel" id="mediaPanel" data-tab="workflows" aria-label="Workflows and media">
-<div class="panel-resize media-resize" id="mediaResize" role="separator" aria-label="Resize media panel" aria-orientation="vertical" aria-controls="mediaPanel" tabindex="0" title="Drag to resize media panel; double-click to reset"></div>
-<div class="panel-head"><div class="seg" role="tablist" aria-label="Library"><button class="active" data-bin-tab="workflows" role="tab" aria-selected="true">Workflows</button><button data-bin-tab="media" role="tab" aria-selected="false">Media</button></div><button class="iconbutton" id="importTop" title="Import workflow or media" aria-label="Import workflow or media"><span data-icon="plus"></span></button></div>
-<div class="media-filters" role="group" aria-label="Media type"><button data-media-filter="all" aria-pressed="true" class="active">All</button><button data-media-filter="video" aria-pressed="false">Video</button><button data-media-filter="image" aria-pressed="false">Image</button><button data-media-filter="audio" aria-pressed="false">Audio</button></div><div class="pool-toolbar"><span class="bin-title" id="binTitle">Workflow templates</span><input id="poolSearch" type="search" aria-label="Search project media" placeholder="Search"><div class="media-view-controls" id="mediaViewControls" role="group" aria-label="Media display"><button id="mediaViewgrid" aria-pressed="true" title="Small thumbnails">Grid</button><button id="mediaViewlist" aria-pressed="false" title="Media list with file details">List</button></div></div>
-<div class="panel-scroll"><div class="bin-grid" id="binGrid"></div></div>
-<section class="workflow-library" aria-label="Workflow library"><div class="panel-head"><strong>Workflows</strong><button class="iconbutton" id="importWorkflow" title="Import workflow" aria-label="Import workflow"><span data-icon="plus"></span></button></div><div id="workflowList"></div></section>
-<div class="panel-foot"><button class="outline" id="importMedia"><span data-icon="import"></span>Import files</button><button class="outline" id="pasteImageMedia" title="Paste image from clipboard (Ctrl+V)" style="margin-top:6px"><span data-icon="clipboard"></span>Paste image</button></div></aside>
-<section class="viewer" id="viewer" tabindex="-1" aria-label="Viewer"><div class="viewer-head"><div class="seg viewer-tabs" role="tablist" aria-label="Viewer"><button id="sourceTab" role="tab" aria-selected="false" title="Review takes and media (Q)">Source</button><button id="editTab" role="tab" aria-selected="true" class="active" title="Play the edit (Q)">Edit</button></div><span class="viewer-context" id="viewerContext" role="status"></span><span class="viewer-actions"><button class="outline compare-toggle" id="compareTakes" aria-pressed="false" title="Compare two takes at the same source frame (C)">Compare</button><button class="outline" id="tryInEdit" title="Play this take inside the edit without changing it"><span data-icon="timeline"></span><span class="label">Try in edit</span></button><button class="outline" id="cancelAudition" title="Show the saved edit (Esc)">Cancel</button><button class="primary" id="useSource" title="Use this take in the edit (Enter)">Use take</button></span></div><div class="viewer-stage" id="viewerStage"><div class="empty-stage" id="emptyStage" hidden>Add a clip to begin</div><img id="still" alt="Selected image" hidden><div class="viewer-overlay" id="viewerOverlay"></div><div class="take-compare" id="takeCompare" hidden aria-label="Synchronized take comparison"><div class="trim-frame compare-pane" id="comparePane0"><div class="trim-frame compare-picture" id="comparePicture0"><img id="compareImage0" alt="Compared take" hidden></div><button class="compare-select" id="compareSelect0" aria-pressed="false" title="Select this pane; click a take to replace it"><span>A</span><strong id="compareName0"></strong><span class="compare-badge" id="compareBadge0"></span></button><div class="trim-caption"><span class="compare-end" id="compareEnd0"></span><b class="mono" id="compareTime0"></b></div></div><div class="trim-frame compare-pane" id="comparePane1"><div class="trim-frame compare-picture" id="comparePicture1"><img id="compareImage1" alt="Compared take" hidden></div><button class="compare-select" id="compareSelect1" aria-pressed="false" title="Select this pane; click a take to replace it"><span>B</span><strong id="compareName1"></strong><span class="compare-badge" id="compareBadge1"></span></button><div class="trim-caption"><span class="compare-end" id="compareEnd1"></span><b class="mono" id="compareTime1"></b></div></div></div><div class="trim-preview" id="trimPreview" hidden aria-label="Trim comparison"><div class="trim-preview-head"><strong id="trimPreviewTitle"></strong><span class="mono" id="trimDelta"></span></div><div class="trim-grid" id="trimGrid"><div class="trim-frame" id="trimFrame0"><video id="trimVideo0" muted playsinline preload="auto" hidden></video><img id="trimImage0" alt="" hidden><span class="trim-empty" id="trimEmpty0">Gap</span><div class="trim-caption"><span id="trimLabel0"></span><b class="mono" id="trimTime0"></b></div></div><div class="trim-frame" id="trimFrame1"><video id="trimVideo1" muted playsinline preload="auto" hidden></video><img id="trimImage1" alt="" hidden><span class="trim-empty" id="trimEmpty1">Gap</span><div class="trim-caption"><span id="trimLabel1"></span><b class="mono" id="trimTime1"></b></div></div><div class="trim-frame" id="trimFrame2"><video id="trimVideo2" muted playsinline preload="auto" hidden></video><img id="trimImage2" alt="" hidden><span class="trim-empty" id="trimEmpty2">Gap</span><div class="trim-caption"><span id="trimLabel2"></span><b class="mono" id="trimTime2"></b></div></div><div class="trim-frame" id="trimFrame3"><video id="trimVideo3" muted playsinline preload="auto" hidden></video><img id="trimImage3" alt="" hidden><span class="trim-empty" id="trimEmpty3">Gap</span><div class="trim-caption"><span id="trimLabel3"></span><b class="mono" id="trimTime3"></b></div></div></div></div><button class="trim-toggle" id="trimViewButton" hidden title="Compare edit frames or see the playhead (C)">Single</button><button class="iconbutton fullscreen" id="fullscreen" title="Fullscreen viewer (F)" aria-label="Fullscreen viewer"><span data-icon="expand"></span></button></div><div class="viewer-tail"><div class="scrub"><input id="seek" type="range" min="0" max="264" step="1" value="90" aria-label="Scrub"><span class="scrub-band" id="scrubBand" title="Range used in the edit" hidden></span></div></div><div class="viewer-controls"><div class="tc-block"><span class="viewer-time mono" id="viewerTime">00:00:00:00</span><span class="small" id="viewerDuration">00:00:11:00</span></div><div class="transport"><button class="iconbutton" id="previous" title="Previous edit" aria-label="Previous edit"><span data-icon="previous"></span></button><button class="iconbutton" id="frameBack" title="Previous frame (←)" aria-label="Previous frame"><span data-icon="frameback"></span></button><button class="iconbutton play" id="play" title="Play / pause (Space)" aria-label="Play"><span data-icon="play"></span></button><button class="iconbutton" id="frameForward" title="Next frame (→)" aria-label="Next frame"><span data-icon="frameforward"></span></button><button class="iconbutton" id="next" title="Next edit" aria-label="Next edit"><span data-icon="next"></span></button></div><div class="viewer-meta"><button class="textbutton viewer-zoom" id="viewerZoom" aria-label="Reset viewer zoom to fit" title="Wheel to zoom · Drag to pan · Double-click to fit">Fit</button><select id="previewQuality" aria-label="Preview resolution" title="Playback resolution relative to the timeline"><option value="full">Full</option><option value="half">1/2</option><option value="quarter">1/4</option></select><span id="viewerResolution">960 × 540</span><button class="iconbutton" id="loop" title="Loop playback" aria-label="Loop playback"><span data-icon="loop"></span></button></div></div></section>
-<section class="takes" id="takes" aria-label="Takes for the selected clip"><div class="takes-head"><span class="takes-title">Takes<span id="takeCount">0</span></span><span class="takes-clip small" id="takesClip"></span><button class="outline compare-strip" id="compareTakesStrip" title="Compare two takes (C)" aria-pressed="false">Compare</button><span class="takes-keys small"><kbd>↑</kbd><kbd>↓</kbd> flip · <kbd>Enter</kbd> use · <kbd>Q</kbd> source</span></div><div class="take-list" id="takeList"></div></section>
-<aside class="inspector" id="inspector" aria-label="Clip inspector"><div class="panel-resize inspector-resize" id="inspectorResize" role="separator" aria-label="Resize clip inspector" aria-orientation="vertical" aria-controls="inspector" tabindex="0" title="Drag to resize inspector; double-click to reset"></div><div class="inspector-head"><input class="inspector-name" id="clipName" aria-label="Selected clip name"><div class="inspector-tabs" role="tablist" aria-label="Inspector"><button class="active" id="inputsInspectorTab" role="tab" aria-selected="true">Inputs</button><button id="audioInspectorTab" role="tab" aria-selected="false">Audio</button></div><button class="iconbutton" id="openWorkflow" title="Open workflow" aria-label="Open workflow"><span data-icon="nodes"></span></button></div><div class="panel-scroll"><div id="inspectorContent"></div><section class="clip-notes" id="clipNotesSection" hidden aria-label="Notes"></section></div><div class="inspector-foot"><p class="generate-reason" id="generateReason" role="status" hidden></p><button class="primary generate" id="generate"><span data-icon="spark"></span><span id="generateLabel">Generate</span></button><div class="foot-note">Local Comfy · new takes stay unselected</div></div></aside>
-</div>
-<div class="timeline-toolbar"><div class="timeline-resize" id="timelineResize" role="separator" aria-label="Resize timeline" aria-orientation="horizontal" tabindex="0" title="Drag to resize timeline; double-click to reset"></div><div class="tools"><button class="outline" id="addVideoTrack" title="Add a video track">+ Track</button><button class="iconbutton" id="pasteImageTimeline" title="Paste image to timeline (Ctrl+V)" aria-label="Paste image to timeline"><span data-icon="clipboard"></span></button><button class="iconbutton" id="split" title="Split at playhead (B)" aria-label="Split at playhead"><span data-icon="scissors"></span></button><button class="iconbutton" id="duplicate" title="Duplicate selected clip" aria-label="Duplicate selected clip"><span data-icon="copy"></span></button><button class="iconbutton" id="remove" title="Delete selected clip (Delete)" aria-label="Delete selected clip"><span data-icon="trash"></span></button><button class="history-button monitor-button" id="monitorMute" title="Unmute monitor; export mix is unchanged" aria-label="Mute monitor" aria-pressed="true"><span data-icon="mute"></span></button><span class="mix-meter" id="mixMeter" title="Monitor peak level"><i id="mixLevel"></i></span><button class="iconbutton" id="importAudio" title="Add audio from an audio or video file" aria-label="Add audio"><span data-icon="audio"></span></button><span class="sep"></span><button class="iconbutton active" id="snap" title="Snap to edits (N)" aria-label="Snap to edits"><span data-icon="magnet"></span></button><span class="gesture-hint" id="gestureHint">Drag clips or edges</span><button class="iconbutton" id="gestureHelp" title="Editing gestures and shortcuts" aria-label="Editing gestures and shortcuts"><span data-icon="keyboard"></span></button></div><div class="history-tools" role="group" aria-label="Edit history"><button class="history-button" id="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><span data-icon="undo"></span><span>Undo</span></button><button class="history-button" id="redo" title="Redo (Ctrl+Shift+Z or Ctrl+Y)" aria-label="Redo"><span data-icon="redo"></span><span>Redo</span></button></div><div class="timeline-name"><span class="mono" id="timelineTime">00:00:00:00</span><span class="sequence-name">Sequence 01</span> <span class="small" id="sequenceStats">3 clips · 00:00:11:00</span></div><div class="zoom"><button class="iconbutton" id="fit" title="Fit timeline (Shift+Z)" aria-label="Fit timeline"><span data-icon="fit"></span></button><button class="iconbutton zoom-step" id="zoomOut" title="Zoom timeline out (−)" aria-label="Zoom timeline out">−</button><input id="zoom" type="range" min="100" max="1600" step="1" value="100" aria-label="Timeline zoom"><button class="iconbutton zoom-step" id="zoomIn" title="Zoom timeline in (+)" aria-label="Zoom timeline in">+</button><span id="zoomValue">100%</span></div></div>
-<section class="timeline-shell" aria-label="Editing timeline"><div class="track-labels"><div id="trackHeaders"><div class="track-label-time"><span class="project-fps">24</span> fps</div><div id="videoTrackLabels"></div><div id="sourceTrackLabels"><div class="track-label audio source-track-label" id="sourceTrackHeader"><span class="track-title"><b>A1</b><small>Clip audio</small></span><button class="track-toggle" id="trackMute" title="Mute A1 clip audio in the mix" aria-label="Mute clip audio" aria-pressed="false">M</button><button class="track-toggle" id="trackSolo" title="Solo clip audio" aria-label="Solo clip audio" aria-pressed="false">S</button></div><div id="sourceExtraTrackLabels"></div></div><div class="track-label audio" id="musicTrackHeader"><span class="track-title"><b>A2</b><small>Soundtrack</small></span><button class="track-toggle" id="musicMute" title="Mute soundtrack in the mix" aria-label="Mute soundtrack" aria-pressed="false">M</button><button class="track-toggle" id="musicSolo" title="Solo soundtrack" aria-label="Solo soundtrack" aria-pressed="false">S</button></div></div></div><div class="timeline-scroll" id="timelineScroll"><div class="timeline-content" id="timelineContent"><div class="ruler" id="ruler" aria-label="Timeline ruler"></div><div class="clip-lane" id="clipLane"></div><button class="add-shot" id="addShot" hidden><span data-icon="plus"></span>Add shot</button><div class="audio-lane" id="audioLane"></div><div class="audio-lane music-lane" id="musicLane"></div><div class="timeline-hint" id="timelineHint">Drag clips to reorder · drag an edge to ripple trim · drop media or workflows to add</div><div class="playhead" id="playhead"></div><div class="drop-line" id="dropLine" hidden></div></div></div></section>
-<footer class="footer"><span class="status-message" id="status">Ready</span><button class="textbutton keyboard-hint" id="help"><span data-icon="keyboard"></span>Shortcuts</button></footer>
-<aside class="renders-panel render-dialog" id="rendersPanel" role="dialog" aria-modal="false" aria-labelledby="rendersTitle" hidden></aside><div class="toast" id="toast" hidden role="status" aria-live="polite"></div><div class="modal-overlay" id="modalOverlay" hidden><section class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"></section></div>
-<div class="external-drop" id="externalDropHint" hidden><strong id="externalDropTitle">Import workflow or media</strong><span>Workflow JSON · video · image · audio</span></div><input id="mediaFiles" type="file" accept=".json,video/*,image/*,audio/*" multiple hidden><input id="audioFiles" type="file" accept="audio/*,video/*,.wav,.mp3,.m4a,.aac,.ogg,.flac,.opus,.mp4,.mov,.webm,.mkv,.m4v" multiple hidden><input id="sourceFile" type="file" hidden><input id="projectFile" type="file" accept=".json" hidden>
-</main>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Spool — Studio</title>
+    <link rel="stylesheet" href="/spool/ui/studio.css" />
+    <link rel="icon" type="image/svg+xml" href="/spool/ui/spool-icon.svg" />
+  </head>
+  <body class="standalone">
+    <main inert class="editor" id="editor" tabindex="0" aria-label="Spool editing workspace">
+      <header class="topbar">
+        <div class="bar-left">
+          <span class="brand" role="img" aria-label="Spool"
+            ><svg class="brand-wordmark" viewBox="52 -1513 4943 1937" aria-hidden="true">
+              <path
+                d="M692 0H68V-272H692Q720 -272 740 -292Q760 -312 760 -340Q760 -369 740 -378Q720 -387 692 -387H408Q337 -387 275 -414Q213 -441 167 -487.5Q121 -534 94.5 -596Q68 -658 68 -729Q68 -800 94.5 -862Q121 -924 167 -970Q213 -1016 275 -1042.5Q337 -1069 408 -1069H961V-797H408Q380 -797 360 -777Q340 -757 340 -729Q340 -700 360 -679.5Q380 -659 408 -659H692Q762 -659 824 -635.5Q886 -612 932 -570Q978 -528 1005 -469Q1032 -410 1032 -340Q1032 -269 1005 -207.5Q978 -146 932 -99.5Q886 -53 824 -26.5Q762 0 692 0ZM1430 408H1155V-1071H1221L1330 -942Q1367 -977 1411 -1008Q1455 -1039 1502.5 -1061.5Q1550 -1084 1601 -1097Q1652 -1110 1704 -1110Q1817 -1110 1916.5 -1069.5Q2016 -1029 2090.5 -955Q2165 -881 2208 -776.5Q2251 -672 2251 -545Q2251 -413 2208 -307.5Q2165 -202 2090.5 -128.5Q2016 -55 1916.5 -16Q1817 23 1704 23Q1668 23 1632.5 15Q1597 7 1562.5 -6.5Q1528 -20 1494.5 -37Q1461 -54 1430 -72ZM1977 -545Q1977 -613 1955.5 -667Q1934 -721 1897 -758.5Q1860 -796 1810 -816Q1760 -836 1704 -836Q1648 -836 1598.5 -816Q1549 -796 1512 -758.5Q1475 -721 1453.5 -667Q1432 -613 1432 -545Q1432 -480 1453.5 -426Q1475 -372 1512 -334Q1549 -296 1598.5 -275Q1648 -254 1704 -254Q1760 -254 1810 -275Q1860 -296 1897 -334Q1934 -372 1955.5 -426Q1977 -480 1977 -545ZM4979 0H4704V-1497H4979Z"
+              />
+              <path
+                class="brand-reels"
+                d="M3425 -545Q3425 -425 3382 -321.5Q3339 -218 3265 -142.5Q3191 -67 3091.5 -23.5Q2992 20 2878 20Q2765 20 2665.5 -23.5Q2566 -67 2491.5 -142.5Q2417 -218 2374 -321.5Q2331 -425 2331 -545Q2331 -667 2374 -771Q2417 -875 2491.5 -950.5Q2566 -1026 2665.5 -1069Q2765 -1112 2878 -1112Q2992 -1112 3091.5 -1071.5Q3191 -1031 3265 -956.5Q3339 -882 3382 -777.5Q3425 -673 3425 -545ZM3150 -545Q3150 -611 3128.5 -664.5Q3107 -718 3070 -756.5Q3033 -795 2983.5 -815.5Q2934 -836 2878 -836Q2822 -836 2772.5 -815.5Q2723 -795 2686.5 -756.5Q2650 -718 2629 -664.5Q2608 -611 2608 -545Q2608 -483 2629 -430Q2650 -377 2686.5 -338Q2723 -299 2772.5 -276.5Q2822 -254 2878 -254Q2934 -254 2983.5 -275Q3033 -296 3070 -334Q3107 -372 3128.5 -426Q3150 -480 3150 -545ZM4599 -545Q4599 -425 4556 -321.5Q4513 -218 4439 -142.5Q4365 -67 4265.5 -23.5Q4166 20 4052 20Q3939 20 3839.5 -23.5Q3740 -67 3665.5 -142.5Q3591 -218 3548 -321.5Q3505 -425 3505 -545Q3505 -667 3548 -771Q3591 -875 3665.5 -950.5Q3740 -1026 3839.5 -1069Q3939 -1112 4052 -1112Q4166 -1112 4265.5 -1071.5Q4365 -1031 4439 -956.5Q4513 -882 4556 -777.5Q4599 -673 4599 -545ZM4324 -545Q4324 -611 4302.5 -664.5Q4281 -718 4244 -756.5Q4207 -795 4157.5 -815.5Q4108 -836 4052 -836Q3996 -836 3946.5 -815.5Q3897 -795 3860.5 -756.5Q3824 -718 3803 -664.5Q3782 -611 3782 -545Q3782 -483 3803 -430Q3824 -377 3860.5 -338Q3897 -299 3946.5 -276.5Q3996 -254 4052 -254Q4108 -254 4157.5 -275Q4207 -296 4244 -334Q4281 -372 4302.5 -426Q4324 -480 4324 -545Z"
+              />
+              <path class="brand-reels" d="M2879 20H4053V-254H2879Z" />
+              <path
+                class="brand-reels"
+                d="M2732.7 -545a146.3 146.3 0 1 0 292.6 0a146.3 146.3 0 1 0 -292.6 0ZM3906.7 -545a146.3 146.3 0 1 0 292.6 0a146.3 146.3 0 1 0 -292.6 0Z"
+              /></svg></span
+          ><button class="iconbutton" id="toggleMedia" title="Media pool" aria-label="Toggle media pool">
+            <span data-icon="bin"></span></button
+          ><input class="project-name" id="projectName" aria-label="Project name" value="Untitled project" /><span
+            class="save-state"
+            ><span class="dot"></span><span id="saveStatus">Loading project?</span> ·
+            <span class="project-fps">24</span> fps</span
+          >
+        </div>
+        <div class="bar-right">
+          <span class="bar-sep"></span
+          ><button class="iconbutton" id="openProject" title="Open project file" aria-label="Open project file">
+            <span data-icon="folder"></span></button
+          ><button class="iconbutton" id="saveProject" title="Download project file" aria-label="Download project file">
+            <span data-icon="save"></span></button
+          ><button class="textbutton" id="reset" title="New project">New project</button
+          ><button class="iconbutton" id="toggleInspector" title="Clip inspector" aria-label="Toggle clip inspector">
+            <span data-icon="sliders"></span></button
+          ><button class="queue-pill" id="showQueue" title="Generation queue">
+            <span data-icon="queue"></span><span id="queueLabel">Queue</span></button
+          ><button class="primary" id="export"><span data-icon="export"></span>Export</button>
+        </div>
+      </header>
+      <div class="workbench" id="workbench">
+        <aside class="media-panel" id="mediaPanel" data-tab="workflows" aria-label="Workflows and media">
+          <div
+            class="panel-resize media-resize"
+            id="mediaResize"
+            role="separator"
+            aria-label="Resize media panel"
+            aria-orientation="vertical"
+            aria-controls="mediaPanel"
+            tabindex="0"
+            title="Drag to resize media panel; double-click to reset"
+          ></div>
+          <div class="panel-head">
+            <div class="seg" role="tablist" aria-label="Library">
+              <button class="active" data-bin-tab="workflows" role="tab" aria-selected="true">Workflows</button
+              ><button data-bin-tab="media" role="tab" aria-selected="false">Media</button>
+            </div>
+            <button
+              class="iconbutton"
+              id="importTop"
+              title="Import workflow or media"
+              aria-label="Import workflow or media"
+            >
+              <span data-icon="plus"></span>
+            </button>
+          </div>
+          <div class="media-filters" role="group" aria-label="Media type">
+            <button data-media-filter="all" aria-pressed="true" class="active">All</button
+            ><button data-media-filter="video" aria-pressed="false">Video</button
+            ><button data-media-filter="image" aria-pressed="false">Image</button
+            ><button data-media-filter="audio" aria-pressed="false">Audio</button>
+          </div>
+          <div class="pool-toolbar">
+            <span class="bin-title" id="binTitle">Workflow templates</span
+            ><input id="poolSearch" type="search" aria-label="Search project media" placeholder="Search" />
+            <div class="media-view-controls" id="mediaViewControls" role="group" aria-label="Media display">
+              <button id="mediaViewgrid" aria-pressed="true" title="Small thumbnails">Grid</button
+              ><button id="mediaViewlist" aria-pressed="false" title="Media list with file details">List</button>
+            </div>
+          </div>
+          <div class="panel-scroll"><div class="bin-grid" id="binGrid"></div></div>
+          <section class="workflow-library" aria-label="Workflow library">
+            <div class="panel-head">
+              <strong>Workflows</strong
+              ><button class="iconbutton" id="importWorkflow" title="Import workflow" aria-label="Import workflow">
+                <span data-icon="plus"></span>
+              </button>
+            </div>
+            <div id="workflowList"></div>
+          </section>
+          <div class="panel-foot">
+            <button class="outline" id="importMedia"><span data-icon="import"></span>Import files</button
+            ><button
+              class="outline"
+              id="pasteImageMedia"
+              title="Paste image from clipboard (Ctrl+V)"
+              style="margin-top: 6px"
+            >
+              <span data-icon="clipboard"></span>Paste image
+            </button>
+          </div>
+        </aside>
+        <section class="viewer" id="viewer" tabindex="-1" aria-label="Viewer">
+          <div class="viewer-head">
+            <div class="seg viewer-tabs" role="tablist" aria-label="Viewer">
+              <button id="sourceTab" role="tab" aria-selected="false" title="Review takes and media (Q)">Source</button
+              ><button id="editTab" role="tab" aria-selected="true" class="active" title="Play the edit (Q)">
+                Edit
+              </button>
+            </div>
+            <span class="viewer-context" id="viewerContext" role="status"></span
+            ><span class="viewer-actions"
+              ><button
+                class="outline compare-toggle"
+                id="compareTakes"
+                aria-pressed="false"
+                title="Compare two takes at the same source frame (C)"
+              >
+                Compare</button
+              ><button class="outline" id="tryInEdit" title="Play this take inside the edit without changing it">
+                <span data-icon="timeline"></span><span class="label">Try in edit</span></button
+              ><button class="outline" id="cancelAudition" title="Show the saved edit (Esc)">Cancel</button
+              ><button class="primary" id="useSource" title="Use this take in the edit (Enter)">Use take</button></span
+            >
+          </div>
+          <div class="viewer-stage" id="viewerStage">
+            <div class="empty-stage" id="emptyStage" hidden>Add a clip to begin</div>
+            <img id="still" alt="Selected image" hidden />
+            <div class="viewer-overlay" id="viewerOverlay"></div>
+            <div class="take-compare" id="takeCompare" hidden aria-label="Synchronized take comparison">
+              <div class="trim-frame compare-pane" id="comparePane0">
+                <div class="trim-frame compare-picture" id="comparePicture0">
+                  <img id="compareImage0" alt="Compared take" hidden />
+                </div>
+                <button
+                  class="compare-select"
+                  id="compareSelect0"
+                  aria-pressed="false"
+                  title="Select this pane; click a take to replace it"
+                >
+                  <span>A</span><strong id="compareName0"></strong
+                  ><span class="compare-badge" id="compareBadge0"></span>
+                </button>
+                <div class="trim-caption">
+                  <span class="compare-end" id="compareEnd0"></span><b class="mono" id="compareTime0"></b>
+                </div>
+              </div>
+              <div class="trim-frame compare-pane" id="comparePane1">
+                <div class="trim-frame compare-picture" id="comparePicture1">
+                  <img id="compareImage1" alt="Compared take" hidden />
+                </div>
+                <button
+                  class="compare-select"
+                  id="compareSelect1"
+                  aria-pressed="false"
+                  title="Select this pane; click a take to replace it"
+                >
+                  <span>B</span><strong id="compareName1"></strong
+                  ><span class="compare-badge" id="compareBadge1"></span>
+                </button>
+                <div class="trim-caption">
+                  <span class="compare-end" id="compareEnd1"></span><b class="mono" id="compareTime1"></b>
+                </div>
+              </div>
+            </div>
+            <div class="trim-preview" id="trimPreview" hidden aria-label="Trim comparison">
+              <div class="trim-preview-head">
+                <strong id="trimPreviewTitle"></strong><span class="mono" id="trimDelta"></span>
+              </div>
+              <div class="trim-grid" id="trimGrid">
+                <div class="trim-frame" id="trimFrame0">
+                  <video id="trimVideo0" muted playsinline preload="auto" hidden></video
+                  ><img id="trimImage0" alt="" hidden /><span class="trim-empty" id="trimEmpty0">Gap</span>
+                  <div class="trim-caption"><span id="trimLabel0"></span><b class="mono" id="trimTime0"></b></div>
+                </div>
+                <div class="trim-frame" id="trimFrame1">
+                  <video id="trimVideo1" muted playsinline preload="auto" hidden></video
+                  ><img id="trimImage1" alt="" hidden /><span class="trim-empty" id="trimEmpty1">Gap</span>
+                  <div class="trim-caption"><span id="trimLabel1"></span><b class="mono" id="trimTime1"></b></div>
+                </div>
+                <div class="trim-frame" id="trimFrame2">
+                  <video id="trimVideo2" muted playsinline preload="auto" hidden></video
+                  ><img id="trimImage2" alt="" hidden /><span class="trim-empty" id="trimEmpty2">Gap</span>
+                  <div class="trim-caption"><span id="trimLabel2"></span><b class="mono" id="trimTime2"></b></div>
+                </div>
+                <div class="trim-frame" id="trimFrame3">
+                  <video id="trimVideo3" muted playsinline preload="auto" hidden></video
+                  ><img id="trimImage3" alt="" hidden /><span class="trim-empty" id="trimEmpty3">Gap</span>
+                  <div class="trim-caption"><span id="trimLabel3"></span><b class="mono" id="trimTime3"></b></div>
+                </div>
+              </div>
+            </div>
+            <button class="trim-toggle" id="trimViewButton" hidden title="Compare edit frames or see the playhead (C)">
+              Single</button
+            ><button
+              class="iconbutton fullscreen"
+              id="fullscreen"
+              title="Fullscreen viewer (F)"
+              aria-label="Fullscreen viewer"
+            >
+              <span data-icon="expand"></span>
+            </button>
+          </div>
+          <div class="viewer-tail">
+            <div class="scrub">
+              <input id="seek" type="range" min="0" max="264" step="1" value="90" aria-label="Scrub" /><span
+                class="scrub-band"
+                id="scrubBand"
+                title="Range used in the edit"
+                hidden
+              ></span>
+            </div>
+          </div>
+          <div class="viewer-controls">
+            <div class="tc-block">
+              <span class="viewer-time mono" id="viewerTime">00:00:00:00</span
+              ><span class="small" id="viewerDuration">00:00:11:00</span>
+            </div>
+            <div class="transport">
+              <button class="iconbutton" id="previous" title="Previous edit" aria-label="Previous edit">
+                <span data-icon="previous"></span></button
+              ><button class="iconbutton" id="frameBack" title="Previous frame (←)" aria-label="Previous frame">
+                <span data-icon="frameback"></span></button
+              ><button class="iconbutton play" id="play" title="Play / pause (Space)" aria-label="Play">
+                <span data-icon="play"></span></button
+              ><button class="iconbutton" id="frameForward" title="Next frame (→)" aria-label="Next frame">
+                <span data-icon="frameforward"></span></button
+              ><button class="iconbutton" id="next" title="Next edit" aria-label="Next edit">
+                <span data-icon="next"></span>
+              </button>
+            </div>
+            <div class="viewer-meta">
+              <button
+                class="textbutton viewer-zoom"
+                id="viewerZoom"
+                aria-label="Reset viewer zoom to fit"
+                title="Wheel to zoom · Drag to pan · Double-click to fit"
+              >
+                Fit</button
+              ><select
+                id="previewQuality"
+                aria-label="Preview resolution"
+                title="Playback resolution relative to the timeline"
+              >
+                <option value="full">Full</option>
+                <option value="half">1/2</option>
+                <option value="quarter">1/4</option></select
+              ><span id="viewerResolution">960 × 540</span
+              ><button class="iconbutton" id="loop" title="Loop playback" aria-label="Loop playback">
+                <span data-icon="loop"></span>
+              </button>
+            </div>
+          </div>
+        </section>
+        <section class="takes" id="takes" aria-label="Takes for the selected clip">
+          <div class="takes-head">
+            <span class="takes-title">Takes<span id="takeCount">0</span></span
+            ><span class="takes-clip small" id="takesClip"></span
+            ><button
+              class="outline compare-strip"
+              id="compareTakesStrip"
+              title="Compare two takes (C)"
+              aria-pressed="false"
+            >
+              Compare</button
+            ><span class="takes-keys small"
+              ><kbd>↑</kbd><kbd>↓</kbd> flip · <kbd>Enter</kbd> use · <kbd>Q</kbd> source</span
+            >
+          </div>
+          <div class="take-list" id="takeList"></div>
+        </section>
+        <aside class="inspector" id="inspector" aria-label="Clip inspector">
+          <div
+            class="panel-resize inspector-resize"
+            id="inspectorResize"
+            role="separator"
+            aria-label="Resize clip inspector"
+            aria-orientation="vertical"
+            aria-controls="inspector"
+            tabindex="0"
+            title="Drag to resize inspector; double-click to reset"
+          ></div>
+          <div class="inspector-head">
+            <input class="inspector-name" id="clipName" aria-label="Selected clip name" />
+            <div class="inspector-tabs" role="tablist" aria-label="Inspector">
+              <button class="active" id="inputsInspectorTab" role="tab" aria-selected="true">Inputs</button
+              ><button id="audioInspectorTab" role="tab" aria-selected="false">Audio</button>
+            </div>
+            <button class="iconbutton" id="openWorkflow" title="Open workflow" aria-label="Open workflow">
+              <span data-icon="nodes"></span>
+            </button>
+          </div>
+          <div class="panel-scroll">
+            <div id="inspectorContent"></div>
+            <section class="clip-notes" id="clipNotesSection" hidden aria-label="Notes"></section>
+          </div>
+          <div class="inspector-foot">
+            <p class="generate-reason" id="generateReason" role="status" hidden></p>
+            <button class="primary generate" id="generate">
+              <span data-icon="spark"></span><span id="generateLabel">Generate</span>
+            </button>
+            <div class="foot-note">Local Comfy · new takes stay unselected</div>
+          </div>
+        </aside>
+      </div>
+      <div class="timeline-toolbar">
+        <div
+          class="timeline-resize"
+          id="timelineResize"
+          role="separator"
+          aria-label="Resize timeline"
+          aria-orientation="horizontal"
+          tabindex="0"
+          title="Drag to resize timeline; double-click to reset"
+        ></div>
+        <div class="tools">
+          <button class="outline" id="addVideoTrack" title="Add a video track">+ Track</button
+          ><button
+            class="iconbutton"
+            id="pasteImageTimeline"
+            title="Paste image to timeline (Ctrl+V)"
+            aria-label="Paste image to timeline"
+          >
+            <span data-icon="clipboard"></span></button
+          ><button class="iconbutton" id="split" title="Split at playhead (B)" aria-label="Split at playhead">
+            <span data-icon="scissors"></span></button
+          ><button
+            class="iconbutton"
+            id="duplicate"
+            title="Duplicate selected clip"
+            aria-label="Duplicate selected clip"
+          >
+            <span data-icon="copy"></span></button
+          ><button
+            class="iconbutton"
+            id="remove"
+            title="Delete selected clip (Delete)"
+            aria-label="Delete selected clip"
+          >
+            <span data-icon="trash"></span></button
+          ><button
+            class="history-button monitor-button"
+            id="monitorMute"
+            title="Unmute monitor; export mix is unchanged"
+            aria-label="Mute monitor"
+            aria-pressed="true"
+          >
+            <span data-icon="mute"></span></button
+          ><span class="mix-meter" id="mixMeter" title="Monitor peak level"><i id="mixLevel"></i></span
+          ><button
+            class="iconbutton"
+            id="importAudio"
+            title="Add audio from an audio or video file"
+            aria-label="Add audio"
+          >
+            <span data-icon="audio"></span></button
+          ><span class="sep"></span
+          ><button class="iconbutton active" id="snap" title="Snap to edits (N)" aria-label="Snap to edits">
+            <span data-icon="magnet"></span></button
+          ><span class="gesture-hint" id="gestureHint">Drag clips or edges</span
+          ><button
+            class="iconbutton"
+            id="gestureHelp"
+            title="Editing gestures and shortcuts"
+            aria-label="Editing gestures and shortcuts"
+          >
+            <span data-icon="keyboard"></span>
+          </button>
+        </div>
+        <div class="history-tools" role="group" aria-label="Edit history">
+          <button class="history-button" id="undo" title="Undo (Ctrl+Z)" aria-label="Undo">
+            <span data-icon="undo"></span><span>Undo</span></button
+          ><button class="history-button" id="redo" title="Redo (Ctrl+Shift+Z or Ctrl+Y)" aria-label="Redo">
+            <span data-icon="redo"></span><span>Redo</span>
+          </button>
+        </div>
+        <div class="timeline-name">
+          <span class="mono" id="timelineTime">00:00:00:00</span><span class="sequence-name">Sequence 01</span>
+          <span class="small" id="sequenceStats">3 clips · 00:00:11:00</span>
+        </div>
+        <div class="zoom">
+          <button class="iconbutton" id="fit" title="Fit timeline (Shift+Z)" aria-label="Fit timeline">
+            <span data-icon="fit"></span></button
+          ><button
+            class="iconbutton zoom-step"
+            id="zoomOut"
+            title="Zoom timeline out (−)"
+            aria-label="Zoom timeline out"
+          >
+            −</button
+          ><input id="zoom" type="range" min="100" max="1600" step="1" value="100" aria-label="Timeline zoom" /><button
+            class="iconbutton zoom-step"
+            id="zoomIn"
+            title="Zoom timeline in (+)"
+            aria-label="Zoom timeline in"
+          >
+            +</button
+          ><span id="zoomValue">100%</span>
+        </div>
+      </div>
+      <section class="timeline-shell" aria-label="Editing timeline">
+        <div class="track-labels">
+          <div id="trackHeaders">
+            <div class="track-label-time"><span class="project-fps">24</span> fps</div>
+            <div id="videoTrackLabels"></div>
+            <div id="sourceTrackLabels">
+              <div class="track-label audio source-track-label" id="sourceTrackHeader">
+                <span class="track-title"><b>A1</b><small>Clip audio</small></span
+                ><button
+                  class="track-toggle"
+                  id="trackMute"
+                  title="Mute A1 clip audio in the mix"
+                  aria-label="Mute clip audio"
+                  aria-pressed="false"
+                >
+                  M</button
+                ><button
+                  class="track-toggle"
+                  id="trackSolo"
+                  title="Solo clip audio"
+                  aria-label="Solo clip audio"
+                  aria-pressed="false"
+                >
+                  S
+                </button>
+              </div>
+              <div id="sourceExtraTrackLabels"></div>
+            </div>
+            <div class="track-label audio" id="musicTrackHeader">
+              <span class="track-title"><b>A2</b><small>Soundtrack</small></span
+              ><button
+                class="track-toggle"
+                id="musicMute"
+                title="Mute soundtrack in the mix"
+                aria-label="Mute soundtrack"
+                aria-pressed="false"
+              >
+                M</button
+              ><button
+                class="track-toggle"
+                id="musicSolo"
+                title="Solo soundtrack"
+                aria-label="Solo soundtrack"
+                aria-pressed="false"
+              >
+                S
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="timeline-scroll" id="timelineScroll">
+          <div class="timeline-content" id="timelineContent">
+            <div class="ruler" id="ruler" aria-label="Timeline ruler"></div>
+            <div class="clip-lane" id="clipLane"></div>
+            <button class="add-shot" id="addShot" hidden><span data-icon="plus"></span>Add shot</button>
+            <div class="audio-lane" id="audioLane"></div>
+            <div class="audio-lane music-lane" id="musicLane"></div>
+            <div class="timeline-hint" id="timelineHint">
+              Drag clips to reorder · drag an edge to ripple trim · drop media or workflows to add
+            </div>
+            <div class="playhead" id="playhead"></div>
+            <div class="drop-line" id="dropLine" hidden></div>
+          </div>
+        </div>
+      </section>
+      <footer class="footer">
+        <span class="status-message" id="status">Ready</span
+        ><button class="textbutton keyboard-hint" id="help"><span data-icon="keyboard"></span>Shortcuts</button>
+      </footer>
+      <aside
+        class="renders-panel render-dialog"
+        id="rendersPanel"
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="rendersTitle"
+        hidden
+      ></aside>
+      <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
+      <div class="modal-overlay" id="modalOverlay" hidden>
+        <section class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"></section>
+      </div>
+      <div class="external-drop" id="externalDropHint" hidden>
+        <strong id="externalDropTitle">Import workflow or media</strong
+        ><span>Workflow JSON · video · image · audio</span>
+      </div>
+      <input id="mediaFiles" type="file" accept=".json,video/*,image/*,audio/*" multiple hidden /><input
+        id="audioFiles"
+        type="file"
+        accept="audio/*,video/*,.wav,.mp3,.m4a,.aac,.ogg,.flac,.opus,.mp4,.mov,.webm,.mkv,.m4v"
+        multiple
+        hidden
+      /><input id="sourceFile" type="file" hidden /><input id="projectFile" type="file" accept=".json" hidden />
+    </main>
 
-<script type="module" src="/spool/ui/bootstrap.js"></script>
-</body>
+    <script type="module" src="/spool/ui/bootstrap.js"></script>
+  </body>
 </html>

@@ -1,4 +1,5 @@
 """Exclusive process-lifetime dispatch ownership; the database heartbeat is informational."""
+
 import os
 import errno
 from pathlib import Path
@@ -21,9 +22,11 @@ def atomic_replace(pending, target):
             pending.replace(target)
             return
         except OSError as error:
-            if index == 20 or (error.errno not in (errno.EACCES, errno.EPERM) and getattr(error, "winerror", None) not in (5, 32, 33)):
+            if index == 20 or (
+                error.errno not in (errno.EACCES, errno.EPERM) and getattr(error, "winerror", None) not in (5, 32, 33)
+            ):
                 raise
-            time.sleep(.1)
+            time.sleep(0.1)
 
 
 class ExecutorBusy(RuntimeError):
@@ -48,8 +51,10 @@ class ExecutorLock:
                 fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as error:
             handle.close()
-            if error.errno in (errno.EACCES, errno.EAGAIN) or getattr(error, 'winerror', None) in (32, 33):
-                raise ExecutorBusy("Another Comfy process owns this Spool store. Use its paired host or a separate test store.") from None
+            if error.errno in (errno.EACCES, errno.EAGAIN) or getattr(error, "winerror", None) in (32, 33):
+                raise ExecutorBusy(
+                    "Another Comfy process owns this Spool store. Use its paired host or a separate test store."
+                ) from None
             raise
         self.handle = handle
 
@@ -81,7 +86,7 @@ def file_lock(path):
                     raise
                 if time.monotonic() >= deadline:
                     raise Conflict("Project is busy in another editor. Try again.") from error
-                time.sleep(.05)
+                time.sleep(0.05)
         try:
             yield
         finally:

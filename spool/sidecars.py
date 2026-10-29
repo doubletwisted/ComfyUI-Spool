@@ -1,4 +1,5 @@
 """Editable Comfy graphs beside media; embedded generation evidence stays intact."""
+
 import copy
 import hashlib
 import json
@@ -45,9 +46,22 @@ def read(source):
         cache = extra.get("spoolWorkflow") if isinstance(extra, dict) else None
         cache = cache if isinstance(cache, dict) else {}
         valid = cache.get("schemaVersion") == 1 and cache.get("graphHash") == graph_hash(graph)
-        capture = {key: copy.deepcopy(cache[key]) for key in ("prompt", "bindings", "result", "provenance", "widgetBindings", "inputRules") if valid and key in cache}
-        capture.update({"workflow": graph_only(graph), "preferWorkflow": True,
-                        "sidecar": {"sha256": hashlib.sha256(raw).hexdigest(), "name": path.name, "needsSerialization": not bool(capture.get("prompt"))}})
+        capture = {
+            key: copy.deepcopy(cache[key])
+            for key in ("prompt", "bindings", "result", "provenance", "widgetBindings", "inputRules")
+            if valid and key in cache
+        }
+        capture.update(
+            {
+                "workflow": graph_only(graph),
+                "preferWorkflow": True,
+                "sidecar": {
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "name": path.name,
+                    "needsSerialization": not bool(capture.get("prompt")),
+                },
+            }
+        )
         if not isinstance(capture.get("prompt"), dict):
             capture["prompt"] = None
             capture["sidecar"]["needsSerialization"] = True
@@ -64,8 +78,16 @@ def serialize(capture):
     bindings = capture.get("widgetBindings", [])
     if capture.get("prompt"):
         graph, bindings = with_prompt({**capture, "workflow": graph}, capture["prompt"])
-        graph.setdefault("extra", {})["spoolWorkflow"] = {"schemaVersion": 1, "graphHash": graph_hash(graph), "widgetBindings": bindings,
-            **{key: copy.deepcopy(capture[key]) for key in ("prompt", "bindings", "result", "provenance", "inputRules") if key in capture}}
+        graph.setdefault("extra", {})["spoolWorkflow"] = {
+            "schemaVersion": 1,
+            "graphHash": graph_hash(graph),
+            "widgetBindings": bindings,
+            **{
+                key: copy.deepcopy(capture[key])
+                for key in ("prompt", "bindings", "result", "provenance", "inputRules")
+                if key in capture
+            },
+        }
     return json.dumps(graph, ensure_ascii=False, indent=2, allow_nan=False).encode("utf-8")
 
 
@@ -119,4 +141,9 @@ def write_result(store, media, attempt, result):
         if node["class_type"] in ("DeadlineSubmit", "SaveAndSubmitNode"):
             capture["prompt"][identity] = copy.deepcopy(node)
     capture["provenance"] = {"source": "Generated take", "attemptId": attempt["id"], "takeId": attempt["take_id"]}
-    write(media.resolve(result["primary"]["originalFile"]), capture, lock_root=store.root / ".spool" / "locks", replace=False)
+    write(
+        media.resolve(result["primary"]["originalFile"]),
+        capture,
+        lock_root=store.root / ".spool" / "locks",
+        replace=False,
+    )

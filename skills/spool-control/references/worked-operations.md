@@ -22,10 +22,10 @@ from urllib.error import HTTPError
 sys.path.insert(0, str(Path.cwd()))
 from spool.wire import wire, unwire
 
+
 def request(base, path, body=None, method="GET"):
     payload = json.dumps(wire(body), allow_nan=False).encode() if body is not None else None
-    req = Request(base.rstrip("/") + path, data=payload, method=method,
-                  headers={"Content-Type": "application/json"})
+    req = Request(base.rstrip("/") + path, data=payload, method=method, headers={"Content-Type": "application/json"})
     try:
         with urlopen(req, timeout=120) as response:
             return unwire(json.load(response))
@@ -33,9 +33,9 @@ def request(base, path, body=None, method="GET"):
         detail = error.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"HTTP {error.code}: {detail}") from error
 
+
 def save_json(path, value):
-    Path(path).write_text(json.dumps(wire(value), ensure_ascii=False, indent=2,
-                                    allow_nan=False), encoding="utf-8")
+    Path(path).write_text(json.dumps(wire(value), ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
 ```
 
 `request` does not retry. On an error, use commands.md to determine whether the
@@ -60,10 +60,12 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 source = Path(SOURCE_PATH)
-upload = Request(BASE.rstrip("/") + "/spool/api/projects/" + quote(PROJECT, safe="") + "/input",
-                 data=source.read_bytes(), method="POST",
-                 headers={"Content-Type": "application/octet-stream",
-                          "X-Filename": quote(source.name, safe="")})
+upload = Request(
+    BASE.rstrip("/") + "/spool/api/projects/" + quote(PROJECT, safe="") + "/input",
+    data=source.read_bytes(),
+    method="POST",
+    headers={"Content-Type": "application/octet-stream", "X-Filename": quote(source.name, safe="")},
+)
 with urlopen(upload, timeout=120) as response:
     STAGED_FILE = json.load(response)["file"]
 ```
@@ -84,8 +86,7 @@ assert binding.get("asset"), "Use the verified media binding"
 clip.setdefault("inputValues", {})[KEY] = STAGED_FILE
 clip["shotInputs"] = [s for s in clip.get("shotInputs", []) if s["key"] != KEY]
 clip["revision"] = clip.get("revision", 0) + 1
-saved = request(BASE, path, {"revision": project["revision"],
-                            "document": authored(project["document"])}, "PUT")
+saved = request(BASE, path, {"revision": project["revision"], "document": authored(project["document"])}, "PUT")
 save_json("after-source-switch.json", saved)
 actual = next(c for c in saved["document"]["clips"] if c["id"] == CLIP)
 assert actual["inputValues"][KEY] == STAGED_FILE

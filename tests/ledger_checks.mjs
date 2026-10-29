@@ -1,62 +1,224 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import * as L from '../ui/ledger.js';
-const fixture=JSON.parse(fs.readFileSync(new URL('./fixtures/ledger_cases.json',import.meta.url),'utf8'));
-const copy=v=>JSON.parse(JSON.stringify(v)),checks=[];
-for(const c of fixture.cases){assert.deepEqual(L.authored(c.attached),c.authored,c.name);checks.push('Shared authored round trip: '+c.name);}
-for(const c of fixture.merges){
- const local=copy(c.local);assert.equal(L.mergeArrivals(local,c.incoming),local);assert.deepEqual(local,c.merged);checks.push(c.name);
- L.mergeArrivals(local,c.incoming);assert.deepEqual(local,c.merged);checks.push('Repeated project application is idempotent');
- assert.deepEqual(L.preserveArrivals(copy(c.local),c.incoming),c.preserved);checks.push('Undo keeps takes, media and workflow arrivals');
- const earlier=copy(c.local);earlier.importedWorkflows=[{id:'old'},{id:'new-workflow',name:'old metadata'}];
- assert.deepEqual(L.preserveArrivals(earlier,c.incoming).importedWorkflows,[{id:'old'},{id:'new-workflow',name:'old metadata'}]);checks.push('Undo unions imported workflows by identity');
- const signature=L.editSignature(c.local);assert.equal(L.editSignature(c.merged),signature);assert.notEqual(JSON.stringify(L.authored(c.local)),JSON.stringify(L.authored({...c.local,clips:[{...c.local.clips[0],takes:[...c.local.clips[0].takes,{id:'imported-new'}]},c.local.clips[1]]})));checks.push('Edit signature ignores take lists while authored signature includes imports');
- const edited=copy(c.local);edited.clips[0].out++;assert.notEqual(L.editSignature(edited),signature);checks.push('Edit signature changes with trim geometry');
- for(const settings of [{fps:30},{resolution:{width:3840,height:2160}},{fpsExplicit:true}])assert.notEqual(L.editSignature({...c.local,...settings}),signature);checks.push('Edit signature changes with project settings');
- const restored=copy(c.local);L.preserveArrivals(restored,c.incoming);assert.deepEqual(c.local.clips[0].takes,[{id:'imported',media:{file:'assets/black.png',frames:120}}]);checks.push('Preserving arrivals never mutates the input snapshot');
+const fixture = JSON.parse(fs.readFileSync(new URL('./fixtures/ledger_cases.json', import.meta.url), 'utf8'));
+const copy = v => JSON.parse(JSON.stringify(v)),
+  checks = [];
+for (const c of fixture.cases) {
+  assert.deepEqual(L.authored(c.attached), c.authored, c.name);
+  checks.push('Shared authored round trip: ' + c.name);
 }
-const late={clips:[{id:'shot',takes:[{id:'second',number:2,generated:true}]}]};
-L.mergeArrivals(late,{clips:[{id:'shot',takes:[{id:'first',number:1,generated:true},{id:'second',number:2,generated:true}]}],jobs:[]});
-assert.deepEqual(late.clips[0].takes.map(t=>[t.id,t.number]),[['first',1],['second',2]]);
+for (const c of fixture.merges) {
+  const local = copy(c.local);
+  assert.equal(L.mergeArrivals(local, c.incoming), local);
+  assert.deepEqual(local, c.merged);
+  checks.push(c.name);
+  L.mergeArrivals(local, c.incoming);
+  assert.deepEqual(local, c.merged);
+  checks.push('Repeated project application is idempotent');
+  assert.deepEqual(L.preserveArrivals(copy(c.local), c.incoming), c.preserved);
+  checks.push('Undo keeps takes, media and workflow arrivals');
+  const earlier = copy(c.local);
+  earlier.importedWorkflows = [{ id: 'old' }, { id: 'new-workflow', name: 'old metadata' }];
+  assert.deepEqual(L.preserveArrivals(earlier, c.incoming).importedWorkflows, [
+    { id: 'old' },
+    { id: 'new-workflow', name: 'old metadata' },
+  ]);
+  checks.push('Undo unions imported workflows by identity');
+  const signature = L.editSignature(c.local);
+  assert.equal(L.editSignature(c.merged), signature);
+  assert.notEqual(
+    JSON.stringify(L.authored(c.local)),
+    JSON.stringify(
+      L.authored({
+        ...c.local,
+        clips: [{ ...c.local.clips[0], takes: [...c.local.clips[0].takes, { id: 'imported-new' }] }, c.local.clips[1]],
+      }),
+    ),
+  );
+  checks.push('Edit signature ignores take lists while authored signature includes imports');
+  const edited = copy(c.local);
+  edited.clips[0].out++;
+  assert.notEqual(L.editSignature(edited), signature);
+  checks.push('Edit signature changes with trim geometry');
+  for (const settings of [{ fps: 30 }, { resolution: { width: 3840, height: 2160 } }, { fpsExplicit: true }])
+    assert.notEqual(L.editSignature({ ...c.local, ...settings }), signature);
+  checks.push('Edit signature changes with project settings');
+  const restored = copy(c.local);
+  L.preserveArrivals(restored, c.incoming);
+  assert.deepEqual(c.local.clips[0].takes, [{ id: 'imported', media: { file: 'assets/black.png', frames: 120 } }]);
+  checks.push('Preserving arrivals never mutates the input snapshot');
+}
+const late = { clips: [{ id: 'shot', takes: [{ id: 'second', number: 2, generated: true }] }] };
+L.mergeArrivals(late, {
+  clips: [
+    {
+      id: 'shot',
+      takes: [
+        { id: 'first', number: 1, generated: true },
+        { id: 'second', number: 2, generated: true },
+      ],
+    },
+  ],
+  jobs: [],
+});
+assert.deepEqual(
+  late.clips[0].takes.map(t => [t.id, t.number]),
+  [
+    ['first', 1],
+    ['second', 2],
+  ],
+);
 checks.push('Out-of-order results preserve allocated take numbers and ordering');
-assert.notEqual(L.editSignature({...late,brief:'A'}),L.editSignature({...late,brief:'B'}));
+assert.notEqual(L.editSignature({ ...late, brief: 'A' }), L.editSignature({ ...late, brief: 'B' }));
 checks.push('Project brief participates in authored edit history');
-const ordered={project:'QA',resolution:{width:128,height:72},clips:[{id:'shot',out:100,in:0,audio:{muted:false,gainDb:-3},takes:[]}]};
-const reordered={project:'QA',resolution:{height:72,width:128},clips:[{audio:{gainDb:-3,muted:false},in:0,out:100,id:'shot',takes:[]}]};
-assert.equal(L.editSignature(ordered),L.editSignature(reordered));
-assert.equal(L.editSignature(JSON.parse(L.editSignature(ordered))),L.editSignature(ordered));
+const ordered = {
+  project: 'QA',
+  resolution: { width: 128, height: 72 },
+  clips: [{ id: 'shot', out: 100, in: 0, audio: { muted: false, gainDb: -3 }, takes: [] }],
+};
+const reordered = {
+  project: 'QA',
+  resolution: { height: 72, width: 128 },
+  clips: [{ audio: { gainDb: -3, muted: false }, in: 0, out: 100, id: 'shot', takes: [] }],
+};
+assert.equal(L.editSignature(ordered), L.editSignature(reordered));
+assert.equal(L.editSignature(JSON.parse(L.editSignature(ordered))), L.editSignature(ordered));
 checks.push('Saved key order preserves edit identity and historical history signatures normalize');
-const removed={...ordered,hiddenMediaIds:['second','first']};
-assert.notEqual(L.editSignature(removed),L.editSignature(ordered));
-assert.equal(L.editSignature(removed),L.editSignature({...removed,hiddenMediaIds:['first','second']}));
-assert.deepEqual(L.authored({...removed,jobs:[]}).hiddenMediaIds,['second','first']);
-const libraryUndo=L.preserveArrivals({...copy(ordered),hiddenMediaIds:[],media:[]},{...copy(removed),media:[{id:'new-import'}],jobs:[]});
-assert.deepEqual(libraryUndo.hiddenMediaIds,[]);assert.deepEqual(libraryUndo.media,[{id:'new-import'}]);
+const removed = { ...ordered, hiddenMediaIds: ['second', 'first'] };
+assert.notEqual(L.editSignature(removed), L.editSignature(ordered));
+assert.equal(L.editSignature(removed), L.editSignature({ ...removed, hiddenMediaIds: ['first', 'second'] }));
+assert.deepEqual(L.authored({ ...removed, jobs: [] }).hiddenMediaIds, ['second', 'first']);
+const libraryUndo = L.preserveArrivals(
+  { ...copy(ordered), hiddenMediaIds: [], media: [] },
+  { ...copy(removed), media: [{ id: 'new-import' }], jobs: [] },
+);
+assert.deepEqual(libraryUndo.hiddenMediaIds, []);
+assert.deepEqual(libraryUndo.media, [{ id: 'new-import' }]);
 checks.push('Media removal participates in save/history while undo keeps later imported files');
-const arrival={generated:true,toJSON(){throw Error('Generated takes must not be cloned before filtering');}};
-const attached={clips:[{id:'shot',takes:[{id:'original'},arrival]}],jobs:[arrival],recoverableResults:[arrival]};
-assert.deepEqual(L.authored(attached),{clips:[{id:'shot',takes:[{id:'original'}]}]});
-assert.equal(attached.clips[0].takes.length,2);
+const arrival = {
+  generated: true,
+  toJSON() {
+    throw Error('Generated takes must not be cloned before filtering');
+  },
+};
+const attached = {
+  clips: [{ id: 'shot', takes: [{ id: 'original' }, arrival] }],
+  jobs: [arrival],
+  recoverableResults: [arrival],
+};
+assert.deepEqual(L.authored(attached), { clips: [{ id: 'shot', takes: [{ id: 'original' }] }] });
+assert.equal(attached.clips[0].takes.length, 2);
 checks.push('Saving skips generated payloads without copying or mutating them');
-const deletedLocal={clips:[{id:'shot',takes:[{id:'kept',media:{id:'m-kept'}},{id:'deleted',media:{id:'m-deleted'}}]}],media:[{id:'m-deleted'}]},incomingDeletion={clips:[{id:'shot',takes:[{id:'kept',media:{id:'m-kept'}}]}],deletedTakeIds:['deleted'],deletedMediaIds:['m-deleted'],jobs:[]};
-L.mergeArrivals(deletedLocal,incomingDeletion);assert.deepEqual(deletedLocal.clips[0].takes.map(t=>t.id),['kept']);assert.deepEqual(deletedLocal.media,[]);
-const afterUndo=L.preserveArrivals({clips:[{id:'shot',takes:[{id:'deleted',media:{id:'m-deleted'}}]}]},deletedLocal);assert.deepEqual(afterUndo.clips[0].takes.map(t=>t.id),['kept']);assert.deepEqual(afterUndo.deletedTakeIds,['deleted']);
-assert.notEqual(L.editSignature(incomingDeletion),L.editSignature({...incomingDeletion,deletedTakeIds:[],deletedMediaIds:[]}));
+const deletedLocal = {
+    clips: [
+      {
+        id: 'shot',
+        takes: [
+          { id: 'kept', media: { id: 'm-kept' } },
+          { id: 'deleted', media: { id: 'm-deleted' } },
+        ],
+      },
+    ],
+    media: [{ id: 'm-deleted' }],
+  },
+  incomingDeletion = {
+    clips: [{ id: 'shot', takes: [{ id: 'kept', media: { id: 'm-kept' } }] }],
+    deletedTakeIds: ['deleted'],
+    deletedMediaIds: ['m-deleted'],
+    jobs: [],
+  };
+L.mergeArrivals(deletedLocal, incomingDeletion);
+assert.deepEqual(
+  deletedLocal.clips[0].takes.map(t => t.id),
+  ['kept'],
+);
+assert.deepEqual(deletedLocal.media, []);
+const afterUndo = L.preserveArrivals(
+  { clips: [{ id: 'shot', takes: [{ id: 'deleted', media: { id: 'm-deleted' } }] }] },
+  deletedLocal,
+);
+assert.deepEqual(
+  afterUndo.clips[0].takes.map(t => t.id),
+  ['kept'],
+);
+assert.deepEqual(afterUndo.deletedTakeIds, ['deleted']);
+assert.notEqual(
+  L.editSignature(incomingDeletion),
+  L.editSignature({ ...incomingDeletion, deletedTakeIds: [], deletedMediaIds: [] }),
+);
 checks.push('Permanent deletions survive merged drafts and undo without resurrecting files or generated takes');
 // History serialization moved to ui/history.js, which owns the take archive that
 // made a step small enough to persist; tests/history_checks.mjs covers it.
-const cleared=L.preserveArrivals({clips:[],jobs:[]},{clips:[],jobs:[{id:'done',status:'complete'}],clearedRenderIds:['done'],media:[]});
-assert.deepEqual(cleared.clearedRenderIds,['done']);
-assert.equal(L.editSignature(cleared),L.editSignature({...cleared,clearedRenderIds:[]}));
+const cleared = L.preserveArrivals(
+  { clips: [], jobs: [] },
+  { clips: [], jobs: [{ id: 'done', status: 'complete' }], clearedRenderIds: ['done'], media: [] },
+);
+assert.deepEqual(cleared.clearedRenderIds, ['done']);
+assert.equal(L.editSignature(cleared), L.editSignature({ ...cleared, clearedRenderIds: [] }));
 checks.push('Queue clearing survives Undo and arrival merging without changing the editorial signature');
-const fields=JSON.parse(fs.readFileSync(new URL('./fixtures/document_fields.json',import.meta.url),'utf8'));
-assert.deepEqual([...L.EDIT_FIELDS],fields.edit);assert.deepEqual([...L.RECORD_FIELDS],fields.records);assert.deepEqual([...L.VIEW_FIELDS],fields.view);assert.deepEqual([...L.UNDO_SKIPS],fields.undoSkips);
-const every=[...fields.edit,...fields.records,...fields.view];assert.equal(new Set(every).size,every.length,'Edit, record and view fields are disjoint');
-const sample={project:'P',brief:'B',fps:24,fpsExplicit:true,resolution:{width:960,height:540},exportRange:{start:0,end:8},clips:[{id:'a',in:0,out:8,takes:[]}],tailGap:2,videoTracks:2,videoTailGaps:{2:1},disabledVideoTracks:[2],audioClips:[{id:'s'}],audioTracks:{musicMuted:true},hiddenMediaIds:['m'],deletedTakeIds:['t'],deletedMediaIds:['d'],jobs:[{id:'j'}],recoverableResults:[{id:'r'}],media:[{id:'m'}],importedWorkflows:[{id:'w'}],clearedRenderIds:['c'],selected:'a',frame:3,zoom:200};
-const signature=L.editSignature(sample);
-const changed=(key,value)=>key==='clips'?[{id:'b',in:0,out:8,takes:[]}]:Array.isArray(value)?[...value,typeof value[0]==='number'?9:'extra']:value&&typeof value==='object'?{...value,changed:true}:typeof value==='number'?value+1:typeof value==='boolean'?!value:value+'!';
-for(const key of fields.edit)assert.notEqual(L.editSignature({...sample,[key]:changed(key,sample[key])}),signature,'Edit field '+key+' takes part in the signature');
-for(const key of [...fields.records,...fields.view])assert.equal(L.editSignature({...sample,[key]:'changed'}),signature,'Field '+key+' is not an authored edit');
-assert.deepEqual(Object.keys(L.savedDocument(sample)).sort(),[...fields.edit,...fields.records].filter(key=>!fields.serverOwned.includes(key)||key==='jobs').sort(),'The editor saves every edit field and record except recoverable results');
+const fields = JSON.parse(fs.readFileSync(new URL('./fixtures/document_fields.json', import.meta.url), 'utf8'));
+assert.deepEqual([...L.EDIT_FIELDS], fields.edit);
+assert.deepEqual([...L.RECORD_FIELDS], fields.records);
+assert.deepEqual([...L.VIEW_FIELDS], fields.view);
+assert.deepEqual([...L.UNDO_SKIPS], fields.undoSkips);
+const every = [...fields.edit, ...fields.records, ...fields.view];
+assert.equal(new Set(every).size, every.length, 'Edit, record and view fields are disjoint');
+const sample = {
+  project: 'P',
+  brief: 'B',
+  fps: 24,
+  fpsExplicit: true,
+  resolution: { width: 960, height: 540 },
+  exportRange: { start: 0, end: 8 },
+  clips: [{ id: 'a', in: 0, out: 8, takes: [] }],
+  tailGap: 2,
+  videoTracks: 2,
+  videoTailGaps: { 2: 1 },
+  disabledVideoTracks: [2],
+  audioClips: [{ id: 's' }],
+  audioTracks: { musicMuted: true },
+  hiddenMediaIds: ['m'],
+  deletedTakeIds: ['t'],
+  deletedMediaIds: ['d'],
+  jobs: [{ id: 'j' }],
+  recoverableResults: [{ id: 'r' }],
+  media: [{ id: 'm' }],
+  importedWorkflows: [{ id: 'w' }],
+  clearedRenderIds: ['c'],
+  selected: 'a',
+  frame: 3,
+  zoom: 200,
+};
+const signature = L.editSignature(sample);
+const changed = (key, value) =>
+  key === 'clips'
+    ? [{ id: 'b', in: 0, out: 8, takes: [] }]
+    : Array.isArray(value)
+      ? [...value, typeof value[0] === 'number' ? 9 : 'extra']
+      : value && typeof value === 'object'
+        ? { ...value, changed: true }
+        : typeof value === 'number'
+          ? value + 1
+          : typeof value === 'boolean'
+            ? !value
+            : value + '!';
+for (const key of fields.edit)
+  assert.notEqual(
+    L.editSignature({ ...sample, [key]: changed(key, sample[key]) }),
+    signature,
+    'Edit field ' + key + ' takes part in the signature',
+  );
+for (const key of [...fields.records, ...fields.view])
+  assert.equal(
+    L.editSignature({ ...sample, [key]: 'changed' }),
+    signature,
+    'Field ' + key + ' is not an authored edit',
+  );
+assert.deepEqual(
+  Object.keys(L.savedDocument(sample)).sort(),
+  [...fields.edit, ...fields.records].filter(key => !fields.serverOwned.includes(key) || key === 'jobs').sort(),
+  'The editor saves every edit field and record except recoverable results',
+);
 checks.push('One document field registry drives saving, edit signatures and undo');
-console.log(JSON.stringify({passed:checks.length,checks},null,2));
+console.log(JSON.stringify({ passed: checks.length, checks }, null, 2));

@@ -1,4 +1,5 @@
 """Runtime requirements reported by the health and capability routes."""
+
 import platform
 import sys
 
@@ -13,8 +14,15 @@ def report():
     tools = {name: find_tool(name) is not None for name in ("ffmpeg", "ffprobe")}
     missing = []
     if sys.version_info < MINIMUM_PYTHON:
-        missing.append("Spool needs Python %d.%d or newer; this ComfyUI runs Python %s." % (*MINIMUM_PYTHON, platform.python_version()))
-    missing += ["Install %s and add it to PATH; Spool uses it to review, prepare and export media." % name for name, found in tools.items() if not found]
+        missing.append(
+            "Spool needs Python %d.%d or newer; this ComfyUI runs Python %s."
+            % (*MINIMUM_PYTHON, platform.python_version())
+        )
+    missing += [
+        "Install %s and add it to PATH; Spool uses it to review, prepare and export media." % name
+        for name, found in tools.items()
+        if not found
+    ]
     return {
         "python": platform.python_version(),
         **tools,

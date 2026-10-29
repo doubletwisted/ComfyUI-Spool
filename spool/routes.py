@@ -47,6 +47,7 @@ def register(server, store, media, executor=None):
     collector = executor.collector if executor is not None else Collector(store, media)
     cloud = CloudExecutor(store, media, collector)
     launcher = ComfyLauncher(store)
+
     def services(request):
         project_id = request.match_info.get("project") or request.query.get("projectId")
         if project_id:
@@ -60,15 +61,18 @@ def register(server, store, media, executor=None):
         return store, media
 
     def response(value):
-        result = web.Response(text=json.dumps(wire(value)), content_type="application/json", zlib_executor_size=64 * 1024)
+        result = web.Response(
+            text=json.dumps(wire(value)), content_type="application/json", zlib_executor_size=64 * 1024
+        )
         if len(result.body) >= 64 * 1024:
             result.enable_compression()
-            result.headers['Vary'] = 'Accept-Encoding'
+            result.headers["Vary"] = "Accept-Encoding"
         return result
 
     async def project_response(request, value):
         def serialize():
             return response(ledger.editor_project(value) if request.headers.get("X-Spool-View") == "editor" else value)
+
         return await asyncio.to_thread(serialize)
 
     def file_response(path, **kwargs):
@@ -87,7 +91,11 @@ def register(server, store, media, executor=None):
         The host-name check stops DNS rebinding: another site cannot make the
         browser address Spool by a loopback host name and its own origin at once.
         """
-        return request.remote in LOOPBACK_PEERS and (request.url.host or "").lower() in LOOPBACK_HOSTS and same_origin(request)
+        return (
+            request.remote in LOOPBACK_PEERS
+            and (request.url.host or "").lower() in LOOPBACK_HOSTS
+            and same_origin(request)
+        )
 
     def local_control(request, message="Use this from the Spool studio on the computer running Spool"):
         """Guard requests that reach beyond project files: paths, programs, folders."""
@@ -99,8 +107,14 @@ def register(server, store, media, executor=None):
         # Every Spool change must come from Spool's own pages or from tools that
         # send no Origin (the CLI and agents). Comfy's origin check is off under
         # --enable-cors-header and absent in standalone mode.
-        if request.path.startswith("/spool/") and request.method not in ("GET", "HEAD", "OPTIONS") and not same_origin(request):
-            return web.json_response({"error": "Spool accepts changes only from its own pages and local tools"}, status=403)
+        if (
+            request.path.startswith("/spool/")
+            and request.method not in ("GET", "HEAD", "OPTIONS")
+            and not same_origin(request)
+        ):
+            return web.json_response(
+                {"error": "Spool accepts changes only from its own pages and local tools"}, status=403
+            )
         return await handler(request)
 
     server.app.middlewares.append(guard)
@@ -126,12 +140,12 @@ def register(server, store, media, executor=None):
         return await asyncio.to_thread(project_media.prepare_workflow, capture, strict, is_local(request))
 
     async def prepare_capture(capture, request):
-        builtin = capture.get('provenance', {}).get('builtinTemplate') in templates.CATALOG
+        builtin = capture.get("provenance", {}).get("builtinTemplate") in templates.CATALOG
         prepared = await prepare_inputs(capture, request, not builtin)
         if builtin:
-            bound = {(b['nodeId'], b['input']) for b in capture.get('bindings', []) if b.get('asset')}
-            if any((m['nodeId'], m['input']) not in bound for m in prepared['inputRecovery']['missing']):
-                raise ValueError('This template has an unbound missing source. Update its studio mapping.')
+            bound = {(b["nodeId"], b["input"]) for b in capture.get("bindings", []) if b.get("asset")}
+            if any((m["nodeId"], m["input"]) not in bound for m in prepared["inputRecovery"]["missing"]):
+                raise ValueError("This template has an unbound missing source. Update its studio mapping.")
         return prepared
 
     def annotate(value):
@@ -142,7 +156,7 @@ def register(server, store, media, executor=None):
             started = time.perf_counter()
             try:
                 result = await handler(request)
-                result.headers['Server-Timing'] = f'spool;dur={(time.perf_counter() - started) * 1000:.1f}'
+                result.headers["Server-Timing"] = f"spool;dur={(time.perf_counter() - started) * 1000:.1f}"
                 return result
             except Conflict as error:
                 value = {"error": str(error)}
@@ -158,7 +172,8 @@ def register(server, store, media, executor=None):
             finally:
                 elapsed = time.perf_counter() - started
                 if elapsed >= 3:
-                    logging.warning('Spool slow request: %s %s %.0f ms', request.method, request.path, elapsed * 1000)
+                    logging.warning("Spool slow request: %s %s %.0f ms", request.method, request.path, elapsed * 1000)
+
         return wrapped
 
     @routes.get("/spool/")
@@ -192,7 +207,11 @@ def register(server, store, media, executor=None):
         data = unwire(await request.json())
         if data.get("folder"):
             local_control(request)
-        return response(await asyncio.to_thread(store.create, data.get("document"), **({"folder": data["folder"]} if data.get("folder") else {})))
+        return response(
+            await asyncio.to_thread(
+                store.create, data.get("document"), **({"folder": data["folder"]} if data.get("folder") else {})
+            )
+        )
 
     @routes.post("/spool/api/open-project")
     @endpoint
@@ -236,32 +255,53 @@ def register(server, store, media, executor=None):
     async def generation_preview(request):
         store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
-        return response(await asyncio.to_thread(requests.preview, store, media, request.match_info["project"], data["revision"], data["clipId"]))
+        return response(
+            await asyncio.to_thread(
+                requests.preview, store, media, request.match_info["project"], data["revision"], data["clipId"]
+            )
+        )
 
     @routes.get("/spool/api/projects/{project}/status")
     @endpoint
     async def project_status(request):
         store, media = await asyncio.to_thread(services, request)
-        return response(await asyncio.to_thread(commands.status, store, request.match_info["project"], request.query.get("clipId"), int(request.query.get("limit", 50)), int(request.query.get("offset", 0))))
+        return response(
+            await asyncio.to_thread(
+                commands.status,
+                store,
+                request.match_info["project"],
+                request.query.get("clipId"),
+                int(request.query.get("limit", 50)),
+                int(request.query.get("offset", 0)),
+            )
+        )
 
     @routes.post("/spool/api/projects/{project}/commands")
     @endpoint
     async def command(request):
         store, media = await asyncio.to_thread(services, request)
-        return response(await asyncio.to_thread(commands.execute, store, media, request.match_info["project"], unwire(await request.json())))
+        return response(
+            await asyncio.to_thread(
+                commands.execute, store, media, request.match_info["project"], unwire(await request.json())
+            )
+        )
 
     @routes.post("/spool/api/projects/{project}/focus/{view}")
     @endpoint
     async def publish_focus(request):
         store, media = await asyncio.to_thread(services, request)
-        await asyncio.to_thread(store.publish_focus, request.match_info["project"], request.match_info["view"], await request.json())
+        await asyncio.to_thread(
+            store.publish_focus, request.match_info["project"], request.match_info["view"], await request.json()
+        )
         return response({"ok": True})
 
     @routes.get("/spool/api/projects/{project}/focus")
     @endpoint
     async def focus(request):
         store, media = await asyncio.to_thread(services, request)
-        return response(await asyncio.to_thread(store.focused, request.match_info["project"], request.query.get("viewId")))
+        return response(
+            await asyncio.to_thread(store.focused, request.match_info["project"], request.query.get("viewId"))
+        )
 
     @routes.post("/spool/api/projects/{project}/comparison")
     @endpoint
@@ -277,7 +317,9 @@ def register(server, store, media, executor=None):
     async def original_media(request):
         store, media = await asyncio.to_thread(services, request)
         local_control(request, "Preview original footage from the computer running Spool")
-        selected = await asyncio.to_thread(store.media_record, request.match_info["project"], request.match_info["media"])
+        selected = await asyncio.to_thread(
+            store.media_record, request.match_info["project"], request.match_info["media"]
+        )
         return file_response((await asyncio.to_thread(media.original_source, selected))["path"])
 
     @routes.get("/spool/api/projects/{project}/media/{media}/evidence")
@@ -316,11 +358,15 @@ def register(server, store, media, executor=None):
         if isinstance(fps, bool) or not isinstance(fps, (int, float)) or not 1 <= fps <= 240:
             raise ValueError("Choose a project frame rate between 1 and 240")
         try:
-            selected = await asyncio.to_thread(store.media_record, request.match_info["project"], request.match_info["media"], ("video", "image"))
+            selected = await asyncio.to_thread(
+                store.media_record, request.match_info["project"], request.match_info["media"], ("video", "image")
+            )
         except ValueError:
-            selected = await asyncio.to_thread(store.media_record, request.match_info["project"], request.match_info["media"], ('audio',))
-        if selected['kind'] == 'audio' and not selected.get('fps'):
-            raise ValueError('This audio source does not contain video frames')
+            selected = await asyncio.to_thread(
+                store.media_record, request.match_info["project"], request.match_info["media"], ("audio",)
+            )
+        if selected["kind"] == "audio" and not selected.get("fps"):
+            raise ValueError("This audio source does not contain video frames")
         key = await asyncio.to_thread(media.preview_path, selected, width, height, fps)
         if key not in preview_jobs:
             preview_jobs[key] = asyncio.create_task(asyncio.to_thread(media.preview, selected, width, height, fps))
@@ -349,12 +395,17 @@ def register(server, store, media, executor=None):
         text = await request.text()
         data = await asyncio.to_thread(lambda: unwire(json.loads(text)))
         recipes = {}
-        for version, capture in data.get('workflowRecipes', {}).items():
+        for version, capture in data.get("workflowRecipes", {}).items():
             recipes[version] = await prepare_capture(capture, request)
-            for clip in data['document']['clips']:
-                if clip.get('workflowVersion') == version and clip.get('inputValues'):
-                    operations.restage(capture, recipes[version], clip['inputValues'])
-        return await project_response(request, await asyncio.to_thread(store.save, request.match_info["project"], data["revision"], data["document"], recipes))
+            for clip in data["document"]["clips"]:
+                if clip.get("workflowVersion") == version and clip.get("inputValues"):
+                    operations.restage(capture, recipes[version], clip["inputValues"])
+        return await project_response(
+            request,
+            await asyncio.to_thread(
+                store.save, request.match_info["project"], data["revision"], data["document"], recipes
+            ),
+        )
 
     @routes.post("/spool/api/projects/{project}/import-workflow")
     @endpoint
@@ -365,7 +416,9 @@ def register(server, store, media, executor=None):
         project_id = request.match_info["project"]
         project = await asyncio.to_thread(store.get, project_id)
         project["document"].setdefault("importedWorkflows", []).append(imported)
-        saved = await asyncio.to_thread(store.save, project_id, int(request.headers["X-Spool-Revision"]), project["document"])
+        saved = await asyncio.to_thread(
+            store.save, project_id, int(request.headers["X-Spool-Revision"]), project["document"]
+        )
         return response({"project": saved, "workflow": imported})
 
     @routes.post("/spool/api/projects/{project}/capture/{clip}")
@@ -377,21 +430,38 @@ def register(server, store, media, executor=None):
         data["capture"] = await prepare_capture(original, request)
         if data.get("overrides"):
             operations.restage(original, data["capture"], data["overrides"])
-        saved = await asyncio.to_thread(operations.apply_capture, store, request.match_info["project"], data["revision"], request.match_info["clip"], data["capture"],
-                                        data.get("overrides"), save_sidecar=bool(data.get("saveSidecar")), reset_inputs=bool(data.get("resetInputs")))
+        saved = await asyncio.to_thread(
+            operations.apply_capture,
+            store,
+            request.match_info["project"],
+            data["revision"],
+            request.match_info["clip"],
+            data["capture"],
+            data.get("overrides"),
+            save_sidecar=bool(data.get("saveSidecar")),
+            reset_inputs=bool(data.get("resetInputs")),
+        )
         return await project_response(request, saved)
 
     @routes.get("/spool/api/projects/{project}/take-workflow/{clip}/{take}")
     @endpoint
     async def take_setup(request):
         store, media = await asyncio.to_thread(services, request)
-        capture = await asyncio.to_thread(take_workflow.resolve, store, request.match_info["project"], request.match_info["clip"], request.match_info["take"])
+        capture = await asyncio.to_thread(
+            take_workflow.resolve,
+            store,
+            request.match_info["project"],
+            request.match_info["clip"],
+            request.match_info["take"],
+        )
         return response(await prepare_inputs(capture, request, True) if capture else None)
 
     def take_source(request):
         selected, project_media = services(request)
         clip = selected.clip(request.match_info["project"], request.match_info["clip"])
-        take = next((t for t in clip["takes"] if t["id"] == request.match_info["take"] and not t.get("placeholder")), None)
+        take = next(
+            (t for t in clip["takes"] if t["id"] == request.match_info["take"] and not t.get("placeholder")), None
+        )
         if not take:
             raise KeyError("Take not found")
         path = project_media.original_source(take["media"])["path"]
@@ -404,7 +474,9 @@ def register(server, store, media, executor=None):
     @endpoint
     async def download_take(request):
         path = await asyncio.to_thread(take_source, request)
-        return file_response(path, headers={"Content-Disposition": content_disposition_header("attachment", filename=path.name)})
+        return file_response(
+            path, headers={"Content-Disposition": content_disposition_header("attachment", filename=path.name)}
+        )
 
     @routes.post("/spool/api/projects/{project}/take-file/{clip}/{take}/reveal")
     @endpoint
@@ -420,6 +492,7 @@ def register(server, store, media, executor=None):
         local_control(request)
         if not system.file_manager():
             raise ValueError("Opening clip folders needs a desktop with xdg-open")
+
         def folder():
             selected, _ = services(request)
             clip = selected.clip(request.match_info["project"], request.match_info["clip"])
@@ -429,6 +502,7 @@ def register(server, store, media, executor=None):
                 raise ValueError("Clip folder must be inside this project's output folder")
             path.mkdir(parents=True, exist_ok=True)
             return path
+
         path = await asyncio.to_thread(folder)
         system.show(path)
         return response({"ok": True})
@@ -439,7 +513,15 @@ def register(server, store, media, executor=None):
         store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
         capture = await prepare_inputs(data["capture"], request, True) if data.get("capture") else None
-        saved = await asyncio.to_thread(operations.use_take, store, request.match_info["project"], data["revision"], request.match_info["clip"], data["takeId"], capture)
+        saved = await asyncio.to_thread(
+            operations.use_take,
+            store,
+            request.match_info["project"],
+            data["revision"],
+            request.match_info["clip"],
+            data["takeId"],
+            capture,
+        )
         return await project_response(request, saved)
 
     @routes.post("/spool/api/prepare-workflow")
@@ -453,7 +535,16 @@ def register(server, store, media, executor=None):
     async def delete_take_files(request):
         selected, _ = await asyncio.to_thread(services, request)
         data = await request.json()
-        return response(await asyncio.to_thread(take_files.delete, selected, request.match_info["project"], data["revision"], request.match_info["clip"], data["takeIds"]))
+        return response(
+            await asyncio.to_thread(
+                take_files.delete,
+                selected,
+                request.match_info["project"],
+                data["revision"],
+                request.match_info["clip"],
+                data["takeIds"],
+            )
+        )
 
     @routes.get("/spool/api/workflows/{version}")
     @endpoint
@@ -467,7 +558,9 @@ def register(server, store, media, executor=None):
         store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
         if data.get("action") in ("open", "prepare"):
-            prepared = await prepare_inputs({"workflow": data.get("workflow"), "prompt": data.get("prompt")}, request, True)
+            prepared = await prepare_inputs(
+                {"workflow": data.get("workflow"), "prompt": data.get("prompt")}, request, True
+            )
             data["workflow"] = prepared["workflow"]
             data["prompt"] = prepared.get("prompt")
             data["inputRecovery"] = prepared["inputRecovery"]
@@ -494,57 +587,86 @@ def register(server, store, media, executor=None):
         project_id = request.match_info["project"]
         items = data.get("items")
         if executor is not None:
-            value = await executor.queue(project_id, data["revision"], data.get("clips", []), data.get("count", 1), data.get("operationId"), data.get("actor", "human"), items)
+            value = await executor.queue(
+                project_id,
+                data["revision"],
+                data.get("clips", []),
+                data.get("count", 1),
+                data.get("operationId"),
+                data.get("actor", "human"),
+                items,
+            )
         else:
-            value = await asyncio.to_thread(requests.accept, store, media, project_id, data["revision"], items if items is not None else [{"clipId": c, "count": data["count"]} for c in data["clips"]], data.get("operationId"), data.get("actor", "human"))
+            value = await asyncio.to_thread(
+                requests.accept,
+                store,
+                media,
+                project_id,
+                data["revision"],
+                items if items is not None else [{"clipId": c, "count": data["count"]} for c in data["clips"]],
+                data.get("operationId"),
+                data.get("actor", "human"),
+            )
         return response(value)
 
     @routes.get("/spool/api/projects/{project}/events")
     @endpoint
     async def events(request):
         store, media = await asyncio.to_thread(services, request)
+
         def read():
             store.exists(request.match_info["project"])
-            return store.events(request.match_info["project"], int(request.query.get("since", "0")), int(request.query.get("limit", "100")), request.query.get("latest") == "true")
+            return store.events(
+                request.match_info["project"],
+                int(request.query.get("since", "0")),
+                int(request.query.get("limit", "100")),
+                request.query.get("latest") == "true",
+            )
+
         return response(await asyncio.to_thread(read))
 
-    @routes.get('/spool/api/comfy')
+    @routes.get("/spool/api/comfy")
     @endpoint
     async def comfy_status(request):
         store, media = await asyncio.to_thread(services, request)
         local_control(request)
         return response({**await launcher.status(), **credentials.key_status()})
 
-    @routes.put('/spool/api/comfy/settings')
+    @routes.put("/spool/api/comfy/settings")
     @endpoint
     async def comfy_settings(request):
         store, media = await asyncio.to_thread(services, request)
         local_control(request)
         data = await request.json()
         settings = await asyncio.to_thread(launcher.save, data)
-        if 'apiKey' in data:
-            credentials.save_key(data['apiKey'])
+        if "apiKey" in data:
+            credentials.save_key(data["apiKey"])
         return response({**settings, **credentials.key_status()})
 
-    @routes.get('/spool/api/templates')
+    @routes.get("/spool/api/templates")
     @endpoint
     async def studio_templates(request):
         return response(list(templates.CATALOG.values()))
 
-    @routes.get('/spool/api/builtin-workflows')
+    @routes.get("/spool/api/builtin-workflows")
     @endpoint
     async def builtin_workflows(request):
-        return response({'templates': {template_id: templates.own_capture(template_id) for template_id in templates.OWN}})
+        return response(
+            {"templates": {template_id: templates.own_capture(template_id) for template_id in templates.OWN}}
+        )
 
-    @routes.get('/spool/api/templates/{template}/{extension}')
+    @routes.get("/spool/api/templates/{template}/{extension}")
     @endpoint
     async def studio_template(request):
-        extension = request.match_info['extension']
-        if extension == 'capture':
-            return response(templates.cloud_capture(request.match_info['template']))
-        return file_response(templates.asset(request.match_info['template'], extension), headers={'Content-Type': 'image/webp' if extension == 'webp' else 'application/json'})
+        extension = request.match_info["extension"]
+        if extension == "capture":
+            return response(templates.cloud_capture(request.match_info["template"]))
+        return file_response(
+            templates.asset(request.match_info["template"], extension),
+            headers={"Content-Type": "image/webp" if extension == "webp" else "application/json"},
+        )
 
-    @routes.post('/spool/api/comfy/start')
+    @routes.post("/spool/api/comfy/start")
     @endpoint
     async def comfy_start(request):
         store, media = await asyncio.to_thread(services, request)
@@ -552,12 +674,12 @@ def register(server, store, media, executor=None):
         await request.json()
         return response(await launcher.start())
 
-    @routes.get('/spool/api/comfy/log')
+    @routes.get("/spool/api/comfy/log")
     @endpoint
     async def comfy_log(request):
         store, media = await asyncio.to_thread(services, request)
         local_control(request)
-        return response({'text': await asyncio.to_thread(launcher.log)})
+        return response({"text": await asyncio.to_thread(launcher.log)})
 
     @routes.get("/spool/api/capabilities")
     @endpoint
@@ -568,11 +690,11 @@ def register(server, store, media, executor=None):
         value["fileManager"] = system.file_manager()
         value["clipFolderReveal"] = value["fileManager"] is not None
         value.update(credentials.key_status())
-        value['cloudExecution'] = cloud_module.available()
-        value['requirements'] = requirements.report()
-        value['version'] = __version__
-        if types != '':
-            value['cloudDefinitions'] = templates.cloud_templates()['definitions']
+        value["cloudExecution"] = cloud_module.available()
+        value["requirements"] = requirements.report()
+        value["version"] = __version__
+        if types != "":
+            value["cloudDefinitions"] = templates.cloud_templates()["definitions"]
         if types is not None:
             selected = set(types.split(","))
             value["definitions"] = {k: v for k, v in value["definitions"].items() if k in selected}
@@ -592,6 +714,7 @@ def register(server, store, media, executor=None):
             if not path.is_file() or path.suffix.lower() not in EXTENSIONS:
                 raise ValueError("Input asset is missing or unsupported")
             return path
+
         return file_response(await asyncio.to_thread(locate))
 
     @routes.post("/spool/api/reconcile")
@@ -607,12 +730,14 @@ def register(server, store, media, executor=None):
     @endpoint
     async def attempt(request):
         store, media = await asyncio.to_thread(services, request)
+
         def read():
             value = store.attempt(request.match_info["attempt"])
             value["dispatch"] = store.dispatch_record(value["id"])
-            if attempts.target_of(value['request']) == attempts.CLOUD:
-                value['cloud'] = store.setting('cloud:' + value['id'])
+            if attempts.target_of(value["request"]) == attempts.CLOUD:
+                value["cloud"] = store.setting("cloud:" + value["id"])
             return value
+
         return response(await asyncio.to_thread(read))
 
     @routes.post("/spool/api/upload")
@@ -629,7 +754,9 @@ def register(server, store, media, executor=None):
         await receive_file(request, target)
         description = await asyncio.to_thread(media.describe, target, name, float(request.query.get("fps", 24)))
         if description.get("workflow"):
-            description["workflowData"] = await prepare_inputs({"workflow": description["workflow"], "prompt": description.get("prompt")}, request)
+            description["workflowData"] = await prepare_inputs(
+                {"workflow": description["workflow"], "prompt": description.get("prompt")}, request
+            )
         return response(description)
 
     @routes.post("/spool/api/import-footage")
@@ -643,7 +770,9 @@ def register(server, store, media, executor=None):
         footage = await asyncio.to_thread(media.import_footage, source, data.get("fps"), data.get("detectCuts", True))
         source = footage["source"]
         if source.get("workflow"):
-            source["workflowData"] = await prepare_inputs({"workflow": source["workflow"], "prompt": source.get("prompt")}, request)
+            source["workflowData"] = await prepare_inputs(
+                {"workflow": source["workflow"], "prompt": source.get("prompt")}, request
+            )
             for shot in footage["shots"]:
                 shot.update({key: source[key] for key in ("workflow", "prompt", "workflowData") if key in source})
         return response(footage)
@@ -655,7 +784,7 @@ def register(server, store, media, executor=None):
         data = await request.json()
         metadata = []
         if data.get("projectId"):
-            metadata = ledger.media_records(await asyncio.to_thread(store.projected, data['projectId']))
+            metadata = ledger.media_records(await asyncio.to_thread(store.projected, data["projectId"]))
             if any(Path(m.get("originalFile", "")).is_absolute() for m in metadata):
                 local_control(request, "Export original footage from the computer running Spool")
         return web.json_response(await asyncio.to_thread(media.export, data, metadata))
@@ -667,7 +796,11 @@ def register(server, store, media, executor=None):
         local_control(request, "Export an editable timeline from the computer running Spool")
         store, media = await asyncio.to_thread(services, request)
         data = await request.json()
-        metadata = ledger.media_records(await asyncio.to_thread(store.projected, data["projectId"])) if data.get("projectId") else []
+        metadata = (
+            ledger.media_records(await asyncio.to_thread(store.projected, data["projectId"]))
+            if data.get("projectId")
+            else []
+        )
         return web.json_response(await asyncio.to_thread(media.export_timeline, data, metadata))
 
     @routes.post("/spool/api/projects/{project}/detect-cuts")
@@ -689,14 +822,29 @@ def register(server, store, media, executor=None):
         store, media = await asyncio.to_thread(services, request)
         local_control(request, "Export a frame from the computer running Spool")
         data = await request.json()
-        selected = await asyncio.to_thread(store.media_record, request.match_info["project"], data["mediaId"], ("video", "image"))
+        selected = await asyncio.to_thread(
+            store.media_record, request.match_info["project"], data["mediaId"], ("video", "image")
+        )
         fps = await asyncio.to_thread(store.frame_rate, request.match_info["project"])
         return response(await asyncio.to_thread(media.export_frame, selected, data["frame"], fps))
 
     @routes.get("/spool/api/health")
     async def health(request):
         host = await asyncio.to_thread(store.host, include_definitions=False)
-        return web.json_response({"spool": True, "version": __version__, "native": True, "requirements": requirements.report(), "executor": executor is not None and executor.managed, "executorError": executor.disabled_reason if executor is not None else None, "storePath": str(store.root), "comfy": host["connected"], "paired": host["configuration"] is not None, "review": "Every source frame once at project FPS; originals retained, linked audio follows interpreted speed"})
+        return web.json_response(
+            {
+                "spool": True,
+                "version": __version__,
+                "native": True,
+                "requirements": requirements.report(),
+                "executor": executor is not None and executor.managed,
+                "executorError": executor.disabled_reason if executor is not None else None,
+                "storePath": str(store.root),
+                "comfy": host["connected"],
+                "paired": host["configuration"] is not None,
+                "review": "Every source frame once at project FPS; originals retained, linked audio follows interpreted speed",
+            }
+        )
 
     server.app.cleanup_ctx.append(cloud.lifecycle)
     if executor is not None:

@@ -41,8 +41,15 @@ RETIRED_TABLES = ("revisions",)
 
 
 def empty_project():
-    return {"project": "Untitled Spool project", "clips": [], "media": [], "importedWorkflows": [], "audioClips": [], "tailGap": 0,
-            "audioTracks": {"sourceMuted": False, "sourceSolo": False, "musicMuted": False, "musicSolo": False}}
+    return {
+        "project": "Untitled Spool project",
+        "clips": [],
+        "media": [],
+        "importedWorkflows": [],
+        "audioClips": [],
+        "tailGap": 0,
+        "audioTracks": {"sourceMuted": False, "sourceSolo": False, "musicMuted": False, "musicSolo": False},
+    }
 
 
 def linked(value):
@@ -51,7 +58,17 @@ def linked(value):
 
 def validate_capture(capture):
     prompt = capture.get("prompt")
-    if not isinstance(prompt, dict) or not prompt or not all(isinstance(k, str) and isinstance(v, dict) and isinstance(v.get("inputs"), dict) and isinstance(v.get("class_type"), str) for k, v in prompt.items()):
+    if (
+        not isinstance(prompt, dict)
+        or not prompt
+        or not all(
+            isinstance(k, str)
+            and isinstance(v, dict)
+            and isinstance(v.get("inputs"), dict)
+            and isinstance(v.get("class_type"), str)
+            for k, v in prompt.items()
+        )
+    ):
         raise ValueError("Capture an executable API prompt with Comfy's serializer")
     seen = set()
     for binding in capture.get("bindings", []):
@@ -64,15 +81,30 @@ def validate_capture(capture):
             raise ValueError("An input can only have one binding")
         seen.add((node, name))
         omit, bypass = binding.get("omit", []), binding.get("bypass", {})
-        if (not isinstance(binding.get("group", ""), str) or not isinstance(omit, list) or not all(isinstance(n, str) for n in omit)
-                or not isinstance(bypass, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in bypass.items())):
+        if (
+            not isinstance(binding.get("group", ""), str)
+            or not isinstance(omit, list)
+            or not all(isinstance(n, str) for n in omit)
+            or not isinstance(bypass, dict)
+            or not all(isinstance(k, str) and isinstance(v, str) for k, v in bypass.items())
+        ):
             raise ValueError("An optional input names its group and the nodes it leaves out")
     rules = capture.get("inputRules", [])
-    if not isinstance(rules, list) or not all(isinstance(r, dict) and isinstance(r.get("message"), str) and isinstance(r.get("anyOf"), list)
-                                              and all(isinstance(g, str) for g in r["anyOf"]) for r in rules):
+    if not isinstance(rules, list) or not all(
+        isinstance(r, dict)
+        and isinstance(r.get("message"), str)
+        and isinstance(r.get("anyOf"), list)
+        and all(isinstance(g, str) for g in r["anyOf"])
+        for r in rules
+    ):
         raise ValueError("Each input rule needs its groups and a message")
     saver = capture.get("result", {})
-    if saver.get("nodeId") not in prompt or saver.get("group") not in ("images", "gifs", "videos") or not isinstance(saver.get("index"), int) or saver["index"] < 0:
+    if (
+        saver.get("nodeId") not in prompt
+        or saver.get("group") not in ("images", "gifs", "videos")
+        or not isinstance(saver.get("index"), int)
+        or saver["index"] < 0
+    ):
         raise ValueError("Choose an exact result node, output group and artifact index")
 
 
@@ -87,15 +119,20 @@ class Edit:
 
     def save(self, document=None):
         """Store the authored document (this edit's, unless another is given) as the next revision."""
-        working = self.store._write_document(self.db, self.project_id, ledger.authored(self.document if document is None else document))
-        self.db.execute("UPDATE projects SET revision=?,document=? WHERE id=?", (self.revision + 1, encode(working), self.project_id))
+        working = self.store._write_document(
+            self.db, self.project_id, ledger.authored(self.document if document is None else document)
+        )
+        self.db.execute(
+            "UPDATE projects SET revision=?,document=? WHERE id=?",
+            (self.revision + 1, encode(working), self.project_id),
+        )
         return working
 
     def event(self, kind, data):
         self.store._event(self.db, self.project_id, kind, data)
 
     def setting(self, key, value):
-        self.db.execute('INSERT OR REPLACE INTO settings VALUES(?,?)', (key, encode(value)))
+        self.db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (key, encode(value)))
 
 
 class Store:
@@ -158,8 +195,11 @@ class Store:
         # Compaction needs its own connection, so it runs after the migration commits.
         if retired >= self.COMPACT_AFTER_RETIREMENT:
             reclaimed = self.compact()
-            logging.info("Spool compacted %s after retiring a write-only table and returned %.1f MB to the filesystem",
-                         self.path, reclaimed / 1e6)
+            logging.info(
+                "Spool compacted %s after retiring a write-only table and returned %.1f MB to the filesystem",
+                self.path,
+                reclaimed / 1e6,
+            )
 
     def migrate(self, db, version):
         """Move data for a schema upgrade in one transaction, version last.
@@ -190,7 +230,9 @@ class Store:
             row = db.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone()
             if not row[0]:
                 continue
-            held = db.execute("SELECT count(*), coalesce(sum(length(cast(document as blob))),0) FROM " + name).fetchone()
+            held = db.execute(
+                "SELECT count(*), coalesce(sum(length(cast(document as blob))),0) FROM " + name
+            ).fetchone()
             db.execute("DROP TABLE " + name)
             dropped.append((name, held[0], held[1]))
         payload = sum(chars for _, _, chars in dropped)
@@ -214,25 +256,42 @@ class Store:
             if not evidence:
                 continue
             for media_id, held in evidence.items():
-                existing = db.execute("SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (row["id"], media_id)).fetchone()
+                existing = db.execute(
+                    "SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (row["id"], media_id)
+                ).fetchone()
                 merged = {**json.loads(existing[0]), **held} if existing else held
-                db.execute("INSERT OR REPLACE INTO media_evidence VALUES(?,?,?)", (row["id"], media_id, encode_ordered(merged)))
+                db.execute(
+                    "INSERT OR REPLACE INTO media_evidence VALUES(?,?,?)", (row["id"], media_id, encode_ordered(merged))
+                )
                 moved += len(encode_ordered(merged))
             db.execute("UPDATE projects SET document=? WHERE id=?", (encode(working), row["id"]))
         if moved:
-            logging.info("Spool moved %.1f MB of media evidence out of project documents into media_evidence", moved / 1e6)
+            logging.info(
+                "Spool moved %.1f MB of media evidence out of project documents into media_evidence", moved / 1e6
+            )
         return moved
 
     def evidence(self, project_id, media_id):
         """The probe and embedded graph for one media record, on demand."""
         with self.connect() as db:
-            row = db.execute("SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (project_id, media_id)).fetchone()
+            row = db.execute(
+                "SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (project_id, media_id)
+            ).fetchone()
             if not row:
-                row = db.execute("SELECT json_extract(result,'$.primary') FROM attempts WHERE project_id=? AND status='complete' AND json_extract(result,'$.primary.id')=?", (project_id, media_id)).fetchone()
+                row = db.execute(
+                    "SELECT json_extract(result,'$.primary') FROM attempts WHERE project_id=? AND status='complete' AND json_extract(result,'$.primary.id')=?",
+                    (project_id, media_id),
+                ).fetchone()
                 if not row:
-                    row = db.execute("SELECT artifact.value FROM attempts, json_each(attempts.result,'$.artifacts') AS artifact WHERE project_id=? AND status='complete' AND json_extract(artifact.value,'$.id')=?", (project_id, media_id)).fetchone()
+                    row = db.execute(
+                        "SELECT artifact.value FROM attempts, json_each(attempts.result,'$.artifacts') AS artifact WHERE project_id=? AND status='complete' AND json_extract(artifact.value,'$.id')=?",
+                        (project_id, media_id),
+                    ).fetchone()
                 if row:
-                    return {"mediaId": media_id, **{key: value for key, value in json.loads(row[0]).items() if key in ledger.EVIDENCE_KEYS}}
+                    return {
+                        "mediaId": media_id,
+                        **{key: value for key, value in json.loads(row[0]).items() if key in ledger.EVIDENCE_KEYS},
+                    }
         if not row:
             raise KeyError("This media has no stored evidence")
         return {"mediaId": media_id, **json.loads(row["evidence"])}
@@ -240,13 +299,20 @@ class Store:
     def all_evidence(self, project_id):
         """Every stored payload for a project, for a portable local draft."""
         with self.connect() as db:
-            rows = db.execute("SELECT media_id, evidence FROM media_evidence WHERE project_id=?", (project_id,)).fetchall()
-            results = db.execute("SELECT result FROM attempts WHERE project_id=? AND status='complete'", (project_id,)).fetchall()
+            rows = db.execute(
+                "SELECT media_id, evidence FROM media_evidence WHERE project_id=?", (project_id,)
+            ).fetchall()
+            results = db.execute(
+                "SELECT result FROM attempts WHERE project_id=? AND status='complete'", (project_id,)
+            ).fetchall()
         evidence = {row["media_id"]: json.loads(row["evidence"]) for row in rows}
         for row in results:
             result = json.loads(row[0])
             for record in [result["primary"], *result.get("artifacts", [])]:
-                evidence[record["id"]] = {**{key: value for key, value in record.items() if key in ledger.EVIDENCE_KEYS}, **evidence.get(record["id"], {})}
+                evidence[record["id"]] = {
+                    **{key: value for key, value in record.items() if key in ledger.EVIDENCE_KEYS},
+                    **evidence.get(record["id"], {}),
+                }
         return evidence
 
     def referenced_names(self):
@@ -256,10 +322,20 @@ class Store:
         including each token's basename, so a reference written as an absolute path or
         with Windows separators still protects its file.
         """
-        columns = (("projects", "document"), ("attempts", "request"), ("attempts", "result"),
-                   ("operations", "payload"), ("submissions", "package"), ("handoffs", "payload"),
-                   ("experiments", "document"), ("feedback", "document"), ("command_results", "result"),
-                   ("dispatches", "payload"), ("executions", "receipt"), ("workflows", "capture"))
+        columns = (
+            ("projects", "document"),
+            ("attempts", "request"),
+            ("attempts", "result"),
+            ("operations", "payload"),
+            ("submissions", "package"),
+            ("handoffs", "payload"),
+            ("experiments", "document"),
+            ("feedback", "document"),
+            ("command_results", "result"),
+            ("dispatches", "payload"),
+            ("executions", "receipt"),
+            ("workflows", "capture"),
+        )
         names = set()
         with self.connect() as db:
             for table, column in columns:
@@ -295,7 +371,7 @@ class Store:
                 unreferenced.append(path)
         return {"folders": folders, "unreferencedPreviews": unreferenced}
 
-    def prune(self, confirm=False, budget=5 * 1024 ** 3, grace=600):
+    def prune(self, confirm=False, budget=5 * 1024**3, grace=600):
         """Report derived storage; with confirm, evict unreferenced previews over budget.
 
         Previews are the only evictable directory: they are rebuilt from the originals
@@ -306,8 +382,16 @@ class Store:
         unreferenced = report.pop("unreferencedPreviews")
         now = time.time()
         held = report["folders"].get("previews", {}).get("bytes", 0)
-        report.update({"previewBytes": held, "budgetBytes": budget, "unreferenced": len(unreferenced),
-                       "unreferencedBytes": sum(path.stat().st_size for path in unreferenced), "evicted": [], "freed": 0})
+        report.update(
+            {
+                "previewBytes": held,
+                "budgetBytes": budget,
+                "unreferenced": len(unreferenced),
+                "unreferencedBytes": sum(path.stat().st_size for path in unreferenced),
+                "evicted": [],
+                "freed": 0,
+            }
+        )
         if not confirm or held <= budget:
             return report
         candidates = [path for path in unreferenced if now - path.stat().st_mtime > grace]
@@ -347,10 +431,17 @@ class Store:
                 row = db.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone()
                 if not row[0]:
                     continue
-                held = db.execute("SELECT count(*), coalesce(sum(length(cast(document as blob))),0) FROM " + name).fetchone()
+                held = db.execute(
+                    "SELECT count(*), coalesce(sum(length(cast(document as blob))),0) FROM " + name
+                ).fetchone()
                 retired.append({"table": name, "rows": held[0], "payloadBytes": held[1]})
-        return {"path": str(self.path), "bytes": self.path.stat().st_size, "freePages": free,
-                "freeBytes": free * page_size, "retired": retired}
+        return {
+            "path": str(self.path),
+            "bytes": self.path.stat().st_size,
+            "freePages": free,
+            "freeBytes": free * page_size,
+            "retired": retired,
+        }
 
     def reclaim(self, confirm=False):
         """Report, and on request drop, storage no reader depends on."""
@@ -363,7 +454,6 @@ class Store:
                 db.execute("DROP TABLE " + entry["table"])
         reclaimed = self.compact()
         return {**self.storage_report(), "retired": report["retired"], "reclaimed": reclaimed}
-
 
     @contextmanager
     def connect(self):
@@ -402,7 +492,9 @@ class Store:
     def recipe(self, project_id, version, db=None):
         """A captured workflow version of this project, or None."""
         with self._using(db) as db:
-            row = db.execute("SELECT capture FROM workflows WHERE id=? AND project_id=?", (version, project_id)).fetchone()
+            row = db.execute(
+                "SELECT capture FROM workflows WHERE id=? AND project_id=?", (version, project_id)
+            ).fetchone()
         return json.loads(row[0]) if row else None
 
     def project_attempts(self, project_id, db=None):
@@ -447,13 +539,29 @@ class Store:
     def recent_review(self, project_id):
         """The latest experiments and take feedback, for agent status."""
         with self.connect() as db:
-            experiments = [{"id": r["id"], **json.loads(r["document"])} for r in db.execute("SELECT * FROM experiments WHERE project_id=? ORDER BY rowid DESC LIMIT 20", (project_id,))]
-            feedback = [{**dict(r), "document": json.loads(r["document"])} for r in db.execute("SELECT * FROM feedback WHERE project_id=? ORDER BY rowid DESC LIMIT 50", (project_id,))]
+            experiments = [
+                {"id": r["id"], **json.loads(r["document"])}
+                for r in db.execute(
+                    "SELECT * FROM experiments WHERE project_id=? ORDER BY rowid DESC LIMIT 20", (project_id,)
+                )
+            ]
+            feedback = [
+                {**dict(r), "document": json.loads(r["document"])}
+                for r in db.execute(
+                    "SELECT * FROM feedback WHERE project_id=? ORDER BY rowid DESC LIMIT 50", (project_id,)
+                )
+            ]
         return experiments, feedback
 
     def cancellation_claimed(self, db, attempt_id):
         """Whether a cancel command already started sending to this attempt's job."""
-        return db.execute("SELECT 1 FROM effects JOIN command_results ON command_results.id=effects.operation_id WHERE json_extract(command_results.result,'$.attemptId')=?", (attempt_id,)).fetchone() is not None
+        return (
+            db.execute(
+                "SELECT 1 FROM effects JOIN command_results ON command_results.id=effects.operation_id WHERE json_extract(command_results.result,'$.attemptId')=?",
+                (attempt_id,),
+            ).fetchone()
+            is not None
+        )
 
     def claim_cancellation(self, db, operation_id):
         db.execute("INSERT INTO effects VALUES(?,'started')", (operation_id,))
@@ -465,7 +573,7 @@ class Store:
 
     def setting(self, key):
         with self.connect() as db:
-            row = db.execute('SELECT document FROM settings WHERE key=?', (key,)).fetchone()
+            row = db.execute("SELECT document FROM settings WHERE key=?", (key,)).fetchone()
         return json.loads(row[0]) if row else None
 
     def for_project(self, project_id):
@@ -486,7 +594,7 @@ class Store:
 
     def set_setting(self, key, value):
         with self.connect() as db:
-            db.execute('INSERT OR REPLACE INTO settings VALUES(?,?)', (key, encode(value)))
+            db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (key, encode(value)))
 
     def _write_document(self, db, project_id, document):
         """Store the working document, keeping any evidence it carries.
@@ -502,9 +610,13 @@ class Store:
             return working
         merged = {}
         for media_id, held in evidence.items():
-            row = db.execute("SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (project_id, media_id)).fetchone()
+            row = db.execute(
+                "SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (project_id, media_id)
+            ).fetchone()
             stored = {**json.loads(row[0]), **held} if row else held
-            db.execute("INSERT OR REPLACE INTO media_evidence VALUES(?,?,?)", (project_id, media_id, encode_ordered(stored)))
+            db.execute(
+                "INSERT OR REPLACE INTO media_evidence VALUES(?,?,?)", (project_id, media_id, encode_ordered(stored))
+            )
             merged[media_id] = stored
         for record in ledger.media_records(working):
             held = merged.get(record.get("id"))
@@ -523,9 +635,12 @@ class Store:
     def list(self):
         """Project names come out of the document with SQL, not by decoding it."""
         with self.connect() as db:
-            return [{"id": r["id"], "revision": r["revision"],
-                     "name": r["name"] or "Untitled Spool project"}
-                    for r in db.execute("SELECT id, revision, json_extract(document,'$.project') AS name FROM projects ORDER BY rowid")]
+            return [
+                {"id": r["id"], "revision": r["revision"], "name": r["name"] or "Untitled Spool project"}
+                for r in db.execute(
+                    "SELECT id, revision, json_extract(document,'$.project') AS name FROM projects ORDER BY rowid"
+                )
+            ]
 
     def exists(self, project_id):
         """An existence check must not decode a document or project the ledger."""
@@ -545,9 +660,23 @@ class Store:
             row = db.execute("SELECT revision FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
                 raise KeyError("Project not found")
-            cursor = db.execute("SELECT coalesce(max(cursor),0) FROM events WHERE project_id=?", (project_id,)).fetchone()[0]
-            jobs = [dict(r) for r in db.execute("SELECT id,status,error,prompt_id AS promptId,coalesce(json_extract(request,'$.target'),'local') AS target FROM attempts WHERE project_id=? AND status NOT IN ('complete','failed','cancelled') ORDER BY id", (project_id,))]
-            submissions = [dict(r) for r in db.execute("SELECT id,attempt_id,external_id,state FROM submissions WHERE attempt_id IN (SELECT id FROM attempts WHERE project_id=?) ORDER BY id", (project_id,))]
+            cursor = db.execute(
+                "SELECT coalesce(max(cursor),0) FROM events WHERE project_id=?", (project_id,)
+            ).fetchone()[0]
+            jobs = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT id,status,error,prompt_id AS promptId,coalesce(json_extract(request,'$.target'),'local') AS target FROM attempts WHERE project_id=? AND status NOT IN ('complete','failed','cancelled') ORDER BY id",
+                    (project_id,),
+                )
+            ]
+            submissions = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT id,attempt_id,external_id,state FROM submissions WHERE attempt_id IN (SELECT id FROM attempts WHERE project_id=?) ORDER BY id",
+                    (project_id,),
+                )
+            ]
         return {"id": project_id, "revision": row[0], "cursor": cursor, "jobs": jobs, "submissions": submissions}
 
     def document(self, project_id):
@@ -578,7 +707,10 @@ class Store:
             if not row:
                 raise KeyError("Project not found")
             document = json.loads(row["document"])
-            attempts = [dict(r) for r in db.execute("SELECT * FROM attempts WHERE project_id=? ORDER BY created,rowid", (project_id,))]
+            attempts = [
+                dict(r)
+                for r in db.execute("SELECT * FROM attempts WHERE project_id=? ORDER BY created,rowid", (project_id,))
+            ]
         return ledger.attach(document, attempts)
 
     def clip(self, project_id, clip_id):
@@ -599,7 +731,10 @@ class Store:
 
     def active_attempts(self, project_id):
         with self.connect() as db:
-            return db.execute("SELECT count(*) FROM attempts WHERE project_id=? AND status NOT IN ('complete','failed','cancelled')", (project_id,)).fetchone()[0]
+            return db.execute(
+                "SELECT count(*) FROM attempts WHERE project_id=? AND status NOT IN ('complete','failed','cancelled')",
+                (project_id,),
+            ).fetchone()[0]
 
     def scan_attempts(self, target=None, pending_only=False):
         """Every attempt the receipt scan must visit, without decoding any document."""
@@ -609,7 +744,7 @@ class Store:
             values.append(target)
         if pending_only:
             conditions.append("status NOT IN ('complete','failed','cancelled')")
-        where = ' WHERE ' + ' AND '.join(conditions) if conditions else ''
+        where = " WHERE " + " AND ".join(conditions) if conditions else ""
         with self.connect() as db:
             rows = [dict(r) for r in db.execute("SELECT * FROM attempts" + where + " ORDER BY created,rowid", values)]
         for row in rows:
@@ -622,12 +757,34 @@ class Store:
             if not row:
                 raise KeyError("Project not found")
             document = json.loads(row["document"])
-            attempts = [dict(r) for r in db.execute("SELECT * FROM attempts WHERE project_id=? ORDER BY created,rowid", (project_id,))]
+            attempts = [
+                dict(r)
+                for r in db.execute("SELECT * FROM attempts WHERE project_id=? ORDER BY created,rowid", (project_id,))
+            ]
             versions = {c["workflowVersion"] for c in document["clips"] if c.get("workflowVersion")}
-            recipe_rows = db.execute("SELECT id,capture FROM workflows WHERE id IN (" + ",".join("?" for _ in versions) + ")", tuple(versions)) if versions else []
+            recipe_rows = (
+                db.execute(
+                    "SELECT id,capture FROM workflows WHERE id IN (" + ",".join("?" for _ in versions) + ")",
+                    tuple(versions),
+                )
+                if versions
+                else []
+            )
             recipes = {r["id"]: json.loads(r["capture"]) for r in recipe_rows}
-            submissions = {r["attempt_id"]: dict(r) for r in db.execute("SELECT id,attempt_id,external_id,state FROM submissions WHERE attempt_id IN (SELECT id FROM attempts WHERE project_id=?)", (project_id,))}
-            finished = {r["attempt_id"]: r["finished"] for r in db.execute("SELECT coalesce(json_extract(data,'$.attemptId'),json_extract(data,'$.result.attemptId')) AS attempt_id, max(created) AS finished FROM events WHERE project_id=? AND (kind='execution.collected' AND json_extract(data,'$.accepted')=1 OR kind='attempt.status' AND json_extract(data,'$.status') IN ('complete','failed','cancelled') OR kind='command.cancel' AND json_extract(data,'$.result.status')='cancelled') GROUP BY attempt_id", (project_id,))}
+            submissions = {
+                r["attempt_id"]: dict(r)
+                for r in db.execute(
+                    "SELECT id,attempt_id,external_id,state FROM submissions WHERE attempt_id IN (SELECT id FROM attempts WHERE project_id=?)",
+                    (project_id,),
+                )
+            }
+            finished = {
+                r["attempt_id"]: r["finished"]
+                for r in db.execute(
+                    "SELECT coalesce(json_extract(data,'$.attemptId'),json_extract(data,'$.result.attemptId')) AS attempt_id, max(created) AS finished FROM events WHERE project_id=? AND (kind='execution.collected' AND json_extract(data,'$.accepted')=1 OR kind='attempt.status' AND json_extract(data,'$.status') IN ('complete','failed','cancelled') OR kind='command.cancel' AND json_extract(data,'$.result.status')='cancelled') GROUP BY attempt_id",
+                    (project_id,),
+                )
+            }
         ledger.attach(document, attempts)
         for job in document["jobs"]:
             if job["status"] in {"complete", "failed", "cancelled"}:
@@ -651,7 +808,10 @@ class Store:
                     if existing["project_id"] != project_id or existing["fingerprint"] != digest:
                         raise Conflict("This immutable workflow version already contains a different capture")
                 else:
-                    db.execute("INSERT INTO workflows VALUES(?,?,?,?,?)", (version, project_id, owners[0]["id"], digest, encode(capture)))
+                    db.execute(
+                        "INSERT INTO workflows VALUES(?,?,?,?,?)",
+                        (version, project_id, owners[0]["id"], digest, encode(capture)),
+                    )
             edit.save(document)
         return self.get(project_id)
 
@@ -665,13 +825,25 @@ class Store:
             if not row:
                 raise KeyError("Project not found")
             document = json.loads(row[0])
-            generated = db.execute("SELECT clip_id,take_id,json_extract(result,'$.primary.frames') AS frames FROM attempts WHERE project_id=? AND take_id=? AND status='complete'", (project_id, take_id)).fetchone() if take_id is not None else None
+            generated = (
+                db.execute(
+                    "SELECT clip_id,take_id,json_extract(result,'$.primary.frames') AS frames FROM attempts WHERE project_id=? AND take_id=? AND status='complete'",
+                    (project_id, take_id),
+                ).fetchone()
+                if take_id is not None
+                else None
+            )
         clip = next((c for c in document["clips"] if c["id"] == clip_id), None)
         if not clip:
             raise KeyError("Clip not found")
         if take_id is not None:
             take = next((t for t in clip["takes"] if t["id"] == take_id and not t.get("placeholder")), None)
-            if take is None and generated and ledger.owns(clip, generated) and take_id not in document.get("deletedTakeIds", []):
+            if (
+                take is None
+                and generated
+                and ledger.owns(clip, generated)
+                and take_id not in document.get("deletedTakeIds", [])
+            ):
                 take = {"media": {"frames": generated["frames"]}}
             if not take or take_id in clip.get("hiddenTakeIds", []) and take_id != clip.get("takeId"):
                 raise ValueError("This take is no longer available for the shot")
@@ -704,12 +876,17 @@ class Store:
         snapshot_id = uid()
         clip["workflowVersion"] = snapshot_id
         clip["bindings"] = capture.get("bindings", [])
-        clip["inputValues"] = {b["key"]: capture["prompt"][b["nodeId"]]["inputs"][b["input"]] for b in capture.get("bindings", [])}
+        clip["inputValues"] = {
+            b["key"]: capture["prompt"][b["nodeId"]]["inputs"][b["input"]] for b in capture.get("bindings", [])
+        }
         for key, value in (overrides or {}).items():
             if key in clip["inputValues"]:
                 clip["inputValues"][key] = value
         clip["revision"] = clip.get("revision", 0) + 1
-        db.execute("INSERT INTO workflows VALUES(?,?,?,?,?)", (snapshot_id, project_id, clip["id"], fingerprint(capture), encode(capture)))
+        db.execute(
+            "INSERT INTO workflows VALUES(?,?,?,?,?)",
+            (snapshot_id, project_id, clip["id"], fingerprint(capture), encode(capture)),
+        )
 
     def workflow(self, snapshot_id):
         with self.connect() as db:
@@ -732,8 +909,16 @@ class Store:
         identity = uid()
         payload = {**payload, "projectId": project_id, "workflowVersion": clip.get("workflowVersion") if clip else None}
         with self.connect() as db:
-            db.execute("INSERT INTO handoffs VALUES(?,?,?,'pending',NULL,?)", (identity, project_id, encode(payload), time.time()))
-            self._event(db, project_id, "graph.handoff", {"handoffId": identity, "clipId": clip["id"] if clip else None, "action": payload["action"]})
+            db.execute(
+                "INSERT INTO handoffs VALUES(?,?,?,'pending',NULL,?)",
+                (identity, project_id, encode(payload), time.time()),
+            )
+            self._event(
+                db,
+                project_id,
+                "graph.handoff",
+                {"handoffId": identity, "clipId": clip["id"] if clip else None, "action": payload["action"]},
+            )
         return self.read_handoff(identity)
 
     def read_handoff(self, identity):
@@ -741,12 +926,20 @@ class Store:
             row = db.execute("SELECT * FROM handoffs WHERE id=?", (identity,)).fetchone()
         if not row or time.time() - row["created"] > 600:
             raise ValueError("Graph handoff expired; open a new one")
-        return {"id": identity, "payload": json.loads(row["payload"]), "state": row["state"], "result": json.loads(row["result"]) if row["result"] else None}
+        return {
+            "id": identity,
+            "payload": json.loads(row["payload"]),
+            "state": row["state"],
+            "result": json.loads(row["result"]) if row["result"] else None,
+        }
 
     def finish_handoff(self, identity, result):
         self.read_handoff(identity)
         with self.connect() as db:
-            changed = db.execute("UPDATE handoffs SET state='complete',result=? WHERE id=? AND state='pending'", (encode(result), identity))
+            changed = db.execute(
+                "UPDATE handoffs SET state='complete',result=? WHERE id=? AND state='pending'",
+                (encode(result), identity),
+            )
             if changed.rowcount != 1:
                 raise Conflict("This graph handoff was already consumed")
         return self.read_handoff(identity)
@@ -757,7 +950,10 @@ class Store:
             row = db.execute("SELECT * FROM submissions WHERE attempt_id=?", (attempt_id,)).fetchone()
             if not row:
                 identity = uid()
-                db.execute("INSERT INTO submissions VALUES(?,?,'deadline','intent',NULL,?)", (identity, attempt_id, encode(package)))
+                db.execute(
+                    "INSERT INTO submissions VALUES(?,?,'deadline','intent',NULL,?)",
+                    (identity, attempt_id, encode(package)),
+                )
                 row = db.execute("SELECT * FROM submissions WHERE id=?", (identity,)).fetchone()
         return {**dict(row), "package": json.loads(row["package"])}
 
@@ -775,8 +971,15 @@ class Store:
                 return
             db.execute("UPDATE submissions SET state='acknowledged',external_id=? WHERE id=?", (job_id, submission_id))
             if not old["external_id"]:
-                project_id = db.execute("SELECT project_id FROM attempts WHERE id=?", (old["attempt_id"],)).fetchone()[0]
-                self._event(db, project_id, "submission.acknowledged", {"submissionId": submission_id, "attemptId": old["attempt_id"], "jobId": job_id})
+                project_id = db.execute("SELECT project_id FROM attempts WHERE id=?", (old["attempt_id"],)).fetchone()[
+                    0
+                ]
+                self._event(
+                    db,
+                    project_id,
+                    "submission.acknowledged",
+                    {"submissionId": submission_id, "attemptId": old["attempt_id"], "jobId": job_id},
+                )
 
     def reject_receipt(self, attempt_id, path, error):
         with self.connect() as db:
@@ -788,16 +991,29 @@ class Store:
     def finish_cancellation(self, operation_id, error=None):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            result = json.loads(db.execute("SELECT result FROM command_results WHERE id=?", (operation_id,)).fetchone()[0])
+            result = json.loads(
+                db.execute("SELECT result FROM command_results WHERE id=?", (operation_id,)).fetchone()[0]
+            )
             note = "Cancellation requested; late results remain collectable"
             if error is not None:
                 note = "Cancellation delivery is unconfirmed: " + error + ". Refresh job status; no automatic repeat."
             result["note"] = note
-            db.execute("UPDATE effects SET state=? WHERE operation_id=?", ("uncertain" if error is not None else "sent", operation_id))
+            db.execute(
+                "UPDATE effects SET state=? WHERE operation_id=?",
+                ("uncertain" if error is not None else "sent", operation_id),
+            )
             db.execute("UPDATE command_results SET result=? WHERE id=?", (encode(result), operation_id))
-            db.execute("UPDATE attempts SET error=? WHERE id=? AND status='cancel_requested'", (note if error is not None else None, result["attemptId"]))
+            db.execute(
+                "UPDATE attempts SET error=? WHERE id=? AND status='cancel_requested'",
+                (note if error is not None else None, result["attemptId"]),
+            )
             project_id = db.execute("SELECT project_id FROM attempts WHERE id=?", (result["attemptId"],)).fetchone()[0]
-            self._event(db, project_id, "cancellation.observed", {"operationId": operation_id, "attemptId": result["attemptId"], "note": note})
+            self._event(
+                db,
+                project_id,
+                "cancellation.observed",
+                {"operationId": operation_id, "attemptId": result["attemptId"], "note": note},
+            )
         return result
 
     def accept_execution(self, attempt_id, execution_id, submission_id, receipt):
@@ -810,18 +1026,31 @@ class Store:
                 return bool(old["accepted"])
             attempt = db.execute("SELECT * FROM attempts WHERE id=?", (attempt_id,)).fetchone()
             winner = attempt["status"] != attempts.COMPLETE
-            db.execute("INSERT INTO executions VALUES(?,?,?,?,?)", (execution_id, attempt_id, submission_id, encode(receipt), int(winner)))
+            db.execute(
+                "INSERT INTO executions VALUES(?,?,?,?,?)",
+                (execution_id, attempt_id, submission_id, encode(receipt), int(winner)),
+            )
             if winner:
-                db.execute("UPDATE attempts SET status='complete',result=?,error=NULL WHERE id=?", (encode(receipt), attempt_id))
-            self._event(db, attempt["project_id"], "execution.collected", {"attemptId": attempt_id, "executionId": execution_id, "accepted": winner})
+                db.execute(
+                    "UPDATE attempts SET status='complete',result=?,error=NULL WHERE id=?",
+                    (encode(receipt), attempt_id),
+                )
+            self._event(
+                db,
+                attempt["project_id"],
+                "execution.collected",
+                {"attemptId": attempt_id, "executionId": execution_id, "accepted": winner},
+            )
         return winner
 
     def export_project(self, project_id):
         project = self.get(project_id)
         versions = {c["workflowVersion"] for c in project["document"]["clips"] if c.get("workflowVersion")}
         with self.connect() as db:
-            evidence = {r["media_id"]: json.loads(r["evidence"])
-                        for r in db.execute("SELECT media_id,evidence FROM media_evidence WHERE project_id=?", (project_id,))}
+            evidence = {
+                r["media_id"]: json.loads(r["evidence"])
+                for r in db.execute("SELECT media_id,evidence FROM media_evidence WHERE project_id=?", (project_id,))
+            }
         # A downloaded project carries its evidence so it stays portable; the
         # working document is what every other reader sees.
         document = ledger.compose(project["document"], evidence, in_place=True)
@@ -851,12 +1080,27 @@ class Store:
     def _intent(self, db, project_id, clip, request, status):
         attempt_id, take_id, prompt_id = uid(), uid(), uid()
         request = copy.deepcopy(request)
-        existing = db.execute("SELECT count(*) FROM attempts WHERE project_id=? AND clip_id=?", (project_id, clip["id"])).fetchone()[0]
+        existing = db.execute(
+            "SELECT count(*) FROM attempts WHERE project_id=? AND clip_id=?", (project_id, clip["id"])
+        ).fetchone()[0]
         baseline = max((t.get("number", 0) for t in clip.get("takes", []) if not t.get("generated")), default=0)
         request["takeNumber"] = baseline + existing + 1
-        request.update({"attemptId": attempt_id, "takeId": take_id, "promptId": prompt_id, "projectId": project_id, "clipId": clip["id"], "clipName": clip["name"], "clipRevision": clip.get("revision", 1)})
+        request.update(
+            {
+                "attemptId": attempt_id,
+                "takeId": take_id,
+                "promptId": prompt_id,
+                "projectId": project_id,
+                "clipId": clip["id"],
+                "clipName": clip["name"],
+                "clipRevision": clip.get("revision", 1),
+            }
+        )
         request["fingerprint"] = fingerprint(request)
-        db.execute("INSERT INTO attempts VALUES(?,?,?,?,?,?,?,?,?,?)", (attempt_id, project_id, clip["id"], take_id, prompt_id, status, encode(request), None, None, time.time()))
+        db.execute(
+            "INSERT INTO attempts VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (attempt_id, project_id, clip["id"], take_id, prompt_id, status, encode(request), None, None, time.time()),
+        )
         return attempt_id
 
     def operation(self, operation_id, project_id, payload):
@@ -886,20 +1130,49 @@ class Store:
                 limit = scope["maxConcurrent"]
                 if type(limit) is not int or limit < 1:
                     raise ValueError("Concurrency limit must be a positive integer")
-                active = db.execute("SELECT count(*) FROM attempts WHERE project_id=? AND status NOT IN ('complete','failed','cancelled')", (project_id,)).fetchone()[0]
+                active = db.execute(
+                    "SELECT count(*) FROM attempts WHERE project_id=? AND status NOT IN ('complete','failed','cancelled')",
+                    (project_id,),
+                ).fetchone()[0]
                 if active + len(requests) > limit:
                     raise ValueError("Queue exceeds the declared outstanding-job limit")
             identities = [self._intent(db, project_id, clip, request, attempts.WAITING) for clip, request in requests]
-            db.execute("INSERT INTO operations VALUES(?,?,?,?,?,?,?)", (operation_id, project_id, fingerprint(payload), encode(payload), encode(identities), actor, time.time()))
+            db.execute(
+                "INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                (
+                    operation_id,
+                    project_id,
+                    fingerprint(payload),
+                    encode(payload),
+                    encode(identities),
+                    actor,
+                    time.time(),
+                ),
+            )
             if payload.get("experiment"):
-                db.execute("INSERT INTO experiments VALUES(?,?,?)", (operation_id, project_id, encode({**payload["experiment"], "attemptIds": identities, "actor": actor})))
-            self._event(db, project_id, "queue.accepted", {"operationId": operation_id, "attemptIds": identities, "actor": actor})
+                db.execute(
+                    "INSERT INTO experiments VALUES(?,?,?)",
+                    (
+                        operation_id,
+                        project_id,
+                        encode({**payload["experiment"], "attemptIds": identities, "actor": actor}),
+                    ),
+                )
+            self._event(
+                db,
+                project_id,
+                "queue.accepted",
+                {"operationId": operation_id, "attemptIds": identities, "actor": actor},
+            )
         return identities
 
     def claim(self, attempt_id, session_id):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            changed = db.execute("UPDATE attempts SET status=? WHERE id=? AND status IN (?,?)", (attempts.DISPATCHING, attempt_id, attempts.INTENT, attempts.WAITING))
+            changed = db.execute(
+                "UPDATE attempts SET status=? WHERE id=? AND status IN (?,?)",
+                (attempts.DISPATCHING, attempt_id, attempts.INTENT, attempts.WAITING),
+            )
             if changed.rowcount != 1:
                 return False
             db.execute("INSERT INTO attempt_owners VALUES(?,?,?)", (attempt_id, session_id, time.time()))
@@ -915,9 +1188,14 @@ class Store:
             db.execute("BEGIN IMMEDIATE")
             old = db.execute("SELECT * FROM host WHERE id=1").fetchone()
             if old and json.loads(old["configuration"]) != configuration:
-                raise Conflict("This store is paired to another Comfy address or media folders. Use a different store or explicitly re-pair it.")
+                raise Conflict(
+                    "This store is paired to another Comfy address or media folders. Use a different store or explicitly re-pair it."
+                )
             schemas = encode(definitions) if definitions is not None else old["definitions"] if old else "{}"
-            db.execute("INSERT INTO host VALUES(1,?,?,?,?) ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id,heartbeat=excluded.heartbeat,definitions=excluded.definitions", (encode(configuration), session_id, time.time(), schemas))
+            db.execute(
+                "INSERT INTO host VALUES(1,?,?,?,?) ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id,heartbeat=excluded.heartbeat,definitions=excluded.definitions",
+                (encode(configuration), session_id, time.time(), schemas),
+            )
 
     def host(self, include_definitions=True):
         with self.connect() as db:
@@ -925,24 +1203,39 @@ class Store:
             row = db.execute("SELECT " + columns + " FROM host WHERE id=1").fetchone()
         if not row:
             return {"connected": False, "configuration": None, "definitions": {}, "sessionId": None}
-        return {"connected": time.time() - row["heartbeat"] < 10, "configuration": json.loads(row["configuration"]), "definitions": json.loads(row["definitions"]) if include_definitions else {}, "sessionId": row["session_id"], "heartbeat": row["heartbeat"]}
+        return {
+            "connected": time.time() - row["heartbeat"] < 10,
+            "configuration": json.loads(row["configuration"]),
+            "definitions": json.loads(row["definitions"]) if include_definitions else {},
+            "sessionId": row["session_id"],
+            "heartbeat": row["heartbeat"],
+        }
 
     def retire_host(self, session_id):
         with self.connect() as db:
             db.execute("UPDATE host SET heartbeat=0 WHERE session_id=?", (session_id,))
 
     def _event(self, db, project_id, kind, data):
-        db.execute("INSERT INTO events(project_id,kind,data,created) VALUES(?,?,?,?)", (project_id, kind, encode(data), time.time()))
+        db.execute(
+            "INSERT INTO events(project_id,kind,data,created) VALUES(?,?,?,?)",
+            (project_id, kind, encode(data), time.time()),
+        )
 
     def events(self, project_id, since=0, limit=100, latest=False):
         if type(since) is not int or since < 0 or type(limit) is not int or not 1 <= limit <= 500:
             raise ValueError("Choose a nonnegative event cursor and a limit of 1-500")
         with self.connect() as db:
             order = "DESC" if latest else "ASC"
-            rows = db.execute("SELECT * FROM events WHERE project_id=? AND cursor>? ORDER BY cursor " + order + " LIMIT ?", (project_id, since, limit)).fetchall()
+            rows = db.execute(
+                "SELECT * FROM events WHERE project_id=? AND cursor>? ORDER BY cursor " + order + " LIMIT ?",
+                (project_id, since, limit),
+            ).fetchall()
             if latest:
                 rows.reverse()
-        values = [{"cursor": r["cursor"], "kind": r["kind"], "data": json.loads(r["data"]), "created": r["created"]} for r in rows]
+        values = [
+            {"cursor": r["cursor"], "kind": r["kind"], "data": json.loads(r["data"]), "created": r["created"]}
+            for r in rows
+        ]
         return {"events": values, "cursor": values[-1]["cursor"] if values else since}
 
     def command(self, identity, project_id, revision, payload, apply):
@@ -952,7 +1245,9 @@ class Store:
             if old:
                 if old["project_id"] != project_id or old["digest"] != fingerprint(payload):
                     raise Conflict("Operation ID already contains another command")
-                return json.loads(db.execute("SELECT result FROM command_results WHERE id=?", (identity,)).fetchone()[0])
+                return json.loads(
+                    db.execute("SELECT result FROM command_results WHERE id=?", (identity,)).fetchone()[0]
+                )
             row = db.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row or row["revision"] != revision:
                 raise Conflict("Project changed; inspect the current revision before applying this command")
@@ -961,9 +1256,22 @@ class Store:
             if edited:
                 Edit(self, db, project_id, revision, document).save()
             result = {**result, "operationId": identity, "revision": revision + int(edited)}
-            db.execute("INSERT INTO operations VALUES(?,?,?,?,?,?,?)", (identity, project_id, fingerprint(payload), encode(payload), "[]", payload["actor"], time.time()))
+            db.execute(
+                "INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                (identity, project_id, fingerprint(payload), encode(payload), "[]", payload["actor"], time.time()),
+            )
             db.execute("INSERT INTO command_results VALUES(?,?)", (identity, encode(result)))
-            self._event(db, project_id, "command." + payload["action"], {"operationId": identity, "actor": payload["actor"], "arguments": payload["arguments"], "result": result})
+            self._event(
+                db,
+                project_id,
+                "command." + payload["action"],
+                {
+                    "operationId": identity,
+                    "actor": payload["actor"],
+                    "arguments": payload["arguments"],
+                    "result": result,
+                },
+            )
         return result
 
     def publish_focus(self, project_id, view_id, value):
@@ -971,17 +1279,25 @@ class Store:
             raise ValueError("Supply a view identity")
         clip_id = value.get("clipId") or None
         with self.connect() as db:
-            row = db.execute("SELECT CASE WHEN ? IS NULL THEN 1 ELSE EXISTS (SELECT 1 FROM json_each(projects.document,'$.clips') WHERE json_extract(value,'$.id')=?) END FROM projects WHERE id=?", (clip_id, clip_id, project_id)).fetchone()
+            row = db.execute(
+                "SELECT CASE WHEN ? IS NULL THEN 1 ELSE EXISTS (SELECT 1 FROM json_each(projects.document,'$.clips') WHERE json_extract(value,'$.id')=?) END FROM projects WHERE id=?",
+                (clip_id, clip_id, project_id),
+            ).fetchone()
         if row is None:
             raise KeyError("Project not found")
         if not row[0]:
             raise ValueError("Focus points to an unavailable shot")
         with self.focus_store.connect() as db:
-            db.execute("INSERT INTO focus VALUES(?,?,?,?) ON CONFLICT(project_id,view_id) DO UPDATE SET document=excluded.document,updated=excluded.updated", (project_id, view_id, encode(value), time.time()))
+            db.execute(
+                "INSERT INTO focus VALUES(?,?,?,?) ON CONFLICT(project_id,view_id) DO UPDATE SET document=excluded.document,updated=excluded.updated",
+                (project_id, view_id, encode(value), time.time()),
+            )
 
     def focused(self, project_id, view_id=None):
         with self.focus_store.connect() as db:
-            rows = db.execute("SELECT * FROM focus WHERE project_id=? AND updated>?", (project_id, time.time() - 15)).fetchall()
+            rows = db.execute(
+                "SELECT * FROM focus WHERE project_id=? AND updated>?", (project_id, time.time() - 15)
+            ).fetchall()
         if view_id:
             rows = [r for r in rows if r["view_id"] == view_id]
         if len(rows) != 1:
@@ -999,7 +1315,13 @@ class Store:
 
     def pending(self):
         with self.connect() as db:
-            return [r[0] for r in db.execute("SELECT id FROM attempts WHERE status IN (" + ",".join("?" for _ in attempts.PENDING) + ")", tuple(attempts.PENDING))]
+            return [
+                r[0]
+                for r in db.execute(
+                    "SELECT id FROM attempts WHERE status IN (" + ",".join("?" for _ in attempts.PENDING) + ")",
+                    tuple(attempts.PENDING),
+                )
+            ]
 
     def dispatched(self, attempt_id, payload, validation):
         with self.connect() as db:
@@ -1019,8 +1341,13 @@ class Store:
         if current and current["status"] == status and result is None and current["error"] == error:
             return
         if current and status not in attempts.ALLOWED.get(current[0], ()):
-            logging.warning("Spool attempt transition outside observed contract: %s -> %s (%s)", current[0], status, attempt_id)
-        db.execute("UPDATE attempts SET status=?,result=COALESCE(?,result),error=? WHERE id=? AND status!='complete'", (status, encode(result) if result is not None else None, error, attempt_id))
+            logging.warning(
+                "Spool attempt transition outside observed contract: %s -> %s (%s)", current[0], status, attempt_id
+            )
+        db.execute(
+            "UPDATE attempts SET status=?,result=COALESCE(?,result),error=? WHERE id=? AND status!='complete'",
+            (status, encode(result) if result is not None else None, error, attempt_id),
+        )
         if current and current[0] != status and current[0] != attempts.COMPLETE:
             project_id = db.execute("SELECT project_id FROM attempts WHERE id=?", (attempt_id,)).fetchone()[0]
             self._event(db, project_id, "attempt.status", {"attemptId": attempt_id, "status": status, "error": error})

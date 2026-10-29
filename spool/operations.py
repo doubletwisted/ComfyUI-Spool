@@ -5,6 +5,7 @@ check and the transaction. `use_take` and `apply_capture` also own the order of
 sidecar work: check the take's workflow file before saving the project, and
 write it only after the save succeeds.
 """
+
 import hashlib
 
 
@@ -17,7 +18,7 @@ def fit_to_take(document, clip, frames):
     if length <= new_length:
         return
     track = clip.get("videoTrack", 1)
-    following = document["clips"][document["clips"].index(clip) + 1:]
+    following = document["clips"][document["clips"].index(clip) + 1 :]
     following = next((c for c in following if c.get("videoTrack", 1) == track), None)
     if following:
         following["gapBefore"] = following.get("gapBefore", 0) + length - new_length
@@ -40,7 +41,10 @@ def assign_workflow(clip, version, capture):
     clip["workflowVersion"] = version
     clip["bindings"] = capture.get("bindings", [])
     # Built-in examples ship without their source files; the clip asks for its own.
-    clip["inputValues"] = {b["key"]: "" if builtin and b.get("asset") else capture["prompt"][b["nodeId"]]["inputs"][b["input"]] for b in clip["bindings"]}
+    clip["inputValues"] = {
+        b["key"]: "" if builtin and b.get("asset") else capture["prompt"][b["nodeId"]]["inputs"][b["input"]]
+        for b in clip["bindings"]
+    }
     clip["executionTarget"] = capture.get("executionTarget", "local")
     library = capture.get("provenance", {}).get("importedWorkflowId")
     if library:
@@ -63,12 +67,17 @@ def restage(original, prepared, values):
 def _sidecars():
     # sidecars imports store, which imports this module for its document operations.
     from . import sidecars
+
     return sidecars
 
 
 def _refresh_sidecar(capture, source):
     raw = _sidecars().serialize(capture)
-    capture["sidecar"] = {"sha256": hashlib.sha256(raw).hexdigest(), "name": source.with_suffix(".json").name, "needsSerialization": False}
+    capture["sidecar"] = {
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "name": source.with_suffix(".json").name,
+        "needsSerialization": False,
+    }
 
 
 def _write_sidecar(store, source, capture, expected):
@@ -97,7 +106,9 @@ def use_take(store, project_id, revision, clip_id, take_id, capture=None):
     return saved
 
 
-def apply_capture(store, project_id, revision, clip_id, capture, overrides=None, save_sidecar=False, reset_inputs=False):
+def apply_capture(
+    store, project_id, revision, clip_id, capture, overrides=None, save_sidecar=False, reset_inputs=False
+):
     """Save a captured workflow to the clip (Apply to clip).
 
     With `save_sidecar`, the graph also replaces the workflow file of the take in
@@ -110,7 +121,9 @@ def apply_capture(store, project_id, revision, clip_id, capture, overrides=None,
         if link.get("projectId") != project_id or link.get("clipId") != clip_id:
             raise ValueError("Apply the workflow linked to this clip")
         clip = store.clip(project_id, clip_id)
-        take = next((t for t in clip.get("takes", []) if t["id"] == clip.get("takeId") and not t.get("placeholder")), None)
+        take = next(
+            (t for t in clip.get("takes", []) if t["id"] == clip.get("takeId") and not t.get("placeholder")), None
+        )
         if take:
             source = sidecars.media_path(store.root, take["media"])
             if not source.is_file():

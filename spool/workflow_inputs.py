@@ -1,6 +1,12 @@
 """Exact loader addresses in editor graphs and their serialized API prompts."""
 
-LOADERS = {"LoadImage": "image", "LoadImageMask": "image", "LoadAudio": "audio", "LoadVideo": "file", "VHS_LoadVideo": "video"}
+LOADERS = {
+    "LoadImage": "image",
+    "LoadImageMask": "image",
+    "LoadAudio": "audio",
+    "LoadVideo": "file",
+    "VHS_LoadVideo": "video",
+}
 
 
 def sources(capture):
@@ -89,6 +95,7 @@ def leave_out(prompt, bindings, values, settings, result):
             if not (isinstance(link, list) and len(link) == 2):
                 raise ValueError("A bypassed node needs a connected input to pass through")
         raise ValueError("Bypassed nodes form a loop")
+
     for node in prompt.values():
         for name, value in node["inputs"].items():
             if isinstance(value, list) and len(value) == 2 and value[0] in bypass:

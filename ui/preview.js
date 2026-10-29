@@ -6,9 +6,9 @@
 // change preview resolution, which happened to clear the cache. Preparing also
 // saved the whole project so the server could read two numbers from the document;
 // the caller now states the size it wants.
-export const QUALITY = {full: 1, half: 2, quarter: 4};
+export const QUALITY = { full: 1, half: 2, quarter: 4 };
 
-export function createPreviews({target, request, changed}) {
+export function createPreviews({ target, request, changed }) {
   const entries = new Map();
 
   const keyFor = media => {
@@ -18,15 +18,24 @@ export function createPreviews({target, request, changed}) {
 
   // Returns the current entry and starts preparing on first use.
   function status(media) {
-    if (!media?.id || !['video', 'image'].includes(media.kind)) return {state: 'direct'};
-    const key = keyFor(media), held = entries.get(key);
+    if (!media?.id || !['video', 'image'].includes(media.kind)) return { state: 'direct' };
+    const key = keyFor(media),
+      held = entries.get(key);
     if (held) return held;
-    const entry = {state: 'preparing'};
+    const entry = { state: 'preparing' };
     entries.set(key, entry);
     (async () => {
       const size = target();
       try {
-        Object.assign(entry, await request(media, {divisor: QUALITY[size.quality], width: size.width, height: size.height, fps: size.fps}));
+        Object.assign(
+          entry,
+          await request(media, {
+            divisor: QUALITY[size.quality],
+            width: size.width,
+            height: size.height,
+            fps: size.fps,
+          }),
+        );
         entry.state = 'ready';
       } catch (error) {
         entry.state = 'failed';
@@ -49,5 +58,12 @@ export function createPreviews({target, request, changed}) {
     entries.clear();
   }
 
-  return {status, retry, clear, get size() { return entries.size; }};
+  return {
+    status,
+    retry,
+    clear,
+    get size() {
+      return entries.size;
+    },
+  };
 }

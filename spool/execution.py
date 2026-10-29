@@ -14,7 +14,6 @@ from .collection import Collector
 from .credentials import cloud_key
 
 
-
 def workflow_metadata(extra_data):
     """The workflow id Comfy's own /prompt route attaches for its job history, when this Comfy has it."""
     try:
@@ -52,19 +51,39 @@ class LocalExecutor:
         if not observed:
             return project
         for job in project["document"]["jobs"]:
-            if job["status"] not in {attempts.RUNNING, attempts.QUEUED, attempts.DISPATCHING} or job["promptId"] != observed["promptId"] or job.get("target") != attempts.LOCAL:
+            if (
+                job["status"] not in {attempts.RUNNING, attempts.QUEUED, attempts.DISPATCHING}
+                or job["promptId"] != observed["promptId"]
+                or job.get("target") != attempts.LOCAL
+            ):
                 continue
             request = self.store.for_project(project["id"]).attempt(job["id"])["request"]
             job["status"] = attempts.RUNNING
-            job["nodeProgress"] = [{**node, "label": request["prompt"].get(node["id"], {}).get("_meta", {}).get("title") or request["prompt"].get(node["id"], {}).get("class_type") or node["id"]} for node in observed["nodes"]]
+            job["nodeProgress"] = [
+                {
+                    **node,
+                    "label": request["prompt"].get(node["id"], {}).get("_meta", {}).get("title")
+                    or request["prompt"].get(node["id"], {}).get("class_type")
+                    or node["id"],
+                }
+                for node in observed["nodes"]
+            ]
         return project
 
     async def queue(self, project_id, revision, clip_ids, count, operation_id=None, actor="human", items=None):
         store = self.store.for_project(project_id)
         media = self.media.for_project(store, project_id)
         async with self.lock:
-            project = await asyncio.to_thread(requests.accept, store, media, project_id, revision,
-                                              items or [{"clipId": c, "count": count} for c in clip_ids], operation_id, actor)
+            project = await asyncio.to_thread(
+                requests.accept,
+                store,
+                media,
+                project_id,
+                revision,
+                items or [{"clipId": c, "count": count} for c in clip_ids],
+                operation_id,
+                actor,
+            )
             if self.disabled_reason:
                 return project
             for job in project["document"]["jobs"]:
@@ -98,14 +117,39 @@ class LocalExecutor:
         try:
             farm = target == attempts.DEADLINE
             package = await self._deadline_package(store, attempt) if farm else None
-            payload = {"prompt": copy.deepcopy(request["prompt"]), "prompt_id": attempt["prompt_id"], "extra_data": {"extra_pnginfo": {"workflow": request["capture"].get("workflow") or {}, "spool": {"attempt_id": attempt["id"], "take_id": attempt["take_id"], "fingerprint": request["fingerprint"]}}}}
+            payload = {
+                "prompt": copy.deepcopy(request["prompt"]),
+                "prompt_id": attempt["prompt_id"],
+                "extra_data": {
+                    "extra_pnginfo": {
+                        "workflow": request["capture"].get("workflow") or {},
+                        "spool": {
+                            "attempt_id": attempt["id"],
+                            "take_id": attempt["take_id"],
+                            "fingerprint": request["fingerprint"],
+                        },
+                    }
+                },
+            }
             payload = self.server.trigger_on_prompt(payload)
             prompt = payload["prompt"]
             self.server.node_replace_manager.apply_replacements(prompt)
-            local_compatibility({k: v for k, v in prompt.items() if not farm or k != request["launcherNodeId"]}, request["capture"]["result"])
-            targets = [request['capture']['result']['nodeId']] if request['capture'].get('resultOnly') and not farm else payload.get("partial_execution_targets")
+            local_compatibility(
+                {k: v for k, v in prompt.items() if not farm or k != request["launcherNodeId"]},
+                request["capture"]["result"],
+            )
+            targets = (
+                [request["capture"]["result"]["nodeId"]]
+                if request["capture"].get("resultOnly") and not farm
+                else payload.get("partial_execution_targets")
+            )
             valid = await self.validate(attempt["prompt_id"], prompt, targets)
-            await asyncio.to_thread(store.dispatched, attempt["id"], payload, {"valid": valid[0], "acceptedOutputs": valid[2], "nodeErrors": valid[3], "error": valid[1]})
+            await asyncio.to_thread(
+                store.dispatched,
+                attempt["id"],
+                payload,
+                {"valid": valid[0], "acceptedOutputs": valid[2], "nodeErrors": valid[3], "error": valid[1]},
+            )
             expected_output = request["launcherNodeId"] if farm else request["capture"]["result"]["nodeId"]
             if not valid[0] or expected_output not in valid[2]:
                 await transition(attempts.FAILED, error=json.dumps({"error": valid[1], "nodeErrors": valid[3]}))
@@ -117,13 +161,25 @@ class LocalExecutor:
                 authored = request["prompt"].get(node_id, {})
                 loader_input = LOADERS.get(node["class_type"])
                 if loader_input and node["inputs"].get(loader_input) != authored.get("inputs", {}).get(loader_input):
-                    await transition(attempts.FAILED, error="A host hook changed a frozen file dependency. Capture a compatible local recipe.")
+                    await transition(
+                        attempts.FAILED,
+                        error="A host hook changed a frozen file dependency. Capture a compatible local recipe.",
+                    )
                     return
-                if node["class_type"] in SAVERS and "filename_prefix" in node["inputs"] and node["inputs"]["filename_prefix"] != request["outputNamespace"]:
-                    await transition(attempts.FAILED, error="A host hook changed the isolated saver path. Capture a compatible local recipe.")
+                if (
+                    node["class_type"] in SAVERS
+                    and "filename_prefix" in node["inputs"]
+                    and node["inputs"]["filename_prefix"] != request["outputNamespace"]
+                ):
+                    await transition(
+                        attempts.FAILED,
+                        error="A host hook changed the isolated saver path. Capture a compatible local recipe.",
+                    )
                     return
             await asyncio.to_thread(verify_frozen_inputs, media, request, prompt)
-            await transition(attempts.DISPATCHING, result={"validation": {"acceptedOutputs": valid[2], "nodeErrors": valid[3]}})
+            await transition(
+                attempts.DISPATCHING, result={"validation": {"acceptedOutputs": valid[2], "nodeErrors": valid[3]}}
+            )
             if farm:
                 await self._submit_deadline(store, attempt, package, transition)
             else:
@@ -136,9 +192,14 @@ class LocalExecutor:
         """The immutable package the Deadline job script verifies; recording it marks the submission."""
         request = attempt["request"]
         launcher = request["launcherNodeId"]
-        package = {"schemaVersion": 2, **{k: request[k] for k in ("projectId", "clipId", "takeId", "attemptId", "fingerprint")},
-                   "variationIndex": 0, "result": request["capture"]["result"], "assets": request["assets"],
-                   "resultRoot": request["prompt"][launcher]["inputs"]["output_directory"]}
+        package = {
+            "schemaVersion": 2,
+            **{k: request[k] for k in ("projectId", "clipId", "takeId", "attemptId", "fingerprint")},
+            "variationIndex": 0,
+            "result": request["capture"]["result"],
+            "assets": request["assets"],
+            "resultRoot": request["prompt"][launcher]["inputs"]["output_directory"],
+        }
         submission = await asyncio.to_thread(store.submission, attempt["id"], package)
         package["submissionId"] = submission["id"]
         return package
@@ -146,10 +207,12 @@ class LocalExecutor:
     async def _deadline_problem(self, attempt, prompt):
         """Why a Deadline workflow cannot leave this host, after Comfy's hooks ran, or None."""
         request = attempt["request"]
-        if farm_protocol.semantic_prompt(prompt) != farm_protocol.semantic_prompt(request['prompt']):
-            return 'A host hook changed the frozen Deadline workflow. Apply a compatible graph before generating.'
+        if farm_protocol.semantic_prompt(prompt) != farm_protocol.semantic_prompt(request["prompt"]):
+            return "A host hook changed the frozen Deadline workflow. Apply a compatible graph before generating."
         worker_prompt = {k: v for k, v in prompt.items() if k != request["launcherNodeId"]}
-        worker_validation = await self.validate(attempt["prompt_id"], worker_prompt, [request["capture"]["result"]["nodeId"]])
+        worker_validation = await self.validate(
+            attempt["prompt_id"], worker_prompt, [request["capture"]["result"]["nodeId"]]
+        )
         if not worker_validation[0] or request["capture"]["result"]["nodeId"] not in worker_validation[2]:
             return "Selected worker output failed host validation: " + json.dumps(worker_validation[1])
         return None
@@ -173,7 +236,7 @@ class LocalExecutor:
         # removes it from queue/history responses. Never persist the key.
         sensitive = {}
         if api_key := cloud_key():
-            sensitive['api_key_comfy_org'] = api_key
+            sensitive["api_key_comfy_org"] = api_key
         self.server.prompt_queue.put((number, attempt["prompt_id"], prompt, extra, valid[2], sensitive))
         await transition(attempts.QUEUED)
 
@@ -187,7 +250,7 @@ class LocalExecutor:
             media = self.media.for_project(store, store.list()[0]["id"])
             for attempt_id in pending:
                 attempt = store.attempt(attempt_id)
-                if attempts.target_of(attempt['request']) != attempts.CLOUD:
+                if attempts.target_of(attempt["request"]) != attempts.CLOUD:
                     found.append((store, media, attempt))
         return found
 
@@ -207,9 +270,18 @@ class LocalExecutor:
         if history:
             status = history.get("status", {})
             if not status.get("completed") or status.get("status_str") != "success":
-                store.transition(attempt_id, attempts.FAILED, result={"history": history}, error="Workflow failed; partial outputs are retained in history")
+                store.transition(
+                    attempt_id,
+                    attempts.FAILED,
+                    result={"history": history},
+                    error="Workflow failed; partial outputs are retained in history",
+                )
                 return False
-            store.transition(attempt_id, attempts.COLLECTING, result={"history": history, "dispatch": store.dispatch_record(attempt_id)})
+            store.transition(
+                attempt_id,
+                attempts.COLLECTING,
+                result={"history": history, "dispatch": store.dispatch_record(attempt_id)},
+            )
             try:
                 if not receipt_file.is_file():
                     artifacts, primary = media.collect(attempt, history, False)
@@ -224,7 +296,11 @@ class LocalExecutor:
         elif attempt["status"] in {attempts.INTENT, attempts.WAITING}:
             return True
         else:
-            store.transition(attempt_id, attempts.UNCERTAIN, error="Prompt absent from queue/history. Computation may have stopped or history was cleared. No automatic redispatch.")
+            store.transition(
+                attempt_id,
+                attempts.UNCERTAIN,
+                error="Prompt absent from queue/history. Computation may have stopped or history was cleared. No automatic redispatch.",
+            )
         return False
 
     async def reconcile(self):
@@ -250,9 +326,12 @@ class LocalExecutor:
                 self.store.publish_host(self.configuration, self.session_id, definitions)
             except (ExecutorBusy, Conflict) as error:
                 self.ownership.close()
-                owner = self.store.host()['configuration'] or {}
-                self.disabled_reason = str(error) + ' Paired Comfy: ' + owner.get('comfyUrl', 'not recorded')
-                logging.warning('Spool queue dispatch disabled in this instance: %s Comfy will start normally.', self.disabled_reason)
+                owner = self.store.host()["configuration"] or {}
+                self.disabled_reason = str(error) + " Paired Comfy: " + owner.get("comfyUrl", "not recorded")
+                logging.warning(
+                    "Spool queue dispatch disabled in this instance: %s Comfy will start normally.",
+                    self.disabled_reason,
+                )
                 yield
                 return
             self.managed = True

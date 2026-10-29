@@ -1,4 +1,5 @@
 """Verify the native document can be served without prototype source."""
+
 import importlib.util
 from pathlib import Path
 from unittest.mock import patch
@@ -24,7 +25,7 @@ assert '<script type="module" src="/spool/ui/bootstrap.js"></script>' in expecte
 assert "demo-runtime.js" not in expected
 assert '<main inert class="editor" id="editor"' in expected
 print("Native document served unchanged with prototype reads forbidden")
-for module in (ROOT / 'spool').glob('*.py'):
-    source = module.read_text(encoding='utf-8')
-    assert 'from ..demo' not in source and 'import demo' not in source, module
+for module in (ROOT / "spool").glob("*.py"):
+    source = module.read_text(encoding="utf-8")
+    assert "from ..demo" not in source and "import demo" not in source, module
 print("Native backend imports no demo modules")

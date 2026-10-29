@@ -1,32 +1,200 @@
-(async()=>{
- const n=spoolNative,d=document,$=id=>d.getElementById(id),T=await import('/spool/ui/timeline.js'),checks=[],c=()=>n.state.clips.find(c=>c.id==='shot');
- const check=(label,ok)=>{if(!ok)throw Error(label);checks.push(label);},wait=async fn=>{const end=Date.now()+15000;while(!await fn()){if(Date.now()>end)throw Error('Studio followup: '+$('toast').textContent);await new Promise(r=>setTimeout(r,20));}},frame=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
- const context=node=>{const r=node.getBoundingClientRect();node.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.left+12,clientY:r.top+12}));},remove=()=>d.querySelector('#native-clip-menu [role=menuitem]').click(),undo=async()=>{n.undo();await n.flush();};
- n.selectClip('shot');await n.flush();const initial=JSON.stringify(n.state.clips);
- context(d.querySelector('[data-select-track="3"]').parentElement);check('Track headers offer Delete track',!$('native-clip-menu').hidden&&$('native-clip-menu').textContent==='Delete track');remove();await n.flush();
- check('Deleting V3 removes its clips and lane',T.videoTracks(n.state)===2&&!n.state.clips.some(c=>c.id==='next'));await undo();check('One Undo restores the deleted lane and all clip data',T.videoTracks(n.state)===3&&JSON.stringify(n.state.clips)===initial);
- context($('sourceTrackHeader'));remove();await n.flush();check('Deleting A1 removes its lane without deleting video',n.state.clips.some(c=>c.id==='next'&&c.audioDetached)&&$('sourceTrackHeader').hidden);await undo();
- context($('musicTrackHeader'));remove();await n.flush();check('Deleting A2 removes its sound and lane',!n.state.audioClips.length&&$('musicLane').hidden);await undo();check('Audio track deletion is undoable',n.state.audioClips.length===1&&!$('musicLane').hidden);
- for(const side of ['Left','Right']){const button=$('toggle'+side+'Panel'),opener=$('show'+side+'Panel'),panel=$(side==='Left'?'mediaPanel':'inspector');check(side+' panel has its toggle in the panel header',panel.contains(button)&&button.getClientRects().length&&button.getAttribute('aria-pressed')==='true');button.click();await frame();check(side+' panel toggle hides the panel and reveals its reopening arrow',button.getAttribute('aria-pressed')==='false'&&!panel.getClientRects().length&&opener.getClientRects().length);opener.click();await frame();check(side+' panel edge arrow restores the panel',button.getAttribute('aria-pressed')==='true'&&panel.getClientRects().length&&opener.hidden);}
- await wait(()=>d.querySelector('[data-builtin="video_ltx2_5_i2v"]'));const library=d.querySelector('[data-builtin="video_ltx2_5_i2v"]').closest('.workflow-cards'),before=library.firstElementChild.getBoundingClientRect().width;
- $('mediaResize').dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true,cancelable:true}));await frame();
- check('A wider library adds columns instead of giant tiles',getComputedStyle(library).gridTemplateColumns.split(' ').length>2&&library.firstElementChild.getBoundingClientRect().width<280&&before<280);$('mediaResize').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));
- const originalTake=c().takes[0],fresh={...structuredClone(originalTake),id:'arrival-'+crypto.randomUUID(),number:99,generated:true};c().takes.push(fresh);n.selectClip('shot');
- check('Unseen takes show a readable New label on their timeline clip',d.querySelector('[data-clip="shot"] [data-unseen-takes]')?.textContent.trim()==='New'&&parseFloat(getComputedStyle(d.querySelector('[data-clip="shot"] [data-unseen-takes]')).fontSize)>0);n.viewTake(fresh.id);check('Reviewing that take clears the timeline New label',!d.querySelector('[data-clip="shot"] [data-unseen-takes]'));c().takes=c().takes.filter(t=>t.id!==fresh.id);n.selectClip('shot');
- $('nativeCount').value='4';$('nativeCount').dispatchEvent(new Event('change',{bubbles:true}));d.querySelector('[data-seed-mode]').value='increment';d.querySelector('[data-seed-mode]').dispatchEvent(new Event('change',{bubbles:true}));
- $('generate').click();await wait(()=>$('generationReviewQueue'));check('Generation review opens after pending saves settle',$('modal').textContent.includes('124')&&$('modal').textContent.includes('127'));
- c().inputValues.seed=124;await $('generationReviewQueue').onclick();check('Changed settings refresh the review rather than leaving a blocked dialog',$('modal').textContent.includes('125')&&$('modal').textContent.includes('128')&&$('toast').textContent.includes('Review the updated values'));
- c().revision++;c().notes=[{id:'review-note',text:'Unrelated note',status:'open'}];const originalFetch=window.fetch;let queued=0;
- window.fetch=async(input,options)=>String(input).endsWith('/queue')?(queued++,new Response(JSON.stringify({error:'Controlled queue stop after review'}),{status:400,headers:{'Content-Type':'application/json'}})):originalFetch(input,options);
- try{await $('generationReviewQueue').onclick();check('Unrelated bookkeeping and notes do not invalidate reviewed seeds',queued===1&&$('toast').textContent==='Controlled queue stop after review');}finally{window.fetch=originalFetch;}$('generationReviewCancel').click();
- const apply=async id=>{const data=new DataTransfer();data.setData('application/spool',JSON.stringify({builtin:id}));const node=d.querySelector('[data-clip="shot"]'),r=node.getBoundingClientRect(),old=c().workflowVersion;node.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:data,clientX:r.left+r.width/2,clientY:r.top+r.height/2}));await wait(()=>c().workflowVersion!==old);await n.flush();};
- const chosen=c().takeId;await apply('video_minimax_h3_i2v');
- check('Applying I2V to an image assigns the current image to First frame',c().takeId===chosen&&c().shotInputs.some(s=>s.source==='selected'&&s.frame==='first')&&c().bindings.some(b=>b.slot==='firstFrame'&&c().shotInputs.some(s=>s.key===b.key)));
- const ratio=c().bindings.find(b=>b.input==='aspect_ratio'),resolution=c().bindings.find(b=>b.input==='megapixels');
- check('Workflow replacement matches aspect ratio and keeps its resolution preset',c().inputValues[ratio.key].startsWith('1:1')&&c().inputValues[resolution.key]===0.4);
- check('Local model workflows do not display Cloud Partner Node execution controls',!$('clipExecutionTarget'));
- await apply('api_minimax_h3_max_i2v');check('Cloud workflows retain their Cloud/Local execution selector',$('clipExecutionTarget')?.value==='cloud');
- await wait(()=>{const image=d.querySelector('[data-image-input] img');return image&&!image.hidden&&image.complete&&image.naturalWidth;});
- check('Matched source media resolves to a real Inspector preview without a stale-edit error',!$('toast').textContent.includes('Project changed'));
- check('The checks submit no render jobs',!n.state.jobs.length);return {checks};
-})()
+(async () => {
+  const n = spoolNative,
+    d = document,
+    $ = id => d.getElementById(id),
+    T = await import('/spool/ui/timeline.js'),
+    checks = [],
+    c = () => n.state.clips.find(c => c.id === 'shot');
+  const check = (label, ok) => {
+      if (!ok) throw Error(label);
+      checks.push(label);
+    },
+    wait = async fn => {
+      const end = Date.now() + 15000;
+      while (!(await fn())) {
+        if (Date.now() > end) throw Error('Studio followup: ' + $('toast').textContent);
+        await new Promise(r => setTimeout(r, 20));
+      }
+    },
+    frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const context = node => {
+      const r = node.getBoundingClientRect();
+      node.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 12, clientY: r.top + 12 }),
+      );
+    },
+    remove = () => d.querySelector('#native-clip-menu [role=menuitem]').click(),
+    undo = async () => {
+      n.undo();
+      await n.flush();
+    };
+  n.selectClip('shot');
+  await n.flush();
+  const initial = JSON.stringify(n.state.clips);
+  context(d.querySelector('[data-select-track="3"]').parentElement);
+  check(
+    'Track headers offer Delete track',
+    !$('native-clip-menu').hidden && $('native-clip-menu').textContent === 'Delete track',
+  );
+  remove();
+  await n.flush();
+  check(
+    'Deleting V3 removes its clips and lane',
+    T.videoTracks(n.state) === 2 && !n.state.clips.some(c => c.id === 'next'),
+  );
+  await undo();
+  check(
+    'One Undo restores the deleted lane and all clip data',
+    T.videoTracks(n.state) === 3 && JSON.stringify(n.state.clips) === initial,
+  );
+  context($('sourceTrackHeader'));
+  remove();
+  await n.flush();
+  check(
+    'Deleting A1 removes its lane without deleting video',
+    n.state.clips.some(c => c.id === 'next' && c.audioDetached) && $('sourceTrackHeader').hidden,
+  );
+  await undo();
+  context($('musicTrackHeader'));
+  remove();
+  await n.flush();
+  check('Deleting A2 removes its sound and lane', !n.state.audioClips.length && $('musicLane').hidden);
+  await undo();
+  check('Audio track deletion is undoable', n.state.audioClips.length === 1 && !$('musicLane').hidden);
+  for (const side of ['Left', 'Right']) {
+    const button = $('toggle' + side + 'Panel'),
+      opener = $('show' + side + 'Panel'),
+      panel = $(side === 'Left' ? 'mediaPanel' : 'inspector');
+    check(
+      side + ' panel has its toggle in the panel header',
+      panel.contains(button) && button.getClientRects().length && button.getAttribute('aria-pressed') === 'true',
+    );
+    button.click();
+    await frame();
+    check(
+      side + ' panel toggle hides the panel and reveals its reopening arrow',
+      button.getAttribute('aria-pressed') === 'false' &&
+        !panel.getClientRects().length &&
+        opener.getClientRects().length,
+    );
+    opener.click();
+    await frame();
+    check(
+      side + ' panel edge arrow restores the panel',
+      button.getAttribute('aria-pressed') === 'true' && panel.getClientRects().length && opener.hidden,
+    );
+  }
+  await wait(() => d.querySelector('[data-builtin="video_ltx2_5_i2v"]'));
+  const library = d.querySelector('[data-builtin="video_ltx2_5_i2v"]').closest('.workflow-cards'),
+    before = library.firstElementChild.getBoundingClientRect().width;
+  $('mediaResize').dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+  await frame();
+  check(
+    'A wider library adds columns instead of giant tiles',
+    getComputedStyle(library).gridTemplateColumns.split(' ').length > 2 &&
+      library.firstElementChild.getBoundingClientRect().width < 280 &&
+      before < 280,
+  );
+  $('mediaResize').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  const originalTake = c().takes[0],
+    fresh = { ...structuredClone(originalTake), id: 'arrival-' + crypto.randomUUID(), number: 99, generated: true };
+  c().takes.push(fresh);
+  n.selectClip('shot');
+  check(
+    'Unseen takes show a readable New label on their timeline clip',
+    d.querySelector('[data-clip="shot"] [data-unseen-takes]')?.textContent.trim() === 'New' &&
+      parseFloat(getComputedStyle(d.querySelector('[data-clip="shot"] [data-unseen-takes]')).fontSize) > 0,
+  );
+  n.viewTake(fresh.id);
+  check(
+    'Reviewing that take clears the timeline New label',
+    !d.querySelector('[data-clip="shot"] [data-unseen-takes]'),
+  );
+  c().takes = c().takes.filter(t => t.id !== fresh.id);
+  n.selectClip('shot');
+  $('nativeCount').value = '4';
+  $('nativeCount').dispatchEvent(new Event('change', { bubbles: true }));
+  d.querySelector('[data-seed-mode]').value = 'increment';
+  d.querySelector('[data-seed-mode]').dispatchEvent(new Event('change', { bubbles: true }));
+  $('generate').click();
+  await wait(() => $('generationReviewQueue'));
+  check(
+    'Generation review opens after pending saves settle',
+    $('modal').textContent.includes('124') && $('modal').textContent.includes('127'),
+  );
+  c().inputValues.seed = 124;
+  await $('generationReviewQueue').onclick();
+  check(
+    'Changed settings refresh the review rather than leaving a blocked dialog',
+    $('modal').textContent.includes('125') &&
+      $('modal').textContent.includes('128') &&
+      $('toast').textContent.includes('Review the updated values'),
+  );
+  c().revision++;
+  c().notes = [{ id: 'review-note', text: 'Unrelated note', status: 'open' }];
+  const originalFetch = window.fetch;
+  let queued = 0;
+  window.fetch = async (input, options) =>
+    String(input).endsWith('/queue')
+      ? (queued++,
+        new Response(JSON.stringify({ error: 'Controlled queue stop after review' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }))
+      : originalFetch(input, options);
+  try {
+    await $('generationReviewQueue').onclick();
+    check(
+      'Unrelated bookkeeping and notes do not invalidate reviewed seeds',
+      queued === 1 && $('toast').textContent === 'Controlled queue stop after review',
+    );
+  } finally {
+    window.fetch = originalFetch;
+  }
+  $('generationReviewCancel').click();
+  const apply = async id => {
+    const data = new DataTransfer();
+    data.setData('application/spool', JSON.stringify({ builtin: id }));
+    const node = d.querySelector('[data-clip="shot"]'),
+      r = node.getBoundingClientRect(),
+      old = c().workflowVersion;
+    node.dispatchEvent(
+      new DragEvent('drop', {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: data,
+        clientX: r.left + r.width / 2,
+        clientY: r.top + r.height / 2,
+      }),
+    );
+    await wait(() => c().workflowVersion !== old);
+    await n.flush();
+  };
+  const chosen = c().takeId;
+  await apply('video_minimax_h3_i2v');
+  check(
+    'Applying I2V to an image assigns the current image to First frame',
+    c().takeId === chosen &&
+      c().shotInputs.some(s => s.source === 'selected' && s.frame === 'first') &&
+      c().bindings.some(b => b.slot === 'firstFrame' && c().shotInputs.some(s => s.key === b.key)),
+  );
+  const ratio = c().bindings.find(b => b.input === 'aspect_ratio'),
+    resolution = c().bindings.find(b => b.input === 'megapixels');
+  check(
+    'Workflow replacement matches aspect ratio and keeps its resolution preset',
+    c().inputValues[ratio.key].startsWith('1:1') && c().inputValues[resolution.key] === 0.4,
+  );
+  check('Local model workflows do not display Cloud Partner Node execution controls', !$('clipExecutionTarget'));
+  await apply('api_minimax_h3_max_i2v');
+  check('Cloud workflows retain their Cloud/Local execution selector', $('clipExecutionTarget')?.value === 'cloud');
+  await wait(() => {
+    const image = d.querySelector('[data-image-input] img');
+    return image && !image.hidden && image.complete && image.naturalWidth;
+  });
+  check(
+    'Matched source media resolves to a real Inspector preview without a stale-edit error',
+    !$('toast').textContent.includes('Project changed'),
+  );
+  check('The checks submit no render jobs', !n.state.jobs.length);
+  return { checks };
+})();

@@ -1,47 +1,151 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {generationItems,seedUpdates,jobElapsed,jobStage,finishedRender,clearableRender,visibleRenderJobs,reviewSignature,PENDING,TERMINAL,ACTIVE,cancelAction} from '../ui/generation.js';
-const statuses=JSON.parse(fs.readFileSync(new URL('./fixtures/attempt_statuses.json',import.meta.url),'utf8'));
-assert.deepEqual([...PENDING].sort(),statuses.pending);assert.deepEqual([...TERMINAL].sort(),statuses.terminal);
-assert.deepEqual(ACTIVE,PENDING.filter(status=>status!=='uncertain'));
-for(const c of statuses.cancel)assert.equal(cancelAction({status:c.status,target:c.target,submission:c.externalJob?{external_id:'job'}:null}),c.action,JSON.stringify(c));
-assert.equal(cancelAction({status:'uncertain'}),'cancelled','Jobs without a target are local');
-const exact=value=>({__spool_int__:String(value)}),max='18446744073709551615';
-const c={id:'shot',name:'Shot',workflowVersion:'recipe',count:3,seedMode:'different',inputValues:{seed:exact(max),other:17},bindings:[{key:'seed',role:'seed',nodeId:'noise',input:'seed'},{key:'other',role:'seed',nodeId:'second',input:'seed'}],seedKey:'seed'};
-const recipes={recipe:{prompt:{noise:{class_type:'Noise'},second:{class_type:'Noise'}}}},definitions={Noise:{input:{required:{seed:['INT',{min:0,max:exact(max)}]}}}};
-const original=JSON.stringify(c),items=generationItems([c],definitions,recipes);
-assert.deepEqual(items.map(i=>i.values.seed),[exact(0),exact(1),exact(2)]);
-assert.ok(items.every(i=>!('other' in i.values)&&i.count===1));
-assert.equal(JSON.stringify(c),original);
-assert.deepEqual(generationItems([{...c,seedMode:'same'}],definitions,recipes),[{clipId:'shot',count:3}]);
-assert.deepEqual(generationItems([{...c,count:1}],definitions,recipes),[{clipId:'shot',count:1,values:{seed:exact(0)}}]);
-assert.throws(()=>generationItems([{...c,seedKey:null}],definitions,recipes),/choose the seed/);
-assert.throws(()=>generationItems([c],{},recipes),/reload the seed/);
-assert.throws(()=>generationItems([c],{Noise:{input:{required:{seed:['INT',{min:0,max:Number(max)}]}}}},recipes),/exact integers/);
-assert.throws(()=>generationItems([{...c,inputValues:{seed:1,other:17}}],{Noise:{input:{required:{seed:['INT',{min:0,max:1}]}}}},recipes),/distinct/);
-const increment={...c,seedMode:'increment'},decrement={...c,seedMode:'decrement',inputValues:{...c.inputValues,seed:exact(0)}};
-assert.deepEqual(generationItems([increment],definitions,recipes).map(i=>i.values.seed),[exact(0),exact(1),exact(2)]);
-assert.deepEqual(generationItems([decrement],definitions,recipes).map(i=>i.values.seed),[exact(max),exact(BigInt(max)-1n),exact(BigInt(max)-2n)]);
-assert.deepEqual(generationItems([{...increment,count:1}],definitions,recipes).map(i=>i.values.seed),[exact(0)]);
-const random=generationItems([{...c,seedMode:'randomize',count:16}],definitions,recipes).map(i=>i.values.seed.__spool_int__);
-assert.equal(new Set(random).size,16);assert.ok(random.every(v=>BigInt(v)>=0n&&BigInt(v)<=BigInt(max)));
-assert.equal(seedUpdates([increment],generationItems([increment],definitions,recipes))[0].after.__spool_int__,'2');
-assert.equal(seedUpdates([c],items)[0].after.__spool_int__,'2');
-assert.equal(jobElapsed({status:'running',createdAt:100},175),'1m 15s');
-assert.equal(jobElapsed({status:'complete',createdAt:100,finishedAt:160},999),'1m 0s');
-assert.equal(jobElapsed({status:'complete',createdAt:100},999),'');
-assert.equal(jobStage({status:'collection_pending'}),'Collection needs retry');
-const history=[{id:'done',status:'complete'},{id:'failed',status:'failed'},{id:'cancelled',status:'cancelled'},{id:'cancelling',status:'cancel_requested'},{id:'active',status:'farm_running'},{id:'recover',status:'collection_pending'}];
-assert.deepEqual(history.filter(finishedRender).map(j=>j.id),['done','failed','cancelled']);
-assert.deepEqual(history.filter(clearableRender).map(j=>j.id),['done','failed','cancelled','cancelling']);
-assert.deepEqual(visibleRenderJobs(history,history.map(j=>j.id)).map(j=>j.id),['active','recover']);
-assert.deepEqual(visibleRenderJobs([{id:'failed',status:'collection_pending'}],['failed']).map(j=>j.id),['failed']);
-const project={fps:24,resolution:{width:1920,height:1080},clips:[structuredClone(c)],audioClips:[]},signature=reviewSignature(project,['shot']);
-project.clips[0].revision=2;project.clips[0].notes=[{text:'Note'}];project.clips[0].name='Renamed';project.clips[0].outputFolder='output/Renamed';project.clips[0].takes=[{id:'new arrival'}];
-assert.equal(reviewSignature(project,['shot']),signature);
-project.clips[0].inputValues={other:17,seed:exact(max)};
-assert.equal(reviewSignature(project,['shot']),signature);
-for(const change of [p=>p.clips[0].inputValues.seed=exact(7),p=>p.clips[0].count=4,p=>p.clips[0].workflowVersion='different',p=>p.clips[0].takeId='another',p=>p.clips[0].out=50,p=>p.fps=30,p=>p.resolution.width=1280]){
- const changed=structuredClone(project);change(changed);assert.notEqual(reviewSignature(changed,['shot']),signature);
+import {
+  generationItems,
+  seedUpdates,
+  jobElapsed,
+  jobStage,
+  finishedRender,
+  clearableRender,
+  visibleRenderJobs,
+  reviewSignature,
+  PENDING,
+  TERMINAL,
+  ACTIVE,
+  cancelAction,
+} from '../ui/generation.js';
+const statuses = JSON.parse(fs.readFileSync(new URL('./fixtures/attempt_statuses.json', import.meta.url), 'utf8'));
+assert.deepEqual([...PENDING].sort(), statuses.pending);
+assert.deepEqual([...TERMINAL].sort(), statuses.terminal);
+assert.deepEqual(
+  ACTIVE,
+  PENDING.filter(status => status !== 'uncertain'),
+);
+for (const c of statuses.cancel)
+  assert.equal(
+    cancelAction({ status: c.status, target: c.target, submission: c.externalJob ? { external_id: 'job' } : null }),
+    c.action,
+    JSON.stringify(c),
+  );
+assert.equal(cancelAction({ status: 'uncertain' }), 'cancelled', 'Jobs without a target are local');
+const exact = value => ({ __spool_int__: String(value) }),
+  max = '18446744073709551615';
+const c = {
+  id: 'shot',
+  name: 'Shot',
+  workflowVersion: 'recipe',
+  count: 3,
+  seedMode: 'different',
+  inputValues: { seed: exact(max), other: 17 },
+  bindings: [
+    { key: 'seed', role: 'seed', nodeId: 'noise', input: 'seed' },
+    { key: 'other', role: 'seed', nodeId: 'second', input: 'seed' },
+  ],
+  seedKey: 'seed',
+};
+const recipes = { recipe: { prompt: { noise: { class_type: 'Noise' }, second: { class_type: 'Noise' } } } },
+  definitions = { Noise: { input: { required: { seed: ['INT', { min: 0, max: exact(max) }] } } } };
+const original = JSON.stringify(c),
+  items = generationItems([c], definitions, recipes);
+assert.deepEqual(
+  items.map(i => i.values.seed),
+  [exact(0), exact(1), exact(2)],
+);
+assert.ok(items.every(i => !('other' in i.values) && i.count === 1));
+assert.equal(JSON.stringify(c), original);
+assert.deepEqual(generationItems([{ ...c, seedMode: 'same' }], definitions, recipes), [{ clipId: 'shot', count: 3 }]);
+assert.deepEqual(generationItems([{ ...c, count: 1 }], definitions, recipes), [
+  { clipId: 'shot', count: 1, values: { seed: exact(0) } },
+]);
+assert.throws(() => generationItems([{ ...c, seedKey: null }], definitions, recipes), /choose the seed/);
+assert.throws(() => generationItems([c], {}, recipes), /reload the seed/);
+assert.throws(
+  () =>
+    generationItems([c], { Noise: { input: { required: { seed: ['INT', { min: 0, max: Number(max) }] } } } }, recipes),
+  /exact integers/,
+);
+assert.throws(
+  () =>
+    generationItems(
+      [{ ...c, inputValues: { seed: 1, other: 17 } }],
+      { Noise: { input: { required: { seed: ['INT', { min: 0, max: 1 }] } } } },
+      recipes,
+    ),
+  /distinct/,
+);
+const increment = { ...c, seedMode: 'increment' },
+  decrement = { ...c, seedMode: 'decrement', inputValues: { ...c.inputValues, seed: exact(0) } };
+assert.deepEqual(
+  generationItems([increment], definitions, recipes).map(i => i.values.seed),
+  [exact(0), exact(1), exact(2)],
+);
+assert.deepEqual(
+  generationItems([decrement], definitions, recipes).map(i => i.values.seed),
+  [exact(max), exact(BigInt(max) - 1n), exact(BigInt(max) - 2n)],
+);
+assert.deepEqual(
+  generationItems([{ ...increment, count: 1 }], definitions, recipes).map(i => i.values.seed),
+  [exact(0)],
+);
+const random = generationItems([{ ...c, seedMode: 'randomize', count: 16 }], definitions, recipes).map(
+  i => i.values.seed.__spool_int__,
+);
+assert.equal(new Set(random).size, 16);
+assert.ok(random.every(v => BigInt(v) >= 0n && BigInt(v) <= BigInt(max)));
+assert.equal(seedUpdates([increment], generationItems([increment], definitions, recipes))[0].after.__spool_int__, '2');
+assert.equal(seedUpdates([c], items)[0].after.__spool_int__, '2');
+assert.equal(jobElapsed({ status: 'running', createdAt: 100 }, 175), '1m 15s');
+assert.equal(jobElapsed({ status: 'complete', createdAt: 100, finishedAt: 160 }, 999), '1m 0s');
+assert.equal(jobElapsed({ status: 'complete', createdAt: 100 }, 999), '');
+assert.equal(jobStage({ status: 'collection_pending' }), 'Collection needs retry');
+const history = [
+  { id: 'done', status: 'complete' },
+  { id: 'failed', status: 'failed' },
+  { id: 'cancelled', status: 'cancelled' },
+  { id: 'cancelling', status: 'cancel_requested' },
+  { id: 'active', status: 'farm_running' },
+  { id: 'recover', status: 'collection_pending' },
+];
+assert.deepEqual(
+  history.filter(finishedRender).map(j => j.id),
+  ['done', 'failed', 'cancelled'],
+);
+assert.deepEqual(
+  history.filter(clearableRender).map(j => j.id),
+  ['done', 'failed', 'cancelled', 'cancelling'],
+);
+assert.deepEqual(
+  visibleRenderJobs(
+    history,
+    history.map(j => j.id),
+  ).map(j => j.id),
+  ['active', 'recover'],
+);
+assert.deepEqual(
+  visibleRenderJobs([{ id: 'failed', status: 'collection_pending' }], ['failed']).map(j => j.id),
+  ['failed'],
+);
+const project = { fps: 24, resolution: { width: 1920, height: 1080 }, clips: [structuredClone(c)], audioClips: [] },
+  signature = reviewSignature(project, ['shot']);
+project.clips[0].revision = 2;
+project.clips[0].notes = [{ text: 'Note' }];
+project.clips[0].name = 'Renamed';
+project.clips[0].outputFolder = 'output/Renamed';
+project.clips[0].takes = [{ id: 'new arrival' }];
+assert.equal(reviewSignature(project, ['shot']), signature);
+project.clips[0].inputValues = { other: 17, seed: exact(max) };
+assert.equal(reviewSignature(project, ['shot']), signature);
+for (const change of [
+  p => (p.clips[0].inputValues.seed = exact(7)),
+  p => (p.clips[0].count = 4),
+  p => (p.clips[0].workflowVersion = 'different'),
+  p => (p.clips[0].takeId = 'another'),
+  p => (p.clips[0].out = 50),
+  p => (p.fps = 30),
+  p => (p.resolution.width = 1280),
+]) {
+  const changed = structuredClone(project);
+  change(changed);
+  assert.notEqual(reviewSignature(changed, ['shot']), signature);
 }
 console.log('Generation seed boundaries, exact integers, unchanged baselines and elapsed/stage checks passed');

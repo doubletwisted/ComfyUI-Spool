@@ -1,54 +1,228 @@
-(async()=>{
- const w=window,d=w.document,n=w.spoolNative,$=id=>n.dialogRoot.getElementById(id)||d.getElementById(id),checks=[];
- const wait=async fn=>{const end=Date.now()+15000;while(!fn()){if(Date.now()>end)throw Error('Take cleanup wait timed out: '+d.getElementById('toast').textContent);await new Promise(r=>setTimeout(r,20));}};
- const check=(label,value)=>{if(!value)throw Error(label);checks.push(label);},shot=()=>n.state.clips.find(c=>c.id==='shot'),cards=()=>[...d.querySelectorAll('#takeList [data-take]')];
- // The studio accepts Ctrl and Cmd on every platform, so both are exercised here.
- const {keyText}=await import('/spool/ui/keys.js'),ctrl={ctrlKey:true},cmd={metaKey:true},undo=keyText('Ctrl+Z');
- const select=id=>cards().find(c=>c.dataset.take===id).querySelector('[data-select-take]').click(),clear=()=>{if(n.view.takeSelection.ids.length){$('selectAllTakes').click();$('selectAllTakes').click();}};
- const menu=()=>[...d.querySelectorAll('#native-clip-menu [role=menuitem]')],act=label=>{const button=menu().find(b=>b.textContent.startsWith(label));if(!button||button.disabled)throw Error('Menu action unavailable: '+label);return button.click();};
- const key=(element,value,extra={})=>{element.focus();element.dispatchEvent(new w.KeyboardEvent('keydown',{key:value,bubbles:true,cancelable:true,...extra}));},checkbox=id=>cards().find(c=>c.dataset.take===id).querySelector('[data-select-take]');
- const exists=async id=>(await fetch('/spool/media/'+n.projectKey+'/'+shot().takes.find(t=>t.id===id).media.originalFile)).ok;
- n.selectClip('shot');if(w.innerWidth<600&&$('editor').classList.contains('compact'))$('toggleInspector').click();await n.flush();
- const before=JSON.stringify(shot()),T=await import('/spool/ui/timeline.js'),edit=JSON.stringify(T.exportPlan(n.state));
- check('Delete actions appear only once takes are selected',$('archiveTakes').hidden&&$('deleteTakesFromDisk').hidden);select('one');
- const left=$('takeSelectionCount').getBoundingClientRect(),right=$('archiveTakes').getBoundingClientRect();
- const all=$('selectAllTakes').getBoundingClientRect(),precedes=(a,b)=>a.right<=b.left+1||a.bottom<=b.top+1;
- check('Selection count and Select all come before Delete and Permanently delete',precedes(left,right)&&precedes(all,right)&&$('archiveTakes').parentElement=== $('deleteTakesFromDisk').parentElement);
- check('Take controls fit within the editor width',d.querySelector('.takes-head').getBoundingClientRect().right<=w.innerWidth+1&&$('deleteTakesFromDisk').getBoundingClientRect().right<=w.innerWidth+1);
- check('Ordinary Delete and Permanently delete are labelled distinctly',!$('deleteSelectedTakes')&&!$('deleteOtherTakes')&&$('archiveTakes').textContent.startsWith('Delete')&&$('archiveTakes').title.includes(undo)&&$('deleteTakesFromDisk').textContent.includes('Permanently delete')&&$('deleteTakesFromDisk').title.includes('cannot be undone'));
- $('archiveTakes').click();
- check('Delete opens a small Selected/Others menu',menu().length===2&&menu()[0].textContent==='Delete selected'&&menu()[1].textContent==='Delete others');
- act('Delete selected');await n.flush();
- check('Ordinary Delete hides the take while keeping its file',cards().length===4&&await exists('one')&&shot().hiddenTakeIds.includes('one'));
- check('Delete returns focus to the editor and names its Undo step',d.activeElement===$('editor')&&$('undo').title.includes('Delete 1 take'));
- key($('editor'),'z',ctrl);await n.flush();check('Ctrl+Z restores a take deleted through the menu',cards().length===5&&JSON.stringify(shot())===before);
- clear();select('two');$('archiveTakes').click();act('Delete others');await n.flush();
- check('Delete others keeps selected takes and the take in the edit',cards().length===2&&cards().some(c=>c.dataset.take==='chosen')&&cards().some(c=>c.dataset.take==='two'));
- n.undo();await n.flush();check('Deleting others is one undo step',cards().length===5);
- clear();select('one');key(checkbox('one'),'Delete');await n.flush();await n.poll();
- check('Delete key removes takes without a permanent-deletion dialog or file removal',cards().length===4&&$('modalOverlay').hidden&&await exists('one')&&!(n.state.deletedTakeIds||[]).length);
- key(checkbox('two'),'z',cmd);await n.flush();check('Cmd+Z works from a focused take checkbox',cards().length===5&&JSON.stringify(shot())===before);
- key(checkbox('two'),'z',{...ctrl,shiftKey:true});await n.flush();check('Ctrl+Shift+Z redoes take removal without touching files',cards().length===4&&await exists('one'));
- key($('editor'),'z',cmd);await n.flush();
- key(checkbox('two'),'y',ctrl);await n.flush();check('Ctrl+Y also redoes take removal',cards().length===4);
- key($('editor'),'z',cmd);await n.flush();
- clear();select('one');key(checkbox('one'),'Backspace');await n.flush();
- check('Backspace also uses undoable take removal',cards().length===4&&$('modalOverlay').hidden&&await exists('one'));
- key($('editor'),'z',ctrl);await n.flush();check('Keyboard removal restores the exact take metadata and edit',cards().length===5&&JSON.stringify(shot())===before);
- clear();select('one');$('deleteTakesFromDisk').click();
- check('Permanent deletion is explicit in its Selected/Others menu',menu().length===2&&menu()[0].textContent==='Permanently delete selected'&&menu()[1].textContent==='Permanently delete others');
- act('Permanently delete selected');await wait(()=>!$('modalOverlay').hidden&&$('takeDeleteConfirm'));
- check('Permanent deletion clearly explains files, JSON and no Undo',$('modal').textContent.includes('workflow JSON')&&$('modal').textContent.includes('cannot be undone')&&await exists('one'));
- $('takeDeleteCancel').click();await n.flush();check('Cancelling deletion leaves the take and file intact',cards().length===5&&await exists('one'));
- $('deleteTakesFromDisk').click();act('Permanently delete selected');await wait(()=>!$('modalOverlay').hidden&&$('takeDeleteConfirm'));await $('takeDeleteConfirm').onclick();await n.flush();
- check('Confirmed deletion removes the take from the project',cards().length===4&&!shot().takes.some(t=>t.id==='one')&&n.state.deletedTakeIds.includes('one'));
- n.undo();await n.flush();await n.poll();check('Undo and receipt polling cannot restore permanently deleted takes',cards().length===4&&!shot().takes.some(t=>t.id==='one'));
- clear();select('two');$('deleteTakesFromDisk').click();act('Permanently delete others');await wait(()=>!$('modalOverlay').hidden&&$('takeDeleteConfirm'));await $('takeDeleteConfirm').onclick();await n.flush();
- check('Delete others keeps the selected take and the edit',cards().length===2&&shot().takeId==='chosen'&&cards().some(c=>c.dataset.take==='two'));
- clear();select('chosen');$('deleteTakesFromDisk').click();check('The take currently in the edit is protected',menu()[0].disabled);d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
- clear();select('two');$('archiveTakes').click();act('Delete selected');await n.flush();check('Undoable deletion still works after permanent deletion and retains the file',cards().length===1&&await exists('two'));n.undo();await n.flush();
- check('Take cleanup leaves timeline placement and export unchanged',shot().takeId==='chosen'&&JSON.stringify(T.exportPlan(n.state))===edit&&!n.state.jobs.length);
- const saved=await fetch('/spool/api/projects/'+n.projectKey).then(r=>r.json());
- check('Deletion is durable in the saved project',saved.document.deletedTakeIds.length===3&&saved.document.clips[0].takes.length===2);
- return {checks,deleted:['one','three','four']};
-})()
+(async () => {
+  const w = window,
+    d = w.document,
+    n = w.spoolNative,
+    $ = id => n.dialogRoot.getElementById(id) || d.getElementById(id),
+    checks = [];
+  const wait = async fn => {
+    const end = Date.now() + 15000;
+    while (!fn()) {
+      if (Date.now() > end) throw Error('Take cleanup wait timed out: ' + d.getElementById('toast').textContent);
+      await new Promise(r => setTimeout(r, 20));
+    }
+  };
+  const check = (label, value) => {
+      if (!value) throw Error(label);
+      checks.push(label);
+    },
+    shot = () => n.state.clips.find(c => c.id === 'shot'),
+    cards = () => [...d.querySelectorAll('#takeList [data-take]')];
+  // The studio accepts Ctrl and Cmd on every platform, so both are exercised here.
+  const { keyText } = await import('/spool/ui/keys.js'),
+    ctrl = { ctrlKey: true },
+    cmd = { metaKey: true },
+    undo = keyText('Ctrl+Z');
+  const select = id =>
+      cards()
+        .find(c => c.dataset.take === id)
+        .querySelector('[data-select-take]')
+        .click(),
+    clear = () => {
+      if (n.view.takeSelection.ids.length) {
+        $('selectAllTakes').click();
+        $('selectAllTakes').click();
+      }
+    };
+  const menu = () => [...d.querySelectorAll('#native-clip-menu [role=menuitem]')],
+    act = label => {
+      const button = menu().find(b => b.textContent.startsWith(label));
+      if (!button || button.disabled) throw Error('Menu action unavailable: ' + label);
+      return button.click();
+    };
+  const key = (element, value, extra = {}) => {
+      element.focus();
+      element.dispatchEvent(new w.KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true, ...extra }));
+    },
+    checkbox = id =>
+      cards()
+        .find(c => c.dataset.take === id)
+        .querySelector('[data-select-take]');
+  const exists = async id =>
+    (await fetch('/spool/media/' + n.projectKey + '/' + shot().takes.find(t => t.id === id).media.originalFile)).ok;
+  n.selectClip('shot');
+  if (w.innerWidth < 600 && $('editor').classList.contains('compact')) $('toggleInspector').click();
+  await n.flush();
+  const before = JSON.stringify(shot()),
+    T = await import('/spool/ui/timeline.js'),
+    edit = JSON.stringify(T.exportPlan(n.state));
+  check(
+    'Delete actions appear only once takes are selected',
+    $('archiveTakes').hidden && $('deleteTakesFromDisk').hidden,
+  );
+  select('one');
+  const left = $('takeSelectionCount').getBoundingClientRect(),
+    right = $('archiveTakes').getBoundingClientRect();
+  const all = $('selectAllTakes').getBoundingClientRect(),
+    precedes = (a, b) => a.right <= b.left + 1 || a.bottom <= b.top + 1;
+  check(
+    'Selection count and Select all come before Delete and Permanently delete',
+    precedes(left, right) &&
+      precedes(all, right) &&
+      $('archiveTakes').parentElement === $('deleteTakesFromDisk').parentElement,
+  );
+  check(
+    'Take controls fit within the editor width',
+    d.querySelector('.takes-head').getBoundingClientRect().right <= w.innerWidth + 1 &&
+      $('deleteTakesFromDisk').getBoundingClientRect().right <= w.innerWidth + 1,
+  );
+  check(
+    'Ordinary Delete and Permanently delete are labelled distinctly',
+    !$('deleteSelectedTakes') &&
+      !$('deleteOtherTakes') &&
+      $('archiveTakes').textContent.startsWith('Delete') &&
+      $('archiveTakes').title.includes(undo) &&
+      $('deleteTakesFromDisk').textContent.includes('Permanently delete') &&
+      $('deleteTakesFromDisk').title.includes('cannot be undone'),
+  );
+  $('archiveTakes').click();
+  check(
+    'Delete opens a small Selected/Others menu',
+    menu().length === 2 && menu()[0].textContent === 'Delete selected' && menu()[1].textContent === 'Delete others',
+  );
+  act('Delete selected');
+  await n.flush();
+  check(
+    'Ordinary Delete hides the take while keeping its file',
+    cards().length === 4 && (await exists('one')) && shot().hiddenTakeIds.includes('one'),
+  );
+  check(
+    'Delete returns focus to the editor and names its Undo step',
+    d.activeElement === $('editor') && $('undo').title.includes('Delete 1 take'),
+  );
+  key($('editor'), 'z', ctrl);
+  await n.flush();
+  check('Ctrl+Z restores a take deleted through the menu', cards().length === 5 && JSON.stringify(shot()) === before);
+  clear();
+  select('two');
+  $('archiveTakes').click();
+  act('Delete others');
+  await n.flush();
+  check(
+    'Delete others keeps selected takes and the take in the edit',
+    cards().length === 2 &&
+      cards().some(c => c.dataset.take === 'chosen') &&
+      cards().some(c => c.dataset.take === 'two'),
+  );
+  n.undo();
+  await n.flush();
+  check('Deleting others is one undo step', cards().length === 5);
+  clear();
+  select('one');
+  key(checkbox('one'), 'Delete');
+  await n.flush();
+  await n.poll();
+  check(
+    'Delete key removes takes without a permanent-deletion dialog or file removal',
+    cards().length === 4 && $('modalOverlay').hidden && (await exists('one')) && !(n.state.deletedTakeIds || []).length,
+  );
+  key(checkbox('two'), 'z', cmd);
+  await n.flush();
+  check('Cmd+Z works from a focused take checkbox', cards().length === 5 && JSON.stringify(shot()) === before);
+  key(checkbox('two'), 'z', { ...ctrl, shiftKey: true });
+  await n.flush();
+  check('Ctrl+Shift+Z redoes take removal without touching files', cards().length === 4 && (await exists('one')));
+  key($('editor'), 'z', cmd);
+  await n.flush();
+  key(checkbox('two'), 'y', ctrl);
+  await n.flush();
+  check('Ctrl+Y also redoes take removal', cards().length === 4);
+  key($('editor'), 'z', cmd);
+  await n.flush();
+  clear();
+  select('one');
+  key(checkbox('one'), 'Backspace');
+  await n.flush();
+  check(
+    'Backspace also uses undoable take removal',
+    cards().length === 4 && $('modalOverlay').hidden && (await exists('one')),
+  );
+  key($('editor'), 'z', ctrl);
+  await n.flush();
+  check(
+    'Keyboard removal restores the exact take metadata and edit',
+    cards().length === 5 && JSON.stringify(shot()) === before,
+  );
+  clear();
+  select('one');
+  $('deleteTakesFromDisk').click();
+  check(
+    'Permanent deletion is explicit in its Selected/Others menu',
+    menu().length === 2 &&
+      menu()[0].textContent === 'Permanently delete selected' &&
+      menu()[1].textContent === 'Permanently delete others',
+  );
+  act('Permanently delete selected');
+  await wait(() => !$('modalOverlay').hidden && $('takeDeleteConfirm'));
+  check(
+    'Permanent deletion clearly explains files, JSON and no Undo',
+    $('modal').textContent.includes('workflow JSON') &&
+      $('modal').textContent.includes('cannot be undone') &&
+      (await exists('one')),
+  );
+  $('takeDeleteCancel').click();
+  await n.flush();
+  check('Cancelling deletion leaves the take and file intact', cards().length === 5 && (await exists('one')));
+  $('deleteTakesFromDisk').click();
+  act('Permanently delete selected');
+  await wait(() => !$('modalOverlay').hidden && $('takeDeleteConfirm'));
+  await $('takeDeleteConfirm').onclick();
+  await n.flush();
+  check(
+    'Confirmed deletion removes the take from the project',
+    cards().length === 4 && !shot().takes.some(t => t.id === 'one') && n.state.deletedTakeIds.includes('one'),
+  );
+  n.undo();
+  await n.flush();
+  await n.poll();
+  check(
+    'Undo and receipt polling cannot restore permanently deleted takes',
+    cards().length === 4 && !shot().takes.some(t => t.id === 'one'),
+  );
+  clear();
+  select('two');
+  $('deleteTakesFromDisk').click();
+  act('Permanently delete others');
+  await wait(() => !$('modalOverlay').hidden && $('takeDeleteConfirm'));
+  await $('takeDeleteConfirm').onclick();
+  await n.flush();
+  check(
+    'Delete others keeps the selected take and the edit',
+    cards().length === 2 && shot().takeId === 'chosen' && cards().some(c => c.dataset.take === 'two'),
+  );
+  clear();
+  select('chosen');
+  $('deleteTakesFromDisk').click();
+  check('The take currently in the edit is protected', menu()[0].disabled);
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  clear();
+  select('two');
+  $('archiveTakes').click();
+  act('Delete selected');
+  await n.flush();
+  check(
+    'Undoable deletion still works after permanent deletion and retains the file',
+    cards().length === 1 && (await exists('two')),
+  );
+  n.undo();
+  await n.flush();
+  check(
+    'Take cleanup leaves timeline placement and export unchanged',
+    shot().takeId === 'chosen' && JSON.stringify(T.exportPlan(n.state)) === edit && !n.state.jobs.length,
+  );
+  const saved = await fetch('/spool/api/projects/' + n.projectKey).then(r => r.json());
+  check(
+    'Deletion is durable in the saved project',
+    saved.document.deletedTakeIds.length === 3 && saved.document.clips[0].takes.length === 2,
+  );
+  return { checks, deleted: ['one', 'three', 'four'] };
+})();

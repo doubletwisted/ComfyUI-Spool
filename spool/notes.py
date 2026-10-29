@@ -1,4 +1,5 @@
 """Clip notes, immutable addressed entries and explicit agent completion."""
+
 import copy
 import time
 
@@ -9,12 +10,17 @@ def entries(clip):
     if "notes" in clip:
         return clip["notes"]
     text = clip.get("intent", "")
-    return [{"id": "note-" + clip["id"], "text": text, "status": "open", "createdAt": None, "createdBy": "user"}] if text.strip() else []
+    return (
+        [{"id": "note-" + clip["id"], "text": text, "status": "open", "createdAt": None, "createdBy": "user"}]
+        if text.strip()
+        else []
+    )
 
 
 def apply(clip, action, arguments, actor):
     values = copy.deepcopy(entries(clip))
     now = int(time.time() * 1000)
+
     def create(text, source=None):
         if not isinstance(text, str) or not text.strip():
             raise ValueError("Write a note first")
@@ -23,6 +29,7 @@ def apply(clip, action, arguments, actor):
             value["reopenedFrom"] = source["id"]
         values.append(value)
         return value
+
     if action == "add_note":
         note = create(arguments.get("text"))
     else:

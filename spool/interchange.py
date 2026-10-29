@@ -7,6 +7,7 @@ stays unset: Resolve builds the timeline at the project rate, and without a star
 clips by time rather than by frame number when that rate differs. Spool interprets every source frame once on the
 sequence clock, so a clip whose source rate differs carries a LinearTimeWarp. Gain and fades
 have no OTIO schema and travel as Spool metadata only."""
+
 import json
 import re
 import uuid
@@ -23,8 +24,15 @@ def _range(start, duration):
 
 
 def _item(schema, name, source_range, enabled=True, metadata=None):
-    return {"OTIO_SCHEMA": schema, "name": name, "metadata": metadata or {}, "source_range": source_range,
-            "effects": [], "markers": [], "enabled": enabled}
+    return {
+        "OTIO_SCHEMA": schema,
+        "name": name,
+        "metadata": metadata or {},
+        "source_range": source_range,
+        "effects": [],
+        "markers": [],
+        "enabled": enabled,
+    }
 
 
 def timecode_frames(value, fps):
@@ -61,15 +69,35 @@ def export_timeline(plan, *, root, fps, width, height, name, sources, resolve, p
             original = sources.get(file)
             path = Path(original["path"] if original else resolve(file))
             entry = {"path": path, "offset": original["offset"] if original else 0, "rate": float(fps), "timecode": 0}
-            media = {"OTIO_SCHEMA": "ExternalReference.1", "name": path.name, "metadata": {},
-                     "target_url": str(path.resolve()), "available_range": None}
+            media = {
+                "OTIO_SCHEMA": "ExternalReference.1",
+                "name": path.name,
+                "metadata": {},
+                "target_url": str(path.resolve()),
+                "available_range": None,
+            }
             if path.suffix.lower() not in image_extensions:
                 details = probe(path)
-                video = next((s for s in details["streams"] if s["codec_type"] == "video" and not s.get("disposition", {}).get("attached_pic")), None)
-                native = rate((original or {}).get("fps") or (video or {}).get("avg_frame_rate"), fps) if video else float(fps)
+                video = next(
+                    (
+                        s
+                        for s in details["streams"]
+                        if s["codec_type"] == "video" and not s.get("disposition", {}).get("attached_pic")
+                    ),
+                    None,
+                )
+                native = (
+                    rate((original or {}).get("fps") or (video or {}).get("avg_frame_rate"), fps)
+                    if video
+                    else float(fps)
+                )
                 entry.update(rate=native, timecode=timecode_frames(_timecode(details), native))
                 count = str((video or {}).get("nb_frames", ""))
-                length = int(count) if count.isdigit() else round(float(details.get("format", {}).get("duration", 0)) * native)
+                length = (
+                    int(count)
+                    if count.isdigit()
+                    else round(float(details.get("format", {}).get("duration", 0)) * native)
+                )
                 if length > 0:
                     media["available_range"] = _range(_time(entry["timecode"], native), _time(length, native))
             entry["media"] = media
@@ -83,12 +111,25 @@ def export_timeline(plan, *, root, fps, width, height, name, sources, resolve, p
         if int(item["in"]) < 0 or frames <= 0:
             raise ValueError("A clip has invalid trim points.")
         metadata = {"spool": {k: item[k] for k in ("id", "takeId", "gainDb", "fadeIn", "fadeOut") if k in item}}
-        result = _item("Clip.1", item.get("name") or source["path"].stem, _range(_time(start, native), _time(frames, fps)),
-                       bool(item.get("enabled", True)), metadata)
+        result = _item(
+            "Clip.1",
+            item.get("name") or source["path"].stem,
+            _range(_time(start, native), _time(frames, fps)),
+            bool(item.get("enabled", True)),
+            metadata,
+        )
         result["media_reference"] = source["media"]
         if abs(native - fps) > 1e-6:
-            result["effects"].append({"OTIO_SCHEMA": "LinearTimeWarp.1", "name": "", "metadata": {}, "enabled": True,
-                                      "effect_name": "LinearTimeWarp", "time_scalar": fps / native})
+            result["effects"].append(
+                {
+                    "OTIO_SCHEMA": "LinearTimeWarp.1",
+                    "name": "",
+                    "metadata": {},
+                    "enabled": True,
+                    "effect_name": "LinearTimeWarp",
+                    "time_scalar": fps / native,
+                }
+            )
         return result
 
     def gap(frames):
@@ -109,11 +150,22 @@ def export_timeline(plan, *, root, fps, width, height, name, sources, resolve, p
         # The first video track runs to the end of the range, so the timeline keeps its length.
         if index == 0 and kind == "Video" and int(plan.get("duration", 0)) > position:
             items.append(gap(int(plan["duration"]) - position))
-        children.append({**_item("Track.1", track.get("name") or kind[0] + str(index + 1), None, bool(track.get("enabled", True))),
-                         "kind": kind, "children": items})
-    timeline = {"OTIO_SCHEMA": "Timeline.1", "name": name or "Spool", "global_start_time": None,
-                "metadata": {"spool": {"fps": fps, "width": width, "height": height}},
-                "tracks": {**_item("Stack.1", "tracks", None), "children": children}}
+        children.append(
+            {
+                **_item(
+                    "Track.1", track.get("name") or kind[0] + str(index + 1), None, bool(track.get("enabled", True))
+                ),
+                "kind": kind,
+                "children": items,
+            }
+        )
+    timeline = {
+        "OTIO_SCHEMA": "Timeline.1",
+        "name": name or "Spool",
+        "global_start_time": None,
+        "metadata": {"spool": {"fps": fps, "width": width, "height": height}},
+        "tracks": {**_item("Stack.1", "tracks", None), "children": children},
+    }
     output_dir = root / "exports"
     output_dir.mkdir(exist_ok=True)
     stem = re.sub(r"[^\w.-]+", "-", name or "spool").strip("-.") or "spool"

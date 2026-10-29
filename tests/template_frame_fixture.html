@@ -1,8 +1,43 @@
-<!doctype html><html><body><button id="selectTemplate">Select CPU template</button><script>
-const params=new URLSearchParams(location.search),session=params.get('spoolTemplateSession'),origin=params.get('spoolTemplateOrigin');
-let viewId=params.get('spoolTemplateView');const send=value=>parent.postMessage({type:'spool-template-state',session,viewId,...value},origin);
-window.fixtureCapture=__CAPTURE__;window.captureError=false;
-document.getElementById('selectTemplate').onclick=()=>send({state:'selected',name:'LTX-2.3 CPU template'});
-window.addEventListener('message',event=>{const value=event.data;if(event.source!==parent||value?.session!==session)return;if(value.action==='activate'){viewId=value.viewId;send({state:'ready'});return;}if(value.viewId!==viewId)return;if(value.action==='suspend'){viewId=null;return;}if(value.action!=='capture')return;const reply=window.captureError?{state:'error',viewId,requestId:value.requestId,message:'Controlled template capture error'}:{state:'captured',viewId,requestId:value.requestId,capture:{...window.fixtureCapture,name:'LTX-2.3 CPU template'}};if(window.captureDelay)setTimeout(()=>send(reply),window.captureDelay);else send(reply);});
-send({state:'ready'});
-</script></body></html>
+<!doctype html>
+<html>
+  <body>
+    <button id="selectTemplate">Select CPU template</button>
+    <script>
+      const params = new URLSearchParams(location.search),
+        session = params.get('spoolTemplateSession'),
+        origin = params.get('spoolTemplateOrigin');
+      let viewId = params.get('spoolTemplateView');
+      const send = value => parent.postMessage({ type: 'spool-template-state', session, viewId, ...value }, origin);
+      window.fixtureCapture = __CAPTURE__;
+      window.captureError = false;
+      document.getElementById('selectTemplate').onclick = () =>
+        send({ state: 'selected', name: 'LTX-2.3 CPU template' });
+      window.addEventListener('message', event => {
+        const value = event.data;
+        if (event.source !== parent || value?.session !== session) return;
+        if (value.action === 'activate') {
+          viewId = value.viewId;
+          send({ state: 'ready' });
+          return;
+        }
+        if (value.viewId !== viewId) return;
+        if (value.action === 'suspend') {
+          viewId = null;
+          return;
+        }
+        if (value.action !== 'capture') return;
+        const reply = window.captureError
+          ? { state: 'error', viewId, requestId: value.requestId, message: 'Controlled template capture error' }
+          : {
+              state: 'captured',
+              viewId,
+              requestId: value.requestId,
+              capture: { ...window.fixtureCapture, name: 'LTX-2.3 CPU template' },
+            };
+        if (window.captureDelay) setTimeout(() => send(reply), window.captureDelay);
+        else send(reply);
+      });
+      send({ state: 'ready' });
+    </script>
+  </body>
+</html>

@@ -1,4 +1,5 @@
 """Spool Deadline protocol 2. Copied beside the worker; stdlib only."""
+
 import copy
 import hashlib
 import json
@@ -8,7 +9,12 @@ import uuid
 from pathlib import Path
 
 SCHEMA = 2
-SAVERS = {"SaveImage": {"images"}, "PreviewImage": {"images"}, "SaveVideo": {"images", "videos"}, "VHS_VideoCombine": {"gifs"}}
+SAVERS = {
+    "SaveImage": {"images"},
+    "PreviewImage": {"images"},
+    "SaveVideo": {"images", "videos"},
+    "VHS_VideoCombine": {"gifs"},
+}
 
 
 def contained(root, relative):
@@ -105,17 +111,48 @@ def finalize(package, execution, prompt_id, history, roots, worker, job_id):
                 if checksum(pending) != digest:
                     raise ValueError("Worker artifact copy failed integrity verification")
                 pending.replace(destination)
-                artifacts.append({"artifactId": artifact_id, "nodeId": node_id, "group": group, "index": index,
-                                  "storageId": "spool-results", "path": destination.relative_to(Path(package["resultRoot"]).resolve()).as_posix(),
-                                  "byteSize": destination.stat().st_size, "sha256": digest})
+                artifacts.append(
+                    {
+                        "artifactId": artifact_id,
+                        "nodeId": node_id,
+                        "group": group,
+                        "index": index,
+                        "storageId": "spool-results",
+                        "path": destination.relative_to(Path(package["resultRoot"]).resolve()).as_posix(),
+                        "byteSize": destination.stat().st_size,
+                        "sha256": digest,
+                    }
+                )
     selection = package["result"]
     primary = next((a for a in artifacts if all(a[k] == selection[k] for k in ("nodeId", "group", "index"))), None)
     if primary is None:
         raise ValueError("Successful worker history omitted the selected artifact")
-    receipt = {k: package[k] for k in ("schemaVersion", "projectId", "clipId", "takeId", "attemptId", "fingerprint", "submissionId", "variationIndex")}
-    receipt.update({"executionId": execution["executionId"], "promptId": prompt_id, "jobId": job_id, "worker": worker,
-                    "outcome": "success", "observedPrompt": history["prompt"][2], "history": history,
-                    "artifacts": artifacts, "primaryArtifactId": primary["artifactId"]})
+    receipt = {
+        k: package[k]
+        for k in (
+            "schemaVersion",
+            "projectId",
+            "clipId",
+            "takeId",
+            "attemptId",
+            "fingerprint",
+            "submissionId",
+            "variationIndex",
+        )
+    }
+    receipt.update(
+        {
+            "executionId": execution["executionId"],
+            "promptId": prompt_id,
+            "jobId": job_id,
+            "worker": worker,
+            "outcome": "success",
+            "observedPrompt": history["prompt"][2],
+            "history": history,
+            "artifacts": artifacts,
+            "primaryArtifactId": primary["artifactId"],
+        }
+    )
     atomic_json(receipt_path, receipt)
     return receipt
 
@@ -135,13 +172,21 @@ def verify(package, receipt, result_root):
     for node_id, node in expected.items():
         if node["class_type"] in SAVERS and "filename_prefix" in node["inputs"]:
             node["inputs"]["filename_prefix"] = saver_prefix(package, receipt["executionId"], node_id)
-    if semantic_prompt(receipt.get("observedPrompt", {})) != semantic_prompt(expected) or semantic_prompt(history.get("prompt", [None, None, {}])[2]) != semantic_prompt(expected) or history["prompt"][1] != receipt["promptId"]:
+    if (
+        semantic_prompt(receipt.get("observedPrompt", {})) != semantic_prompt(expected)
+        or semantic_prompt(history.get("prompt", [None, None, {}])[2]) != semantic_prompt(expected)
+        or history["prompt"][1] != receipt["promptId"]
+    ):
         raise ValueError("Farm observed prompt differs from the permitted execution copy")
     artifacts = receipt["artifacts"]
     if len({a["artifactId"] for a in artifacts}) != len(artifacts):
         raise ValueError("Duplicate artifact identity")
-    reported = {(node_id, group, index) for node_id, node in expected.items() for group in SAVERS.get(node["class_type"], ())
-                for index, record in enumerate(history.get("outputs", {}).get(node_id, {}).get(group, []))}
+    reported = {
+        (node_id, group, index)
+        for node_id, node in expected.items()
+        for group in SAVERS.get(node["class_type"], ())
+        for index, record in enumerate(history.get("outputs", {}).get(node_id, {}).get(group, []))
+    }
     if {(a["nodeId"], a["group"], a["index"]) for a in artifacts} != reported:
         raise ValueError("Farm receipt omitted or invented a reported artifact")
     for artifact in artifacts:
@@ -149,7 +194,11 @@ def verify(package, receipt, result_root):
             raise ValueError("Unknown farm storage ID")
         path = contained(result_root, artifact["path"])
         namespace = contained(result_root, "spool-receipts/" + package["attemptId"] + "/" + receipt["executionId"])
-        if not path.is_relative_to(namespace) or path.stat().st_size != artifact["byteSize"] or checksum(path) != artifact["sha256"]:
+        if (
+            not path.is_relative_to(namespace)
+            or path.stat().st_size != artifact["byteSize"]
+            or checksum(path) != artifact["sha256"]
+        ):
             raise ValueError("Farm artifact integrity or containment failed")
     primary = next((a for a in artifacts if a["artifactId"] == receipt["primaryArtifactId"]), None)
     if not primary or any(primary[k] != package["result"][k] for k in ("nodeId", "group", "index")):
