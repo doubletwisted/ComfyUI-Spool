@@ -75,8 +75,8 @@ class ProjectFormatTests(unittest.TestCase):
     def test_read_only_uris_open_shares_and_unusual_names(self):
         # SQLite refuses a URI host, so pathlib's file://server/share form fails for every UNC project.
         self.assertEqual(
-            read_only_uri(PureWindowsPath("//NAS02/Comfy/spool/Shot #1/project.spool")),
-            "file:////NAS02/Comfy/spool/Shot%20%231/project.spool?mode=ro&immutable=1",
+            read_only_uri(PureWindowsPath("//server/share/projects/Shot #1/project.spool")),
+            "file:////server/share/projects/Shot%20%231/project.spool?mode=ro&immutable=1",
         )
         self.assertEqual(
             read_only_uri(PureWindowsPath("C:/Spool/a%b/project.spool")),
