@@ -51,6 +51,8 @@ class FolderTakes:
             for path in directory.iterdir():
                 if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS | IMAGE_EXTENSIONS:
                     continue
+                if any(prefix in path.stem for prefix in inventory[2]):
+                    continue
                 relative = path.relative_to(store.root).as_posix()
                 legacy = authored_takes.get(indexed.get(relative)) if relative not in external else None
                 if relative in known and relative not in external and not legacy:
@@ -147,7 +149,7 @@ class FolderTakes:
             return
         try:
             # A project that changed meanwhile is rescanned on the next pass.
-            with store.editing(project_id, revision) as edit:
+            with store.editing(project_id, revision, cursor=state["cursor"]) as edit:
                 edit.forget_media_evidence(refreshed)
                 edit.save(document)
                 indexed.update(dict(ready))

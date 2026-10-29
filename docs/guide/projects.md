@@ -123,7 +123,10 @@ requirements.
 
 Routine studio updates fetch compact take summaries. Opening a take's workflow
 loads its full saved evidence on demand. Generated results are recognized by
-their recorded files, so an unrelated file with a similar name can still arrive.
+their recorded files, so an unrelated file with a similar name can still arrive
+after the render settles. While a render is pending, filenames containing the
+first eight characters of its take ID are reserved for its outputs. A scan that
+overlaps a new render receipt retries against the updated takes.
 
 For newly discovered external files, a rename within the same clip folder keeps
 the take identity when the filesystem reports the same file and its bytes are

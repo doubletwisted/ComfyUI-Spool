@@ -141,8 +141,10 @@ A writer can publish while an existing reader finishes its older generation.
 
 Receipt scans visit pending attempts every two seconds and settled history every
 five minutes (also on collector startup). Folder scans cache projection/inventory
-at a revision/event cursor and correlate generated outputs by exact artifact
-paths, never filename prefixes. `external_file_index` stores path, take/media IDs,
+at a revision/event cursor and recheck both inside the save transaction. Collected
+outputs are recognized by exact artifact paths; pending attempts also reserve files
+whose stems contain their take ID's first eight characters until they settle.
+`external_file_index` stores path, take/media IDs,
 file identity, size, modification/change times and SHA-256. Same-directory renames preserve identity
 only with the same nonzero device/inode and bytes and a missing old path. Copies
 and cross-directory moves become new takes. Changed bytes at an indexed path

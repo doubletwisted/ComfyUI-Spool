@@ -7,6 +7,7 @@ All notable changes to Spool are recorded here. Versions follow
 
 - Discard unpublished local changes after an interrupted save or project upgrade.
 - Keep project downloads and portable draft evidence working after takes are deleted from disk.
+- Prevent folder discovery from importing pending render outputs or duplicating takes when a receipt arrives during a scan.
 - Fetch compact take summaries in the studio and load full take evidence on demand.
   Current local reads bypass the shared project lock; settled receipts are checked
   less often. Keep completion times when diagnostic history expires after 30 days,

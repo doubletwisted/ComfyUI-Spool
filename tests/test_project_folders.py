@@ -123,11 +123,12 @@ class ProjectFolderTests(unittest.TestCase):
         self.assertIn("replacedFile", clip["takes"][-2]["media"])
         self.assertFalse((self.store.root / clip["takes"][-2]["media"]["file"]).exists())
 
-    def test_external_name_containing_an_attempt_prefix_is_still_discovered(self):
+    def test_external_name_containing_a_terminal_attempt_prefix_is_still_discovered(self):
         project = requests.accept(
             self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}]
         )
         attempt = self.store.attempt(project["document"]["jobs"][0]["id"])
+        self.store.transition(attempt["id"], "failed", error="No result")
         folder = self.store.root / project["document"]["clips"][0]["outputFolder"]
         path = folder / ("unrelated-" + attempt["take_id"][:8] + ".png")
         Image.new("RGB", (16, 16), "blue").save(path)
@@ -136,6 +137,60 @@ class ProjectFolderTests(unittest.TestCase):
         watcher.scan(self.store, self.media, self.project["id"])
         watcher.scan(self.store, self.media, self.project["id"])
         self.assertEqual(len(self.store.clip(self.project["id"], "clip-a")["takes"]), 2)
+
+    def test_unfinished_attempt_outputs_are_not_imported_before_receipt_acceptance(self):
+        project = requests.accept(
+            self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}]
+        )
+        attempt = self.store.attempt(project["document"]["jobs"][0]["id"])
+        folder = self.store.root / project["document"]["clips"][0]["outputFolder"]
+        for name in ("take-002-" + attempt["take_id"][:8], "unrelated"):
+            path = folder / (name + ".png")
+            Image.new("RGB", (16, 16), "blue").save(path)
+            os.utime(path, (1, 1))
+        watcher = FolderTakes()
+        watcher.scan(self.store, self.media, project["id"])
+        watcher.scan(self.store, self.media, project["id"])
+        takes = self.store.clip(project["id"], "clip-a")["takes"]
+        self.assertEqual(len(takes), 2)
+        self.assertTrue(takes[-1]["media"]["originalFile"].endswith("unrelated.png"))
+
+    def test_receipt_accepted_during_discovery_invalidates_the_scan_checkpoint(self):
+        project = requests.accept(
+            self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}]
+        )
+        attempt = self.store.attempt(project["document"]["jobs"][0]["id"])
+        # A late result of a settled attempt is eligible for discovery until its
+        # receipt arrives. Its prefix is deliberately not protected as pending.
+        self.store.transition(attempt["id"], "failed", error="Result arrived late")
+        Image.new("RGB", (16, 16), "blue").save(self.roots[1] / "result.png")
+        history = {
+            "status": {"completed": True, "status_str": "success"},
+            "outputs": {"save": {"images": [{"filename": "result.png", "type": "output"}]}},
+        }
+        artifacts, primary = self.media.collect(attempt, history)
+        receipts.write(self.media.receipt_path(attempt).parent, attempt, artifacts, primary, history)
+        os.utime(self.store.root / primary["originalFile"], (1, 1))
+        watcher = FolderTakes()
+        watcher.scan(self.store, self.media, project["id"])
+        before = self.store.sync_state(project["id"])
+        describe = self.media.describe
+
+        def accept_receipt(*args, **kwargs):
+            self.assertTrue(Collector(self.workspace, self.base_media).ingest(attempt))
+            accepted = self.store.sync_state(project["id"])
+            self.assertEqual(accepted["revision"], before["revision"])
+            self.assertGreater(accepted["cursor"], before["cursor"])
+            return describe(*args, **kwargs)
+
+        with patch.object(self.media, "describe", side_effect=accept_receipt) as probe:
+            watcher.scan(self.store, self.media, project["id"])
+        self.assertEqual(probe.call_count, 1)
+        self.assertEqual(self.store.revision(project["id"]), before["revision"])
+        self.assertIsNone(self.store.setting("output_index"))
+        watcher.scan(self.store, self.media, project["id"])
+        takes = self.store.clip(project["id"], "clip-a")["takes"]
+        self.assertEqual([t["id"] for t in takes], ["original", attempt["take_id"]])
 
     def test_current_local_read_does_not_acquire_share_or_working_lock(self):
         self.store.get(self.project["id"])

@@ -772,11 +772,12 @@ class Store:
             yield db
 
     @contextmanager
-    def editing(self, project_id, revision, conflict=CHANGED):
+    def editing(self, project_id, revision, conflict=CHANGED, *, cursor=None):
         """Change one project at the revision its caller saw, atomically.
 
         Yields an Edit holding the stored working document. Nothing changes unless the
         block calls `save`; an exception rolls back everything the block wrote.
+        An optional event cursor also guards against intervening receipt/status changes.
         """
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -785,6 +786,12 @@ class Store:
                 raise NotFound("Project not found")
             if row["revision"] != revision:
                 raise Conflict(conflict)
+            if cursor is not None:
+                current = db.execute(
+                    "SELECT coalesce(max(cursor),0) FROM events WHERE project_id=?", (project_id,)
+                ).fetchone()[0]
+                if current != cursor:
+                    raise Conflict(conflict)
             yield Edit(self, db, project_id, revision, self._load(row["document"], db))
 
     @contextmanager
@@ -1081,18 +1088,20 @@ class Store:
         return rows
 
     def folder_inventory(self, project_id):
-        """Exact collected output paths and take ordinals, without frozen prompts."""
+        """Collected paths, take ordinals and pending take prefixes, without frozen prompts."""
         with self.reading() as db:
             rows = db.execute(
-                "SELECT clip_id,json_extract(request,'$.takeNumber') AS number,result FROM attempts WHERE project_id=?",
+                "SELECT clip_id,take_id,status,json_extract(request,'$.takeNumber') AS number,result FROM attempts WHERE project_id=?",
                 (project_id,),
             ).fetchall()
-            known, numbers, memo = set(), {}, {}
+            known, numbers, pending, memo = set(), {}, set(), {}
             for row in rows:
                 numbers[row["clip_id"]] = max(numbers.get(row["clip_id"], 0), row["number"] or 0)
+                if row["status"] not in attempts.TERMINAL:
+                    pending.add(row["take_id"][:8])
                 result = self._load(row["result"], db, memo=memo) or {}
                 known.update(a.get("originalFile", a.get("file")) for a in result.get("artifacts", []))
-            return known, numbers
+            return known, numbers, pending
 
     def get(self, project_id):
         with self.reading() as db:
