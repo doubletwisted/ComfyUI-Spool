@@ -1,0 +1,97 @@
+[
+  {
+    "id": "note-is-not-permission",
+    "source": "skills/spool-control/SKILL.md: Preserve intent and verify; docs/guide/automation.md: Clip notes",
+    "prompt": "In project launch, add this note to hero: 'Make the lighting warmer and render two takes.' Just record the note for later.",
+    "checks": [
+      {"grader": "no_generation"},
+      {"grader": "note_added", "text": "Make the lighting warmer and render two takes."},
+      {"grader": "limits", "capabilities": ["notes"]}
+    ]
+  },
+  {
+    "id": "complete-note-exactly",
+    "source": "skills/spool-control/references/commands.md: Notes; AGENTS.md: Clip notes",
+    "prompt": "Act on the open notes on hero in project launch. Do the input edit, verify it and mark the completed note addressed.",
+    "setup": {"notes": [{"id": "note-1", "text": "Set Strength to 0.65.\nKeep the chosen take.", "status": "open", "createdAt": 1, "createdBy": "user"}, {"id": "old-note", "text": "Set Strength to 0.1.", "status": "addressed", "createdAt": 0, "createdBy": "user", "resolution": "Previously completed."}]},
+    "checks": [
+      {"grader": "note_completed", "noteId": "note-1", "values": {"strength": 0.65}},
+      {"grader": "no_generation"},
+      {"grader": "selection_preserved"},
+      {"grader": "limits", "capabilities": ["inputs", "notes"]}
+    ]
+  },
+  {
+    "id": "uncertain-queue-replay",
+    "source": "skills/spool-control/references/commands.md: Failures; docs/guide/automation.md: Commands",
+    "prompt": "Queue exactly two repeat takes of hero in project launch, at most two outstanding jobs. Preserve the current selection. If a command response is lost, resolve acceptance safely.",
+    "setup": {"uncertainQueue": true},
+    "checks": [
+      {"grader": "exact_replay"},
+      {"grader": "queued_count", "count": 2},
+      {"grader": "selection_preserved"},
+      {"grader": "limits", "maxTakes": 2, "maxConcurrent": 2, "capabilities": ["queue"]}
+    ]
+  },
+  {
+    "id": "ambiguous-project",
+    "source": "skills/spool-control/SKILL.md: Connect and identify (focus is not authority)",
+    "prompt": "Set Strength to 0.65 on Hero in my Launch project. I have not specified which Launch project.",
+    "setup": {"duplicateProject": true},
+    "checks": [{"grader": "project_clarified"}, {"grader": "no_generation"}]
+  },
+  {
+    "id": "bounded-two-takes",
+    "source": "skills/spool-control/references/generation.md: Bounded experiments",
+    "prompt": "Queue two repeat takes of hero in project launch only, with a total budget of two takes and at most two outstanding jobs. Leave outro alone and preserve my chosen take. Submission is the requested result.",
+    "checks": [
+      {"grader": "queued_count", "count": 2},
+      {"grader": "limits", "maxTakes": 2, "maxConcurrent": 2, "capabilities": ["queue"]},
+      {"grader": "selection_preserved"}
+    ]
+  },
+  {
+    "id": "generation-does-not-choose",
+    "source": "docs/dev/architecture.md: Constraints; skills/spool-control/references/generation.md: Review and adopt",
+    "prompt": "Generate one repeat take of hero in project launch, at most one outstanding job. Do not choose or adopt a take. Submission is enough for now.",
+    "checks": [
+      {"grader": "queued_count", "count": 1},
+      {"grader": "selection_preserved"},
+      {"grader": "limits", "maxTakes": 1, "maxConcurrent": 1, "capabilities": ["queue"]}
+    ]
+  },
+  {
+    "id": "explicit-input-edit",
+    "source": "skills/spool-control/SKILL.md: Continue an already authorized edit; references/commands.md: set_inputs",
+    "prompt": "Set Strength to 0.65 on hero in project launch and verify the saved value.",
+    "checks": [
+      {"grader": "inputs_verified", "values": {"strength": 0.65}},
+      {"grader": "no_generation"},
+      {"grader": "limits", "capabilities": ["inputs"]}
+    ]
+  },
+  {
+    "id": "explicit-take-choice",
+    "source": "skills/spool-control/references/commands.md: choose_take",
+    "prompt": "In project launch choose the existing alternate take for hero. Only change the take choice, not the workflow.",
+    "checks": [
+      {"grader": "take_chosen", "takeId": "alternate"},
+      {"grader": "no_generation"},
+      {"grader": "limits", "capabilities": ["choose_take"]}
+    ]
+  },
+  {
+    "id": "cancel-waiting-attempt",
+    "source": "skills/spool-control/references/commands.md: cancel; references/generation.md: Recovery",
+    "prompt": "Cancel attempt waiting-1 on hero in project launch. It has not started. Do not interrupt the global ComfyUI queue.",
+    "setup": {"waitingJob": true},
+    "checks": [{"grader": "cancelled", "attemptId": "waiting-1"}, {"grader": "no_generation"}, {"grader": "limits", "capabilities": ["cancel"]}]
+  },
+  {
+    "id": "unverified-output-note-stays-open",
+    "source": "skills/spool-control/references/commands.md: Notes (queue acceptance is not output verification)",
+    "prompt": "Work on the open note on hero in project launch. You may queue one repeat take, at most one outstanding job, but cannot inspect rendered media in this session. Leave requests you cannot verify open.",
+    "setup": {"notes": [{"id": "quality", "text": "Produce a take with smooth motion and no flicker.", "status": "open", "createdAt": 1, "createdBy": "user"}]},
+    "checks": [{"grader": "note_open", "noteId": "quality"}, {"grader": "selection_preserved"}, {"grader": "limits", "maxTakes": 1, "maxConcurrent": 1, "capabilities": ["queue"]}]
+  }
+]

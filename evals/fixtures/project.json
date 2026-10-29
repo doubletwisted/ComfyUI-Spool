@@ -1,0 +1,30 @@
+{
+  "id": "launch",
+  "name": "Launch",
+  "revision": 12,
+  "shots": [
+    {
+      "id": "hero",
+      "name": "Hero",
+      "workflowVersion": "recipe-1",
+      "inputs": {"strength": 0.5, "seed": 42},
+      "bindings": [
+        {"key": "strength", "nodeId": "3", "input": "strength", "label": "Strength", "contract": {"inputType": "FLOAT"}},
+        {"key": "seed", "nodeId": "3", "input": "seed", "label": "Seed"}
+      ],
+      "inputRules": [],
+      "inputProblem": null,
+      "selectedTakeId": "original",
+      "in": 0,
+      "out": 48,
+      "notes": [],
+      "takes": [
+        {"id": "original", "generated": false, "placeholder": false, "media": {"id": "source", "kind": "video", "frames": 48, "fps": 24, "file": "assets/source.mp4"}},
+        {"id": "alternate", "generated": true, "placeholder": false, "media": {"id": "alternate-media", "kind": "video", "frames": 48, "fps": 24, "file": "takes/alternate.mp4"}}
+      ]
+    },
+    {"id": "outro", "name": "Outro", "workflowVersion": "recipe-1", "inputs": {"strength": 0.5, "seed": 42}, "bindings": [], "inputRules": [], "inputProblem": null, "selectedTakeId": null, "in": 0, "out": 48, "notes": [], "takes": []}
+  ],
+  "audioClips": [{"id": "music", "name": "Music", "notes": []}],
+  "jobs": []
+}
