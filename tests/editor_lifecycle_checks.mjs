@@ -1,9 +1,10 @@
+import { createQueueActions } from '../ui/queue-submission.js';
+import { createInputActions } from '../ui/input-actions.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import * as G from '../ui/generation.js';
 import { createInputReplacements } from '../ui/input-replacement.js';
-import { compactGroups } from '../ui/input-groups.js';
 import { createApi } from '../ui/api.js';
 
 // Exercise the production event handlers with deferred transport/decoder dependencies.
@@ -76,10 +77,29 @@ function queueFixture(extra = {}) {
     toast: message => messages.push(message),
     ...extra,
   };
-  const api = vm.runInNewContext(
-    section('const queueRetryKey =', 'function queueModal()') + '\n({queueClips,queueSubmission})',
-    context,
-  );
+  const api = createQueueActions({
+    storage: sessionStorage,
+    retryKey: 'project:queue-request',
+    getClips: () => context.state.clips,
+    getBridge: () => context.bridgeClient,
+    getRecipes: () => context.nativeRecipes,
+    getCloudDefinitions: () => context.cloudDefinitions,
+    getDefinitions: () => context.productDefinitions,
+    isConnected: () => context.productCapabilities.connected,
+    pingAction: 'ping',
+    projectKey: 'p',
+    projectEdit: context.projectEdit,
+    request: (...args) => context.request(...args),
+    edits: context.edits,
+    decimal: context.decimal,
+    $: context.$,
+    closeModal: () => {},
+    queueReason: (...args) => context.queueReason(...args),
+    reviewGeneration: (...args) => context.reviewGeneration(...args),
+    flushNative: () => context.flushNative(),
+    toast: context.toast,
+    renderQueueList: () => {},
+  });
   return { ...api, context, sent, messages, state, sessionStorage };
 }
 
@@ -234,7 +254,6 @@ function inputFixture(slot = 'video') {
   const context = {
     state: { clips: [c] },
     inputReplacements: createInputReplacements(),
-    compactGroups,
     api: createApi({
       diagnostics: { run: (label, run) => run() },
       project: () => 'p',
@@ -256,11 +275,18 @@ function inputFixture(slot = 'video') {
     $: () => ({ querySelector: () => null }),
     createImageBitmap: async () => ({ close() {} }),
   };
-  const api = vm.runInNewContext(
-    section('function useTimelineVideo(', 'const countLabel =') +
-      '\n({useTimelineVideo,replaceInputMedia,replaceInputImage,clearInput})',
-    context,
-  );
+  const api = createInputActions({
+    getClips: () => context.state.clips,
+    inputReplacements: context.inputReplacements,
+    take: context.take,
+    edits: context.edits,
+    $: context.$,
+    api: context.api,
+    projectKey: 'p',
+    flushNative: () => context.flushNative(),
+    toast: context.toast,
+    decodeImage: file => context.createImageBitmap(file),
+  });
   return { c, context, history, ...api };
 }
 {

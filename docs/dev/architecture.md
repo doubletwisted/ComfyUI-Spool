@@ -178,6 +178,8 @@ contracts that have tests of their own:
   the document field registry is pinned by `tests/fixtures/document_fields.json`.
 - `api.js`: the one HTTP client for `/spool/api` (error mapping, processing
   labels, background rules, recipe attachment on save).
+- `queue-submission.js` and `input-actions.js`: asynchronous submission and input
+  replacement ownership with explicit editor adapters.
 - `picture.js`: what the viewer shows at a frame or in Source, apart from playback.
 - `pointer.js`: cancels every pointer gesture when the window loses focus or the
   tab is hidden.

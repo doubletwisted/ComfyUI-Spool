@@ -1,5 +1,7 @@
+import { createQueueActions } from './queue-submission.js';
+import { createInputActions } from './input-actions.js';
 import { createInputReplacements } from './input-replacement.js';
-import { compactGroups, visibleInputs, inputFilled, mayStayEmpty } from './input-groups.js';
+import { visibleInputs, inputFilled, mayStayEmpty } from './input-groups.js';
 import { keyText } from './keys.js';
 // Native editor runtime. Demo source is not loaded or transformed.
 let initialization;
@@ -7588,94 +7590,29 @@ async function startEditor(isFailed) {
       toast(error.message);
     }
   };
-  const queueRetryKey = STORAGE_KEY + ':queue-request';
-  const queueSubmission = G.createQueueSubmission({ storage: sessionStorage, key: queueRetryKey, submit: submitQueue });
-  async function submitQueue(body) {
-    const { seedUpdates = [], ...payload } = body;
-    await projectEdit.change(() => request('projects/' + projectKey + '/queue', payload));
-    const updates = seedUpdates.filter(update => {
-      const c = state.clips.find(c => c.id === update.clipId);
-      return (
-        c &&
-        c.workflowVersion === update.workflowVersion &&
-        c.seedMode === update.mode &&
-        c.seedKey === update.seedKey &&
-        decimal(c.inputValues[update.key]) === decimal(update.before)
-      );
-    });
-    if (updates.length) {
-      edits.apply(
-        'Advance generation seeds',
-        () => {
-          for (const update of updates) {
-            const c = state.clips.find(c => c.id === update.clipId);
-            c.inputValues[update.key] = update.after;
-            c.revision++;
-          }
-        },
-        'inspector',
-      );
-    }
-    if ($('generationReviewQueue')) closeModal();
-    const cloudOnly = payload.items?.every(item => {
-      const clip = state.clips.find(c => c.id === item.clipId);
-      return (clip?.executionTarget || nativeRecipes[clip?.workflowVersion]?.executionTarget) === 'cloud';
-    });
-    toast(
-      cloudOnly
-        ? 'Cloud generation requests accepted.'
-        : productCapabilities.connected
-          ? 'Generation requests accepted.'
-          : 'Requests saved; waiting for Comfy.',
-    );
-  }
-  function queueClips(clips, reviewed = null) {
-    return queueSubmission
-      .start(async () => {
-        if (!clips.length) return;
-        if (bridgeClient) {
-          const live = await bridgeClient.call(B.ACTIONS.ping, {}, { timeoutMs: 300 }).catch(() => null),
-            linked = live?.linkedWorkflow;
-          if (
-            linked?.projectId === projectKey &&
-            linked.deadline &&
-            clips.some(
-              c =>
-                c.id === linked.clipId &&
-                !Object.values(nativeRecipes[c.workflowVersion]?.prompt || {}).some(n =>
-                  ['DeadlineSubmit', 'SaveAndSubmitNode'].includes(n.class_type),
-                ),
-            )
-          )
-            throw Error(
-              'Apply this clip’s Comfy changes before generating. Its saved workflow has no Deadline submit node.',
-            );
-        }
-        for (const c of clips) {
-          const reason = queueReason(c);
-          if (reason) throw Error(c.name + ': ' + reason);
-        }
-        if (!reviewed && clips.some(c => (c.count || 1) > 1)) {
-          await reviewGeneration(clips);
-          return;
-        }
-        await flushNative();
-        const items =
-          reviewed || G.generationItems(clips, { ...cloudDefinitions, ...productDefinitions }, nativeRecipes);
-        return {
-          revision: projectEdit.revision,
-          items,
-          seedUpdates: G.seedUpdates(clips, items),
-          operationId: crypto.randomUUID(),
-        };
-      })
-      .catch(error => {
-        if (error.status !== 409) toast(error.message);
-      })
-      .finally(() => {
-        if ($('queueList')) renderQueueList();
-      });
-  }
+  const { queueClips, queueSubmission } = createQueueActions({
+    storage: sessionStorage,
+    retryKey: STORAGE_KEY + ':queue-request',
+    getClips: () => state.clips,
+    getBridge: () => bridgeClient,
+    getRecipes: () => nativeRecipes,
+    getCloudDefinitions: () => cloudDefinitions,
+    getDefinitions: () => productDefinitions,
+    isConnected: () => productCapabilities.connected,
+    pingAction: B.ACTIONS.ping,
+    projectKey,
+    projectEdit,
+    request,
+    edits,
+    decimal,
+    $,
+    closeModal,
+    queueReason,
+    reviewGeneration,
+    flushNative,
+    toast,
+    renderQueueList,
+  });
   // Renders is a panel, not a modal: editing, playback and shortcuts continue while it is open.
   function closeRenders() {
     const panel = $('rendersPanel');
@@ -8491,122 +8428,17 @@ async function startEditor(isFailed) {
         });
     }
   }
-  function useTimelineVideo(clipId, index) {
-    const c = state.clips.find(c => c.id === clipId);
-    if (!c) return;
-    const b = c.bindings[index],
-      current = take(c);
-    if (b.slot !== 'video' || current.placeholder || current.media.kind !== 'video') return;
-    inputReplacements.choose(c.id, b.key);
-    if (c.shotInputs?.some(s => s.key === b.key && s.source === 'selected')) return;
-    edits.apply(
-      'Use timeline video',
-      () => {
-        c.shotInputs = [
-          ...(c.shotInputs || []).filter(s => s.key !== b.key),
-          { key: b.key, source: 'selected', ...(b.audio ? { audio: true } : {}) },
-        ];
-        settleGroups(c);
-        c.revision++;
-      },
-      'inspector',
-    );
-    $('inspectorContent')
-      .querySelector('[data-media-input="' + index + '"] [data-use-timeline-video]')
-      ?.focus({ preventScroll: true });
-  }
-  // Filled inputs of a group stay in its first slots, so "Image 2" in a prompt is the second one shown.
-  function settleGroups(c) {
-    if (!(c.bindings || []).some(b => b.group)) return;
-    const next = compactGroups(c.bindings, c.inputValues || {}, c.shotInputs || []);
-    c.inputValues = next.values;
-    c.shotInputs = next.settings;
-  }
-  function clearInput(c, index) {
-    const b = c.bindings[index];
-    if (!b?.optional) return;
-    inputReplacements.choose(c.id, b.key);
-    edits.apply(
-      'Remove ' + b.label,
-      () => {
-        c.inputValues[b.key] = '';
-        c.shotInputs = (c.shotInputs || []).filter(s => s.key !== b.key);
-        settleGroups(c);
-        c.revision++;
-      },
-      'inspector',
-    );
-  }
-  async function replaceInputMedia(c, index, file) {
-    const b = c.bindings[index];
-    const allowed = b.slot === 'video' ? /\.(mp4|mov|mkv|webm|m4v)$/i : /\.(wav|mp3|ogg|flac|m4a)$/i;
-    if (!allowed.test(file.name)) throw Error('Choose a ' + b.slot + ' file.');
-    const replacement = inputReplacements.begin(c, b.key);
-    try {
-      const uploaded = await api.upload('projects/' + projectKey + '/input', file, file.name, {
-        fallback: 'Could not save this input.',
-      });
-      const current = state.clips.find(clip => clip.id === c.id);
-      if (!replacement.owns(current)) throw Error('This input changed while uploading. Choose the file again.');
-      edits.apply(
-        'Replace ' + b.label,
-        () => {
-          current.inputValues[b.key] = uploaded.file;
-          current.shotInputs = (current.shotInputs || []).filter(s => s.key !== b.key);
-          settleGroups(current);
-          current.revision++;
-        },
-        'inspector',
-      );
-      await flushNative();
-      toast(b.label + ' replaced');
-    } finally {
-      replacement.finish();
-    }
-  }
-  async function replaceInputImage(c, index, file) {
-    if (!file.type.startsWith('image/')) throw Error('Choose an image file.');
-    const b = c.bindings[index];
-    if (file.size > 100 * 1024 * 1024) throw Error('Choose an image smaller than 100 MB.');
-    const replacement = inputReplacements.begin(c, b.key);
-    try {
-      let blob = file,
-        extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[file.type];
-      const bitmap = await createImageBitmap(file);
-      if (!extension) {
-        const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        canvas.getContext('2d').drawImage(bitmap, 0, 0);
-        blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-        extension = 'png';
-      }
-      bitmap.close();
-      const uploaded = await api.upload(
-        'projects/' + projectKey + '/input',
-        blob,
-        file.name?.replace(/\.[^.]+$/, '') + '.' + extension || 'image.' + extension,
-        { fallback: 'Could not save this input image.' },
-      );
-      const current = state.clips.find(clip => clip.id === c.id);
-      if (!replacement.owns(current)) throw Error('The input changed while uploading. Choose the image again.');
-      const value = uploaded.file;
-      edits.apply(
-        'Replace ' + b.label,
-        () => {
-          current.inputValues[b.key] = value;
-          current.shotInputs = (current.shotInputs || []).filter(s => s.key !== b.key);
-          settleGroups(current);
-          current.revision++;
-        },
-        'inspector',
-      );
-      await flushNative();
-      toast(b.label + ' replaced');
-    } finally {
-      replacement.finish();
-    }
-  }
+  const { useTimelineVideo, clearInput, replaceInputMedia, replaceInputImage } = createInputActions({
+    getClips: () => state.clips,
+    inputReplacements,
+    take,
+    edits,
+    $,
+    api,
+    projectKey,
+    flushNative,
+    toast,
+  });
   const countLabel = document.createElement('label');
   countLabel.className = 'native-count';
   countLabel.innerHTML =

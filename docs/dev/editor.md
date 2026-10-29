@@ -29,3 +29,10 @@ fail and **Open Spool** is unavailable. This deliberately fails closed because
 routes and scripts ship together. Bridge wire literals are frozen. `serve`
 returns a cleanup function; the owner closes its channel. Client close rejects
 pending calls.
+
+Queue preflight, submission, persisted retry ownership and seed advancement live
+in `ui/queue-submission.js`. `ui/input-actions.js` owns asynchronous input
+replacement and explicit input choices, backed by `ui/input-replacement.js`
+tokens. Both receive live getters and narrow actions; they never retain a
+project snapshot across a transport boundary. Lifecycle checks import these
+production modules with deferred transport and decoder dependencies.
