@@ -39,6 +39,7 @@ export function createProjectEdit({ project, document, apply, request, blocked, 
       notify({ kind: 'conflict', revision, error });
     }
   }
+  /** @param {import('./types.js').ApiResult<import('./types.js').Document>} value */
   function applyProject(value, replace) {
     apply(value, replace);
     project = value;
@@ -169,6 +170,7 @@ export function createProjectEdit({ project, document, apply, request, blocked, 
     }
   }
   // The authored document omits jobs; retain the last applied server ledger.
+  /** @returns {import('./types.js').Attempt[]} */
   function projectJobs() {
     return project.document.jobs;
   }

@@ -51,7 +51,8 @@ python tests/run_architecture_checks.py
 ```
 
 It checks formatting (ruff for Python, Prettier for JavaScript, HTML and CSS)
-and lint (ruff and ESLint), then runs every `tests/test_*.py` and
+and lint (ruff and ESLint), TypeScript checking of the studio owners without
+emitting a build, then runs every `tests/test_*.py` and
 `tests/*_checks.mjs` and the contract checks that pin shared Python/JavaScript
 formats (see the table in the architecture doc). It needs no ComfyUI host.
 `npm run format` and `python -m ruff format .` fix formatting; the gate only

@@ -436,7 +436,7 @@ export function timelinePlan(doc, range = { start: 0, end: total(doc) }) {
       : lane('music', 'A2', 'music')
     ).push(sound(c, c.start, c.media.file, enabled(c)));
   const audio = [...lanes]
-    .sort(([a], [b]) => (a === 'music') - (b === 'music') || a - b)
+    .sort(([a], [b]) => Number(a === 'music') - Number(b === 'music') || Number(a) - Number(b))
     .flatMap(([, t]) => {
       const packed = [];
       for (const c of t.clips.filter(Boolean).sort((a, b) => a.start - b.start)) {
@@ -624,11 +624,17 @@ export function resolveGesture(doc, target, modifiers = {}) {
   return { kind: 'move', mode: modifiers.alt ? 'copy' : 'move' };
 }
 
+/**
+ * @param {import('./types.js').Document} doc
+ * @param {import('./types.js').EditOptions} options
+ */
 export function beginEdit(
   doc,
   { id, audio = false, kind, mode, edge = null, peer = null, snapEnabled = false, snapTolerance = 0 },
 ) {
-  const clips = audio ? doc.audioClips || [] : doc.clips,
+  const clips = /** @type {(import('./types.js').Clip | import('./types.js').AudioClip)[]} */ (
+      audio ? doc.audioClips || [] : doc.clips
+    ),
     c = clips.find(c => c.id === id),
     index = clips.indexOf(c);
   return {
@@ -940,7 +946,7 @@ export function addAudioClip(doc, m, start, newId, { track = 'music', fullLength
   if (m.kind === 'video' && !m.audio) return null;
   showAudioTrack(doc, track, lane);
   const length = fullLength ? m.frames : Math.min(m.frames, Math.max(MIN_FRAMES, videoTotal(doc) - start)),
-    c = {
+    c = /** @type {import('./types.js').AudioClip} */ ({
       id: newId,
       name: m.name.replace(/\.[^.]+$/, ''),
       media: { ...copy(m), kind: 'audio' },
@@ -949,7 +955,7 @@ export function addAudioClip(doc, m, start, newId, { track = 'music', fullLength
       in: 0,
       out: length,
       audio: { gainDb: -6, muted: false, fadeIn: 0, fadeOut: 0 },
-    };
+    });
   if (track === 'source') c.track = track;
   (doc.audioClips ??= []).push(c);
   return c;

@@ -53,14 +53,16 @@ export function createActionMenu({ $, esc, menuParent }) {
     const rect = clipMenu.getBoundingClientRect();
     clipMenu.style.left = Math.max(6, Math.min(x, innerWidth - rect.width - 6)) + 'px';
     clipMenu.style.top = Math.max(6, Math.min(y, innerHeight - rect.height - 6)) + 'px';
-    clipMenu.querySelector('button:not(:disabled)')?.focus({ preventScroll: true });
+    /** @type {HTMLButtonElement} */ (clipMenu.querySelector('button:not(:disabled)'))?.focus({ preventScroll: true });
   }
   const menuKey = e => {
     if (clipMenu.hidden) return;
     e.stopImmediatePropagation();
     if (e.type === 'keyup') return;
-    const items = [...clipMenu.querySelectorAll('button:not(:disabled)')],
-      i = items.indexOf(document.activeElement);
+    const items = [
+        .../** @type {NodeListOf<HTMLButtonElement>} */ (clipMenu.querySelectorAll('button:not(:disabled)')),
+      ],
+      i = items.indexOf(/** @type {HTMLButtonElement} */ (document.activeElement));
     if (e.key === 'Escape' || e.key === 'Tab') {
       e.preventDefault();
       closeClipMenu();

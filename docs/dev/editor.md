@@ -58,3 +58,10 @@ selection, history, repaint and save actions.
 controls. `ui/library-renderer.js` builds the media pool and its cards.
 `ui/workflow-coordinator.js` retains workflow preparation/load caches and
 coordinates workflow-library insertion and replacement.
+
+The studio remains build-free. `tsconfig.json` checks the timeline, ledger,
+project-edit, generation and extracted owners with `allowJs`, `checkJs` and
+`noEmit`. `ui/types.js` holds shared document, clip, take, attempt and API result
+JSDoc contracts. Run `npm run typecheck`; the architecture gate runs it too.
+Strict inference is disabled for gradual checking of existing JavaScript; no
+blanket `any` annotations or `@ts-nocheck` exclusions are used.

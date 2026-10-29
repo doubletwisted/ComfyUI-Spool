@@ -210,6 +210,7 @@ export function visibleRenderJobs(jobs, cleared = []) {
   const hidden = new Set(cleared);
   return jobs.filter(j => !hidden.has(j.id) || !clearableRender(j));
 }
+/** @param {import('./types.js').Attempt} job */
 export function jobElapsed(job, now = Date.now() / 1000) {
   if (!job.createdAt || (TERMINAL.includes(job.status) && !job.finishedAt)) return '';
   const seconds = Math.max(0, Math.floor((job.finishedAt || now) - job.createdAt));

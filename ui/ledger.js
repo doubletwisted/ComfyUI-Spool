@@ -103,6 +103,7 @@ export function savedDocument(state) {
   }
   return out;
 }
+/** @param {import('./types.js').Document} doc */
 export function authored(doc) {
   const { jobs, recoverableResults, ...document } = doc;
   return copy({ ...document, clips: doc.clips.map(c => ({ ...c, takes: c.takes.filter(t => !t.generated) })) });
@@ -162,7 +163,7 @@ export function mergeArrivals(local, incoming) {
       c.takes.push(...latest.takes.filter(t => !known.has(t.id)));
     }
     c.takes = c.takes.filter(t => !deleted.has(t.id) && !media.has(t.media?.id));
-    c.takes.sort((a, b) => !!a.generated - !!b.generated || a.number - b.number);
+    c.takes.sort((a, b) => Number(!!a.generated) - Number(!!b.generated) || a.number - b.number);
   }
   if (local.media) local.media = local.media.filter(m => !media.has(m.id));
   local.jobs = incoming.jobs;

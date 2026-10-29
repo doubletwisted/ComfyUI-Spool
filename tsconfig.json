@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "strict": false
+  },
+  "include": [
+    "ui/timeline.js",
+    "ui/ledger.js",
+    "ui/project-edit.js",
+    "ui/generation.js",
+    "ui/queue-submission.js",
+    "ui/input-actions.js",
+    "ui/dialogs.js",
+    "ui/action-menu.js",
+    "ui/viewer.js",
+    "ui/timeline-renderer.js",
+    "ui/timeline-pointer.js",
+    "ui/inspector-renderer.js",
+    "ui/library-renderer.js",
+    "ui/workflow-coordinator.js"
+  ]
+}
