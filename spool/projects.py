@@ -114,6 +114,9 @@ class ProjectStore(Store):
                     self.runtime.with_name(self.runtime.name + suffix).unlink(missing_ok=True)
                 if signature is not None:
                     shutil.copyfile(self.snapshot, self.runtime)
+            # Invalidate before any transaction (including a migration) can commit.
+            # Only a successfully acknowledged publication makes this cache trusted.
+            self.stamp.write_text("null")
             db = sqlite3.connect(self.runtime, timeout=30)
             db.row_factory = sqlite3.Row
             before = db.total_changes
@@ -137,9 +140,6 @@ class ProjectStore(Store):
                     or db.execute("PRAGMA page_count").fetchone()[0] != pages
                 )
                 if changed or signature is None:
-                    # A failed publication invalidates the local working copy: the
-                    # next reader restores the last durable, acknowledged state.
-                    self.stamp.write_text("null")
                     local = self.runtime.with_name("snapshot-" + uid() + ".sqlite3")
                     pending = self.snapshot.with_name("project." + uid() + ".partial")
                     try:
@@ -159,7 +159,7 @@ class ProjectStore(Store):
                     finally:
                         local.unlink(missing_ok=True)
                         pending.unlink(missing_ok=True)
-                elif saved != signature:
+                else:
                     self.stamp.write_text(json.dumps(signature))
             except Exception:
                 self.stamp.unlink(missing_ok=True)

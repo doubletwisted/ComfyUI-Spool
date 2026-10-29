@@ -22,7 +22,8 @@ opened. A clip keeps its folder when renamed.
 `project.spool` is a SQLite snapshot. While you work, Spool edits a local copy in
 `ComfyUI/user/spool/cache` and publishes the snapshot to the folder under a lock,
 so the live database never runs on a network drive. The local cache can always be
-rebuilt from the project folder.
+rebuilt from the project folder. After an interrupted save or upgrade, reopening
+restores the last published snapshot and retries any required upgrade.
 
 **Download project file** in the top bar saves a project file; **Open project
 file** imports one. The file contains the edit, workflow versions and media

@@ -353,6 +353,70 @@ class ProjectFormatTests(unittest.TestCase):
         store = ProjectStore(self.folder, workspace)
         self.assertEqual(store.attempt(self.attempt_id)["request"], self.expected["attempt"]["request"])
 
+    def test_interrupted_commit_or_publication_discards_unpublished_working_state(self):
+        connect = sqlite3.connect
+
+        class InterruptedCommit(sqlite3.Connection):
+            def commit(self):
+                super().commit()
+                if self.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION:
+                    raise KeyboardInterrupt("Committed but not published")
+
+            def __exit__(self, *args):
+                committed = self.in_transaction and args[0] is None
+                result = super().__exit__(*args)
+                if committed and self.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION:
+                    raise KeyboardInterrupt("Committed but not published")
+                return result
+
+        for operation in ("write", "migration"):
+            for interruption in ("commit", "replace"):
+                with self.subTest(operation=operation, interruption=interruption):
+                    folder = self.root / (operation + "-" + interruption)
+                    folder.mkdir()
+                    shutil.copyfile(FIXTURES / "project-schema5.spool", folder / "project.spool")
+                    workspace = Workspace(self.root / (folder.name + "-workspace"))
+                    store = ProjectStore(folder, workspace, migrate=False, writable=True)
+                    # Prime a valid checkpoint, including for the schema-5 snapshot.
+                    with store.connect():
+                        pass
+                    if operation == "write":
+                        store = ProjectStore(folder, workspace)
+                    before = store.snapshot.read_bytes()
+
+                    def interrupted_connect(path, *args, **kwargs):
+                        if path == store.runtime:
+                            kwargs["factory"] = InterruptedCommit
+                        return connect(path, *args, **kwargs)
+
+                    failure = (
+                        patch("spool.projects.sqlite3.connect", interrupted_connect)
+                        if interruption == "commit"
+                        else patch(
+                            "spool.projects.atomic_replace", side_effect=KeyboardInterrupt("Publication stopped")
+                        )
+                    )
+                    with failure, self.assertRaises(KeyboardInterrupt):
+                        if operation == "migration":
+                            ProjectStore(folder, workspace)
+                        else:
+                            project = store.get(self.project_id)
+                            project["document"]["project"] = "Unpublished edit"
+                            store.save(self.project_id, project["revision"], project["document"])
+                    self.assertEqual(store.snapshot.read_bytes(), before)
+                    with patch.object(Store, "_migration6", autospec=True, side_effect=Store._migration6) as migrate:
+                        reopened = ProjectStore(folder, workspace)
+                    self.assertEqual(migrate.call_count, int(operation == "migration"))
+                    project = reopened.get(self.project_id)
+                    self.assertEqual(project["document"]["project"], self.expected["get"]["document"]["project"])
+                    self.assertEqual(reopened.attempt(self.attempt_id)["request"], self.expected["attempt"]["request"])
+                    published = Store(folder, migrate=False, filename="project.spool").get(self.project_id)
+                    self.assertEqual(project["document"], published["document"])
+                    with reopened.connect() as db:
+                        working = reopened._load(db.execute("SELECT document FROM projects").fetchone()[0], db)
+                    self.assertEqual(working["project"], published["document"]["project"])
+                    self.assertEqual(json.loads(reopened.stamp.read_text()), reopened.signature())
+
     def test_maintenance_reports_do_not_migrate_create_or_recover(self):
         before = {p.relative_to(self.folder): p.read_bytes() for p in self.folder.rglob("*") if p.is_file()}
         with patch("spool.projects.take_files.recover", side_effect=AssertionError("Must not recover")):
