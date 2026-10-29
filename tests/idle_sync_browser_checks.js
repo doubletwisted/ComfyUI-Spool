@@ -56,7 +56,7 @@
     await n.poll();
     check(
       'Remote edits invalidate the token and refresh the project',
-      reads.at(-1).value.document?.brief === 'External editor update' &&
+      reads.some(r => r.value.document?.brief === 'External editor update') &&
         n.state.brief === 'External editor update' &&
         n.revision > revision,
     );

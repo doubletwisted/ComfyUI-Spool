@@ -17,6 +17,7 @@
     "ui/timeline.js",
     "ui/ledger.js",
     "ui/project-edit.js",
+    "ui/project-sync.js",
     "ui/generation.js",
     "ui/queue-submission.js",
     "ui/input-actions.js",

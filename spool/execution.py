@@ -43,6 +43,25 @@ class LocalExecutor:
         self.disabled_reason = None
         self.collector = Collector(store, media)
         self.progress = progress
+        self.pushed_progress = {}
+
+    def notify_progress(self):
+        """Progress is ephemeral: wake readers only when the observed values change."""
+        notify = getattr(self.store, "project_changed", None)
+        if not notify:
+            return
+        current = {}
+        for store in self.store.project_stores():
+            project_id = store.list()[0]["id"]
+            state = store.sync_state(project_id)
+            if not state["jobs"]:
+                continue
+            value = self.annotate_progress({"id": project_id, "document": {"jobs": state["jobs"]}})
+            progress = json.dumps(value["document"]["jobs"], sort_keys=True)
+            current[project_id] = progress
+            if self.pushed_progress.get(project_id) != progress:
+                notify({"projectId": project_id, "revision": state["revision"], "cursor": state["cursor"]})
+        self.pushed_progress = current
 
     def annotate_progress(self, project):
         self.collector.annotate_progress(project)
@@ -295,6 +314,7 @@ class LocalExecutor:
                     await asyncio.to_thread(self.store.publish_host, self.configuration, self.session_id)
                 await self.reconcile()
                 await asyncio.to_thread(self.collector.scan)
+                await asyncio.to_thread(self.notify_progress)
             except Exception:
                 logging.exception("Spool reconciliation failed; saved attempts remain pending")
             await asyncio.sleep(2)

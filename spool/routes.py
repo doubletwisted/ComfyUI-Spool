@@ -115,6 +115,8 @@ def register(server, store, media, executor=None):
     collector = executor.collector if executor is not None else Collector(store, media)
     cloud = CloudExecutor(store, media, collector)
     launcher = ComfyLauncher(store)
+    project_updates = executor is not None and callable(getattr(server, "send_sync", None))
+    store.project_changed = (lambda value: server.send_sync("spool.project", value)) if project_updates else None
 
     def services(request):
         project_id = request.match_info.get("project") or request.query.get("projectId")
@@ -783,6 +785,7 @@ def register(server, store, media, executor=None):
         value["requirements"] = requirements.report()
         value["version"] = __version__
         value["apiVersion"] = API_VERSION
+        value["projectUpdates"] = project_updates
         value["commandActions"] = sorted(commands.ACTION_CAPABILITIES)
         value["commandSchema"] = "/spool/api/command-schema"
         if types != "":

@@ -5,6 +5,9 @@ All notable changes to Spool are recorded here. Versions follow
 
 ## 0.1.0 (unreleased)
 
+- Refresh project changes, take arrivals and render progress through ComfyUI's
+  websocket, with fewer idle project reads and polling recovery. Standalone
+  Spool retains its existing polling behavior.
 - Discard unpublished local changes after an interrupted save or project upgrade.
 - Keep project downloads and portable draft evidence working after takes are deleted from disk.
 - Prevent folder discovery from importing pending render outputs or duplicating takes when a receipt arrives during a scan.

@@ -1,4 +1,5 @@
 import { createWorkflowDialogs } from './workflow-dialogs.js';
+import { createProjectSync } from './project-sync.js';
 import { createWorkflowControls } from './workflow-controls.js';
 import { createRenderQueue } from './render-queue.js';
 import { createComfyConnection } from './comfy-connection.js';
@@ -1733,7 +1734,7 @@ async function startEditor(isFailed) {
     getPixelScale: () => ppf,
     isTimelinePanning: () => !!timelinePan,
     resetProjectPoll: () => {
-      projectPoll = 0;
+      projectSync.requestPoll();
     },
     refreshTrimPreview: () => {
       if (lastTrimEdit) updateTrimPreview(lastTrimEdit.d, lastTrimEdit.delta);
@@ -3294,33 +3295,44 @@ async function startEditor(isFailed) {
   // Only edits and view history use browser storage; durable queue/result state is polled from SQLite.
   const nativeEditingField = () =>
     document.activeElement?.matches('input:not([type=range]):not([type=checkbox]):not([type=file]),textarea,select');
-  let projectPoll = Date.now(),
-    nativePolling = false;
+  let nativePolling = null;
   const focusViewId = crypto.randomUUID();
   let focusPoll = 0;
   const editorVisible = () =>
     !document.hidden && (!window.frameElement || window.frameElement.getClientRects().length > 0);
-  async function pollNative(automatic = false) {
-    if (nativePolling || (automatic && !editorVisible())) return;
-    nativePolling = true;
-    try {
-      const active = visibleJobs().some(j => !G.TERMINAL.includes(j.status));
-      if (!automatic || (!viewer.playing && Date.now() - projectPoll >= (active ? 1200 : 15000))) {
-        projectPoll = Date.now();
-        await projectEdit.poll();
-      }
-      // Agent focus expires after 15 seconds; a small heartbeat keeps it current.
-      if (Date.now() - focusPoll >= 10000 && editorVisible()) {
-        focusPoll = Date.now();
-        await request('projects/' + projectKey + '/focus/' + focusViewId, {
-          clipId: state.selected,
-          takeId: review.source?.takeId || selected()?.takeId,
-          playhead: state.frame,
-          mode: 'editor',
-        }).catch(() => {});
-      }
-    } finally {
-      nativePolling = false;
+  const socketUrl = new URL('/ws', location.href);
+  socketUrl.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const projectSync = createProjectSync({
+    enabled: productCapabilities.projectUpdates === true,
+    projectId: projectKey,
+    url: socketUrl.href,
+    refresh: () => {
+      if (editorVisible() && !viewer.playing) pollNative(true);
+    },
+  });
+  function pollNative(automatic = false) {
+    if (nativePolling) return automatic ? nativePolling : nativePolling.then(() => pollNative());
+    if (automatic && !editorVisible()) return Promise.resolve();
+    nativePolling = pollProject(automatic).finally(() => {
+      nativePolling = null;
+    });
+    return nativePolling;
+  }
+  async function pollProject(automatic) {
+    const active = visibleJobs().some(j => !G.TERMINAL.includes(j.status));
+    if (!automatic || (!viewer.playing && projectSync.due(active))) {
+      projectSync.didPoll();
+      await projectEdit.poll();
+    }
+    // Agent focus expires after 15 seconds; a small heartbeat keeps it current.
+    if (Date.now() - focusPoll >= 10000 && editorVisible()) {
+      focusPoll = Date.now();
+      await request('projects/' + projectKey + '/focus/' + focusViewId, {
+        clipId: state.selected,
+        takeId: review.source?.takeId || selected()?.takeId,
+        playhead: state.frame,
+        mode: 'editor',
+      }).catch(() => {});
     }
   }
   const connectionButton = document.createElement('button');
@@ -4082,6 +4094,7 @@ async function startEditor(isFailed) {
   const resumeSync = () => {
     if (editorVisible() && !viewer.playing) pollNative();
   };
+  projectSync.start();
   window.addEventListener('focus', resumeSync);
   document.addEventListener('visibilitychange', resumeSync);
   request('comfy')
@@ -4097,6 +4110,7 @@ async function startEditor(isFailed) {
     templateBrowser?.dispose();
     clearInterval(diagnosticsTimer);
     clearInterval(pollTimer);
+    projectSync.dispose();
     clearInterval(saveTimer);
     clearInterval(generationClock);
     clearTimeout(viewSaveTimer);

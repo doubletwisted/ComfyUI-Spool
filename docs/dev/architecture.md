@@ -233,6 +233,7 @@ Comfy templates without touching the user's graph.
 | Take ownership | `spool/ledger.py` | `ui/ledger.js` | `tests/fixtures/ledger_cases.json` |
 | Optional and grouped inputs | `spool/workflow_inputs.py` | `ui/input-groups.js` | `tests/fixtures/optional_inputs.json` |
 | API version | `spool/protocol.py` | `ui/protocol.js` | `tests/fixtures/protocol_versions.json` |
+| Project push hints | `spool/projects.py`, `spool/routes.py` | `ui/project-sync.js` | `tests/fixtures/project_updates.json` |
 | Bridge messages | — | `ui/bridge.js` | `tests/bridge_checks.mjs` |
 
 ## Constraints

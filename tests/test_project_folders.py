@@ -85,6 +85,159 @@ class ProjectFolderTests(unittest.TestCase):
             self.project["id"], self.project["revision"], "clip-a", self.media.prepare_workflow(self.capture, True)
         )
 
+    def watch_changes(self):
+        messages = []
+
+        def changed(value):
+            state = self.store.sync_state(value["projectId"])
+            self.assertEqual(
+                value, {"projectId": state["id"], "revision": state["revision"], "cursor": state["cursor"]}
+            )
+            messages.append(value)
+
+        self.workspace.project_changed = changed
+        return messages
+
+    def queued_attempt(self):
+        project = requests.accept(
+            self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}]
+        )
+        return self.store.attempt(project["document"]["jobs"][-1]["id"])
+
+    def test_save_notifies_after_publication_without_a_document(self):
+        messages = self.watch_changes()
+        self.project["document"]["brief"] = "changed"
+        self.store.save(self.project["id"], self.project["revision"], self.project["document"])
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["revision"], self.project["revision"] + 1)
+        self.store.set_setting("unrelated", True)
+        self.store.get(self.project["id"])
+        self.assertEqual(len(messages), 1)
+
+    def test_scoped_command_notifies_once_and_replay_is_silent(self):
+        messages = self.watch_changes()
+        data = self.input_command("set_shot_inputs", {"inputs": [{"key": "image", "source": "selected"}]})
+        commands.execute(self.store, self.media, self.project["id"], data)
+        self.assertEqual(len(messages), 1)
+        commands.execute(self.store, self.media, self.project["id"], data)
+        self.assertEqual(len(messages), 1)
+
+    def test_attempt_status_notifies_without_changing_revision(self):
+        for target in ("local", "cloud", "deadline"):
+            with self.subTest(target=target):
+                attempt = self.queued_attempt()
+                # Pin the common publication path without submitting any target.
+                with self.store.connect() as db:
+                    db.execute(
+                        "UPDATE attempts SET request=json_set(request,'$.target',?) WHERE id=?", (target, attempt["id"])
+                    )
+                messages = self.watch_changes()
+                for status in ("dispatching", "queued", "running"):
+                    self.store.transition(attempt["id"], status)
+                    self.assertEqual(messages[-1]["revision"], self.project["revision"])
+                self.assertEqual(len(messages), 3)
+                self.store.transition(attempt["id"], "running")
+                self.assertEqual(len(messages), 3)
+
+    def test_project_socket_contract_and_standalone_capability(self):
+        contract = json.loads(Path("tests/fixtures/project_updates.json").read_text())
+
+        async def check():
+            for embedded in (True, False):
+                with self.subTest(embedded=embedded):
+                    messages = []
+                    server = SimpleNamespace(routes=web.RouteTableDef(), app=web.Application())
+                    if embedded:
+                        server.send_sync = lambda event, data: messages.append({"type": event, "data": data})
+                    executor = LocalExecutor(self.workspace, self.base_media, server, None) if embedded else None
+                    register(server, self.workspace, self.base_media, executor)
+                    server.app.cleanup_ctx.clear()
+                    server.app.add_routes(server.routes)
+                    async with TestClient(TestServer(server.app)) as client:
+                        value = await (await client.get("/spool/api/capabilities?types=")).json()
+                        self.assertEqual(value["projectUpdates"], embedded)
+                        self.project = self.store.save(
+                            self.project["id"], self.project["revision"], self.project["document"]
+                        )
+                        if embedded:
+                            self.assertEqual(len(messages), 1)
+                            self.assertEqual(messages[0]["type"], contract["type"])
+                            self.assertEqual(set(messages[0]["data"]), set(contract["data"]))
+                            self.assertEqual(messages[0]["data"]["projectId"], self.project["id"])
+                        else:
+                            self.assertIsNone(self.workspace.project_changed)
+
+        asyncio.run(check())
+
+    def test_receipt_acceptance_notifies_at_the_same_revision(self):
+        attempt = self.queued_attempt()
+        messages = self.watch_changes()
+        metadata = {"id": "result", "kind": "image", "file": "assets/black.png", "frames": 24}
+        self.store.accept_execution(attempt["id"], "execution", None, {"primary": metadata, "artifacts": [metadata]})
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["revision"], self.project["revision"])
+        self.assertEqual(self.store.attempt(attempt["id"])["status"], "complete")
+
+    def test_folder_discovery_notifies_only_when_a_take_is_accepted(self):
+        messages = self.watch_changes()
+        folder = self.store.root / self.project["document"]["clips"][0]["outputFolder"]
+        Image.new("RGB", (16, 16), "blue").save(folder / "outside.png")
+        os.utime(folder / "outside.png", (1, 1))
+        watcher = FolderTakes()
+        watcher.scan(self.store, self.media, self.project["id"])
+        watcher.scan(self.store, self.media, self.project["id"])
+        self.assertEqual(len(messages), 1)
+        watcher.scan(self.store, self.media, self.project["id"])
+        self.assertEqual(len(messages), 1)
+
+    def test_rollback_failed_publication_and_other_process_do_not_notify(self):
+        messages = self.watch_changes()
+        with self.assertRaisesRegex(ValueError, "abort"):
+            with self.store.editing(self.project["id"], self.project["revision"]) as edit:
+                edit.save()
+                raise ValueError("abort")
+        with patch("spool.projects.atomic_replace", side_effect=OSError("disconnected")):
+            with self.assertRaisesRegex(OSError, "disconnected"):
+                self.store.save(self.project["id"], self.project["revision"], self.project["document"])
+        other = Workspace(self.root / "other")
+        other.open_folder(self.store.root)
+        other.for_project(self.project["id"]).save(
+            self.project["id"], self.project["revision"], self.project["document"]
+        )
+        self.assertEqual(self.store.revision(self.project["id"]), self.project["revision"] + 1)
+        self.assertEqual(messages, [], "Other machines/processes require the fallback poll")
+
+    def test_notification_failure_does_not_fail_a_durable_save(self):
+        self.workspace.project_changed = lambda value: (_ for _ in ()).throw(RuntimeError("socket stopped"))
+        with self.assertLogs(level="ERROR"):
+            saved = self.store.save(self.project["id"], self.project["revision"], self.project["document"])
+        self.assertEqual(saved["revision"], self.project["revision"] + 1)
+
+    def test_progress_changes_wake_readers_for_local_and_deadline(self):
+        attempt = self.queued_attempt()
+        self.store.transition(attempt["id"], "dispatching")
+        self.store.transition(attempt["id"], "queued")
+        messages = self.watch_changes()
+        observed = {"promptId": attempt["prompt_id"], "nodes": [{"id": "load", "value": 1, "max": 10}]}
+        executor = LocalExecutor(self.workspace, self.base_media, None, None, progress=lambda: observed)
+        executor.notify_progress()
+        executor.notify_progress()
+        self.assertEqual(len(messages), 1)
+        observed["nodes"][0]["value"] = 2
+        executor.notify_progress()
+        self.assertEqual(len(messages), 2)
+        state = self.store.sync_state(self.project["id"])
+        state["jobs"][0]["target"] = "deadline"
+        farm = SimpleNamespace(observations={attempt["id"]: {"percent": 25}})
+        executor.collector.farms["fixture"] = farm
+        with patch.object(self.store, "sync_state", return_value=state):
+            executor.notify_progress()
+            executor.notify_progress()
+            self.assertEqual(len(messages), 3)
+            farm.observations[attempt["id"]]["percent"] = 50
+            executor.notify_progress()
+            self.assertEqual(len(messages), 4)
+
     def test_external_identity_survives_rename_and_replacement_is_a_new_take(self):
         folder = self.store.root / self.project["document"]["clips"][0]["outputFolder"]
         path = folder / "outside.png"

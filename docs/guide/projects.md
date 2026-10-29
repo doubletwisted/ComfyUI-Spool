@@ -127,6 +127,11 @@ requirements.
 
 ## History and external files
 
+Inside ComfyUI, project edits, take arrivals and render progress refresh through
+its websocket, with periodic reads to recover missed updates. Changes made by
+another machine on a shared folder appear on a fallback read (up to about 30
+seconds). Standalone Spool continues to check for updates by polling.
+
 Routine studio updates fetch compact take summaries. Opening a take's workflow
 loads its full saved evidence on demand. Generated results are recognized by
 their recorded files, so an unrelated file with a similar name can still arrive

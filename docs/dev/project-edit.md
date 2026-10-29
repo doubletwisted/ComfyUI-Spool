@@ -72,3 +72,33 @@ status/progress use the `progress` adapter. They retain authored object identity
 studio patches render rows, pending-take status and clip badges without adopting
 a project receipt or rebuilding timeline/inspector DOM. Full receipts continue
 through the existing revision and ledger-adoption checks.
+
+## Push hints and polling
+
+Inside ComfyUI, `projectUpdates` in capabilities enables a separate studio
+connection to the same-origin `/ws` (including HTTPS/WSS). The `spool.project`
+event contains only `{projectId, revision, cursor}`. Project publication sends
+it after an in-process revision/event-cursor change is durable, covering saves,
+scoped commands, attempt transitions, accepted receipts and discovered folder
+takes. No document or render evidence travels over the socket. The executor's
+existing two-second reconciliation loop also sends hints when the progress
+returned by ordinary reads changes (local node progress and Deadline observations).
+Cloud status and receipts use the same publication boundary; there is no new
+Cloud progress source.
+
+`ui/project-sync.js` scopes hints to the open project and wakes the existing
+`pollNative` read. The project-edit guards still own gestures, focused fields,
+drafts and capture reservations; a hint never adopts data directly. Hidden or
+playing editors defer hints. Hints received during a read remain pending for the
+next timer tick. Connecting or reconnecting immediately requests a recovery read.
+Disconnect restores the existing 1.2-second active / 15-second idle polling;
+socket retries run from that same timer, at most once per five seconds. Unload
+closes the socket and removes its handlers.
+
+While connected, project reads fall back to every 30 seconds (both active and
+idle); the independent focus heartbeat keeps its existing cadence. A change
+made by another machine/process on a shared project folder does **not** arrive
+over this socket. The fallback read still detects it. Standalone Spool advertises
+no project socket and keeps the original polling behavior, even when paired
+with a separate ComfyUI. Push delivery is an optimization, never an authority or
+a condition for eventual convergence.

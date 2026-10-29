@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -102,6 +103,7 @@ class ProjectStore(Store):
             with Store.connect(self) as db:
                 yield db
             return
+        notifications = []
         with file_lock(self.local_lock), file_lock(self.lock_file):
             self.check_manifest()
             signature = self.signature() if self.snapshot.exists() else None
@@ -123,6 +125,8 @@ class ProjectStore(Store):
             schema = db.execute("PRAGMA schema_version").fetchone()[0]
             version = db.execute("PRAGMA user_version").fetchone()[0]
             pages = db.execute("PRAGMA page_count").fetchone()[0]
+            notify = self.workspace.project_changed if self.workspace else None
+            tokens = self.change_tokens(db) if notify and version else {}
             try:
                 if version > SCHEMA_VERSION:
                     raise ValueError("This Spool project needs a newer extension version")
@@ -156,6 +160,12 @@ class ProjectStore(Store):
                         atomic_replace(pending, self.snapshot)
                         self.write_manifest(db)
                         self.stamp.write_text(json.dumps(self.signature()))
+                        if notify:
+                            notifications = [
+                                {"projectId": identity, "revision": token[0], "cursor": token[1]}
+                                for identity, token in self.change_tokens(db).items()
+                                if tokens.get(identity) != token
+                            ]
                     finally:
                         local.unlink(missing_ok=True)
                         pending.unlink(missing_ok=True)
@@ -166,6 +176,21 @@ class ProjectStore(Store):
                 raise
             finally:
                 db.close()
+        # A reader must be able to see the publication before its invalidation.
+        for value in notifications:
+            try:
+                notify(value)
+            except Exception:
+                logging.exception("Spool project notification failed; polling will recover")
+
+    @staticmethod
+    def change_tokens(db):
+        return {
+            row[0]: (row[1], row[2])
+            for row in db.execute(
+                "SELECT id,revision,(SELECT coalesce(max(cursor),0) FROM events WHERE project_id=projects.id) FROM projects"
+            )
+        }
 
     @contextmanager
     def reading(self):
@@ -274,6 +299,7 @@ class Workspace(Store):
     """Machine settings and a directory of opened projects, never their edit data."""
 
     def __init__(self, root):
+        self.project_changed = None
         super().__init__(root, filename="app.sqlite3")
         self.opened = {}
         self.opening = threading.RLock()  # handlers open project stores from worker threads
