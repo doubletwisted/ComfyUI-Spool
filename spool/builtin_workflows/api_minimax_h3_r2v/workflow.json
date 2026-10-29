@@ -1,0 +1,971 @@
+{
+  "id": "70906299-66df-4c9a-bf83-7601ea44cf16",
+  "revision": 0,
+  "last_node_id": 17,
+  "last_link_id": 16,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "SaveVideo",
+      "pos": [
+        480,
+        0
+      ],
+      "size": [
+        420,
+        120
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": null
+        }
+      ],
+      "properties": {},
+      "widgets_values": [
+        "video/MiniMax_H3_reference",
+        "auto",
+        "auto",
+        "auto"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "video/MiniMax_H3_reference",
+        "format": "auto",
+        "format.codec": "auto",
+        "codec": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "MinimaxHailuo03ReferenceNode",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        420,
+        536
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model.reference_images.image_1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 2
+        },
+        {
+          "name": "model.reference_images.image_2",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 3
+        },
+        {
+          "name": "model.reference_images.image_3",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 4
+        },
+        {
+          "name": "model.reference_images.image_4",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 5
+        },
+        {
+          "name": "model.reference_images.image_5",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "name": "model.reference_images.image_6",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 7
+        },
+        {
+          "name": "model.reference_images.image_7",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 8
+        },
+        {
+          "name": "model.reference_images.image_8",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 9
+        },
+        {
+          "name": "model.reference_images.image_9",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 10
+        },
+        {
+          "name": "model.reference_videos.video_1",
+          "shape": 7,
+          "type": "VIDEO",
+          "link": 11
+        },
+        {
+          "name": "model.reference_videos.video_2",
+          "shape": 7,
+          "type": "VIDEO",
+          "link": 12
+        },
+        {
+          "name": "model.reference_videos.video_3",
+          "shape": 7,
+          "type": "VIDEO",
+          "link": 13
+        },
+        {
+          "name": "model.reference_audios.audio_1",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 14
+        },
+        {
+          "name": "model.reference_audios.audio_2",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 15
+        },
+        {
+          "name": "model.reference_audios.audio_3",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MinimaxHailuo03ReferenceNode"
+      },
+      "widgets_values": [
+        "MiniMax H3",
+        "Image 1 is the main character. They walk slowly toward the camera along a quiet street at dusk. The camera pushes in. Soft natural light.",
+        "768P",
+        "adaptive",
+        5,
+        42,
+        "fixed",
+        false
+      ],
+      "widgets_values_named": {
+        "model": "MiniMax H3",
+        "model.prompt": "Image 1 is the main character. They walk slowly toward the camera along a quiet street at dusk. The camera pushes in. Soft natural light.",
+        "model.resolution": "768P",
+        "model.ratio": "adaptive",
+        "model.duration": 5,
+        "seed": 42,
+        "control_after_generate": "fixed",
+        "watermark": false
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 3,
+      "type": "LoadImage",
+      "pos": [
+        -1150,
+        0
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            2
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Reference image 1",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 4,
+      "type": "LoadImage",
+      "pos": [
+        -780,
+        0
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            3
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Reference image 2",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 5,
+      "type": "LoadImage",
+      "pos": [
+        -410,
+        0
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            4
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Reference image 3",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 6,
+      "type": "LoadImage",
+      "pos": [
+        -1150,
+        380
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            5
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Reference image 4",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 7,
+      "type": "LoadImage",
+      "pos": [
+        -780,
+        380
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            6
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Reference image 5",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 8,
+      "type": "LoadImage",
+      "pos": [
+        -410,
+        380
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            7
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Reference image 6",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 9,
+      "type": "LoadImage",
+      "pos": [
+        -1150,
+        760
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            8
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Reference image 7",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 10,
+      "type": "LoadImage",
+      "pos": [
+        -780,
+        760
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            9
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Reference image 8",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 11,
+      "type": "LoadImage",
+      "pos": [
+        -410,
+        760
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            10
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Reference image 9",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 12,
+      "type": "LoadVideo",
+      "pos": [
+        -1150,
+        1240
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            11
+          ]
+        }
+      ],
+      "title": "Reference video 1",
+      "properties": {
+        "Node name for S&R": "LoadVideo"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "file": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 13,
+      "type": "LoadVideo",
+      "pos": [
+        -780,
+        1240
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            12
+          ]
+        }
+      ],
+      "title": "Reference video 2",
+      "properties": {
+        "Node name for S&R": "LoadVideo"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "file": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 14,
+      "type": "LoadVideo",
+      "pos": [
+        -410,
+        1240
+      ],
+      "size": [
+        340,
+        330
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            13
+          ]
+        }
+      ],
+      "title": "Reference video 3",
+      "properties": {
+        "Node name for S&R": "LoadVideo"
+      },
+      "widgets_values": [
+        "",
+        "image"
+      ],
+      "widgets_values_named": {
+        "file": "",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 15,
+      "type": "LoadAudio",
+      "pos": [
+        -1150,
+        1760
+      ],
+      "size": [
+        340,
+        130
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            14
+          ]
+        }
+      ],
+      "title": "Reference audio 1",
+      "properties": {
+        "Node name for S&R": "LoadAudio"
+      },
+      "widgets_values": [
+        "",
+        ""
+      ],
+      "widgets_values_named": {
+        "audio": "",
+        "upload": ""
+      }
+    },
+    {
+      "id": 16,
+      "type": "LoadAudio",
+      "pos": [
+        -780,
+        1760
+      ],
+      "size": [
+        340,
+        130
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            15
+          ]
+        }
+      ],
+      "title": "Reference audio 2",
+      "properties": {
+        "Node name for S&R": "LoadAudio"
+      },
+      "widgets_values": [
+        "",
+        ""
+      ],
+      "widgets_values_named": {
+        "audio": "",
+        "upload": ""
+      }
+    },
+    {
+      "id": 17,
+      "type": "LoadAudio",
+      "pos": [
+        -410,
+        1760
+      ],
+      "size": [
+        340,
+        130
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            16
+          ]
+        }
+      ],
+      "title": "Reference audio 3",
+      "properties": {
+        "Node name for S&R": "LoadAudio"
+      },
+      "widgets_values": [
+        "",
+        ""
+      ],
+      "widgets_values_named": {
+        "audio": "",
+        "upload": ""
+      }
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      1,
+      0,
+      "VIDEO"
+    ],
+    [
+      2,
+      3,
+      0,
+      2,
+      0,
+      "IMAGE"
+    ],
+    [
+      3,
+      4,
+      0,
+      2,
+      1,
+      "IMAGE"
+    ],
+    [
+      4,
+      5,
+      0,
+      2,
+      2,
+      "IMAGE"
+    ],
+    [
+      5,
+      6,
+      0,
+      2,
+      3,
+      "IMAGE"
+    ],
+    [
+      6,
+      7,
+      0,
+      2,
+      4,
+      "IMAGE"
+    ],
+    [
+      7,
+      8,
+      0,
+      2,
+      5,
+      "IMAGE"
+    ],
+    [
+      8,
+      9,
+      0,
+      2,
+      6,
+      "IMAGE"
+    ],
+    [
+      9,
+      10,
+      0,
+      2,
+      7,
+      "IMAGE"
+    ],
+    [
+      10,
+      11,
+      0,
+      2,
+      8,
+      "IMAGE"
+    ],
+    [
+      11,
+      12,
+      0,
+      2,
+      9,
+      "VIDEO"
+    ],
+    [
+      12,
+      13,
+      0,
+      2,
+      10,
+      "VIDEO"
+    ],
+    [
+      13,
+      14,
+      0,
+      2,
+      11,
+      "VIDEO"
+    ],
+    [
+      14,
+      15,
+      0,
+      2,
+      12,
+      "AUDIO"
+    ],
+    [
+      15,
+      16,
+      0,
+      2,
+      13,
+      "AUDIO"
+    ],
+    [
+      16,
+      17,
+      0,
+      2,
+      14,
+      "AUDIO"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Reference images",
+      "bounding": [
+        -1170,
+        -60,
+        1120,
+        1170
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "Reference videos",
+      "bounding": [
+        -1170,
+        1180,
+        1120,
+        410
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "Reference audio",
+      "bounding": [
+        -1170,
+        1700,
+        1120,
+        210
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.9,
+      "offset": [
+        416,
+        110
+      ]
+    },
+    "frontendVersion": "1.55.18"
+  },
+  "version": 0.4
+}

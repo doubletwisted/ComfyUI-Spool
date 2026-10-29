@@ -1,4 +1,5 @@
 import {createInputReplacements} from './input-replacement.js';
+import {compactGroups,visibleInputs,inputFilled} from './input-groups.js';
 import {keyText} from './keys.js';
 // Native editor runtime. Demo source is not loaded or transformed.
 let initialization;
@@ -77,13 +78,14 @@ const interruptions=createInterruptions();
 const api=createApi({diagnostics,project:()=>bootId,recipes:()=>unsavedRecipes}),request=api.request;
 if(!bootId){const projects=await api.call('projects');bootId=projects[0]?.id;if(!bootId){const created=await api.call('projects',{method:'POST',body:{}});bootId=created.id;}const address=new URL(location.href);address.searchParams.set('project',bootId);window.history.replaceState(null,'',address);}
 const BOOT=await diagnostics.run('Opening project',()=>api.call('projects/'+encodeURIComponent(bootId),{headers:{'X-Spool-View':'editor'},fallback:'Project unavailable'}));
-const [{createWorkflowSetup,workflowStatus,matchClipInputs},{createProjectEdit},{createHistory,sameStacks},{createEditSession},{createPreviews,QUALITY},T,L,B,W,{videoFrameCount,createVideoSeekGuard},productCapabilities,{createThumbnails},G,{createTakeReview},builtinCatalog]=await Promise.all([
+const [{createWorkflowSetup,workflowStatus,matchClipInputs},{createProjectEdit},{createHistory,sameStacks},{createEditSession},{createPreviews,QUALITY},T,L,B,W,{videoFrameCount,createVideoSeekGuard},productCapabilities,{createThumbnails},G,{createTakeReview},builtinCatalog,ownCatalog]=await Promise.all([
  import('/spool/ui/workflow-setup.js'),import('/spool/ui/project-edit.js'),import('/spool/ui/history.js'),import('/spool/ui/edit-session.js'),import('/spool/ui/preview.js'),import('/spool/ui/timeline.js'),import('/spool/ui/ledger.js'),import('/spool/ui/bridge.js'),import('/spool/ui/wire.js'),import('/spool/ui/video-seek-guard.js'),
- diagnostics.run('Loading Comfy node definitions',()=>api.call('capabilities',{fallback:'Comfy node definitions unavailable'})).catch(()=>({definitions:{}})),import('/spool/ui/thumbnails.js'),import('/spool/ui/generation.js'),import('/spool/ui/take-review.js'),fetch('/spool/ui/builtin-captures.json').then(r=>{if(!r.ok)throw Error('Built-in workflows unavailable');return r.json();}).catch(()=>({templates:{},cloudDefinitions:{},unavailable:true}))
+ diagnostics.run('Loading Comfy node definitions',()=>api.call('capabilities',{fallback:'Comfy node definitions unavailable'})).catch(()=>({definitions:{}})),import('/spool/ui/thumbnails.js'),import('/spool/ui/generation.js'),import('/spool/ui/take-review.js'),fetch('/spool/ui/builtin-captures.json').then(r=>{if(!r.ok)throw Error('Built-in workflows unavailable');return r.json();}).catch(()=>({templates:{},cloudDefinitions:{},unavailable:true})),
+ api.call('builtin-workflows',{fallback:'Spool workflows unavailable'}).catch(()=>({templates:{}}))
 ]);
 const inputReplacements=createInputReplacements();
 let productDefinitions=productCapabilities.definitions||{};
-const builtinCaptures=builtinCatalog.templates;
+const builtinCaptures={...builtinCatalog.templates,...ownCatalog.templates};
 const cloudDefinitions={...builtinCatalog.cloudDefinitions,...productCapabilities.cloudDefinitions};
 function definitionsFor(c){return (c?.executionTarget||nativeRecipes[c?.workflowVersion]?.executionTarget)==='cloud'?{...productDefinitions,...cloudDefinitions}:productDefinitions;}
 if(isFailed())throw Error('Initialization cancelled');
@@ -397,7 +399,7 @@ function renderInspector(){
  if(selectionIds().length>1){renderSelectionInspector();return;}
  $('inspector').classList.remove('multi-selected');const c=selected();if(!c||selectedAudio()||inspectorTab==='audio'){renderNonVideoInspector();countLabel.hidden=true;jobStatus.textContent='';return;}
  $('inspector').classList.remove('audio-selected');$('clipName').value=c.name;$('inputsInspectorTab').classList.add('active');$('inputsInspectorTab').setAttribute('aria-selected','true');$('audioInspectorTab').classList.remove('active');$('audioInspectorTab').setAttribute('aria-selected','false');renderTakes();
- const reason=queueReason(c),embedded=!c.workflow&&!c.workflowVersion&&!!editableGraph(c),bindings=nativeRecipes[c.workflowVersion]?builtinBindings(nativeRecipes[c.workflowVersion],definitionsFor(c),c.bindings):c.bindings||[],essential=bindings.map((b,i)=>({b,i})).filter(({b})=>!b.advanced),pose=essential.filter(({b})=>b.role==='pose');
+ const reason=queueReason(c),embedded=!c.workflow&&!c.workflowVersion&&!!editableGraph(c),bindings=nativeRecipes[c.workflowVersion]?builtinBindings(nativeRecipes[c.workflowVersion],definitionsFor(c),c.bindings):c.bindings||[],shown=new Set(visibleInputs(bindings,c.inputValues||{},c.shotInputs||[])),essential=bindings.map((b,i)=>({b,i})).filter(({b})=>!b.advanced&&shown.has(b)),pose=essential.filter(({b})=>b.role==='pose');
  $('generate').hidden=false;$('generate').disabled=!!reason;$('generate').title=reason||'Generate new takes with these settings';$('generateLabel').textContent='Generate';
  countLabel.hidden=!!reason;$('nativeCount').value=c.count||1;$('nativeCount').onchange=e=>{const value=Number(e.target.value);if(!Number.isInteger(value)||value<1||value>16){e.target.value=c.count||1;return;}edits.apply('Change take count',()=>{c.count=value;},'none');};
  renderJobStatus();
@@ -408,6 +410,7 @@ function renderInspector(){
  $('reloadTakeWorkflow').disabled=$('reloadTakeWorkflow').hidden=!!take(c).placeholder||!editableGraph(c);$('reloadTakeWorkflow').onclick=()=>chooseTake(c.id,c.takeId);
  const executionTarget=$('clipExecutionTarget');if(executionTarget)executionTarget.onchange=()=>{edits.apply('Change execution target',()=>{c.executionTarget=executionTarget.value;c.revision++;},'inspector');};
  bindImageInputs(c);
+ $('inspectorContent').querySelectorAll('[data-clear-input]').forEach(button=>button.onclick=e=>{e.preventDefault();e.stopPropagation();clearInput(c,Number(button.dataset.clearInput));});
  $('inspectorContent').querySelectorAll('[data-media-input]').forEach(field=>{
   const index=Number(field.dataset.mediaInput),picker=field.querySelector('input'),button=field.querySelector('[data-media-upload]'),timeline=field.querySelector('[data-use-timeline-video]');button.onclick=()=>picker.click();
   if(timeline)timeline.onclick=()=>useTimelineVideo(c.id,index);
@@ -1692,6 +1695,10 @@ function bindWorkflowControls(c,bindings){
  c.inputValues={...Object.fromEntries(bindings.map(b=>[b.key,copy(capture.prompt[b.nodeId].inputs[b.input])])),...c.inputValues};
  c.bindings=copy(bindings);c.workflowVersion=version;nativeRecipes[version]=capture;unsavedRecipes.set(version,capture);
 }
+function inputLabel(b,i,c,label){
+ const remove=b.optional&&inputFilled(b,c.inputValues||{},c.shotInputs||[]);
+ return remove?'<span class="input-label">'+label+'<button type="button" class="input-clear" data-clear-input="'+i+'" aria-label="Remove '+label+'">Remove</button></span>':'<span>'+label+'</span>';
+}
 function controlField(b,i,c){
  const value=Object.hasOwn(c.inputValues||{},b.key)?c.inputValues[b.key]:nativeRecipes[c.workflowVersion]?.prompt[b.nodeId]?.inputs[b.input],label=esc(b.label||b.input),source=(c.shotInputs||[]).find(s=>s.key===b.key);
  if(b.role==='resolution'&&b.options?.length&&b.options.every(v=>/^\d+x\d+$/.test(v))){
@@ -1702,10 +1709,10 @@ function controlField(b,i,c){
  const missing=nativeRecipes[c.workflowVersion]?.inputRecovery?.missing?.some(m=>m.nodeId===b.nodeId&&m.input===b.input&&m.sources.includes(value));
  if(b.asset&&['video','audio'].includes(b.slot)){
   const video=b.slot==='video',current=take(c),available=!current.placeholder&&current.media.kind==='video',timeline=video&&source?.source==='selected';
-  const description=source?(timeline?'Timeline video · '+c.name:generationSourceLabel(source)):!value||missing?'No '+b.slot+' selected':String(value).split('/').at(-1);
-  return '<div class="field binding-source" data-media-input="'+i+'"><span>'+label+'</span><span class="native-source-value" data-media-source>'+esc(description)+'</span><div class="media-input-actions">'+(video?'<button class="outline" type="button" data-use-timeline-video aria-pressed="'+timeline+'" '+(!available?'disabled':'')+' title="'+(available?'Use this clip’s selected take and timeline trim':'This clip needs a video take first')+'">Use timeline video</button>':'')+'<button class="outline" type="button" data-media-upload>Choose file…</button></div><input type="file" accept="'+b.slot+'/*" hidden></div>';
+  const description=source?(timeline?'Timeline video · '+c.name:generationSourceLabel(source)):!value||missing?(b.optional?'Optional · no ':'No ')+b.slot+' selected':String(value).split('/').at(-1);
+  return '<div class="field binding-source" data-media-input="'+i+'">'+inputLabel(b,i,c,label)+'<span class="native-source-value" data-media-source>'+esc(description)+'</span><div class="media-input-actions">'+(video?'<button class="outline" type="button" data-use-timeline-video aria-pressed="'+timeline+'" '+(!available?'disabled':'')+' title="'+(available?'Use this clip’s selected take and timeline trim':'This clip needs a video take first')+'">Use timeline video</button>':'')+'<button class="outline" type="button" data-media-upload>Choose file…</button></div><input type="file" accept="'+b.slot+'/*" hidden></div>';
  }
- if(b.asset&&['LoadImage','LoadImageMask'].includes(b.contract?.classType||nativeRecipes[c.workflowVersion]?.prompt[b.nodeId]?.class_type))return '<div class="field binding-source image-input" data-image-input="'+i+'"><span>'+label+'</span><button type="button" class="image-input-target" aria-label="Replace '+label+'"><img class="native-source-preview" '+(!value||missing||source?'hidden':'src="/spool/api/input/'+encodeURIComponent(value)+'"')+' alt="'+label+'"><span><strong>'+esc(source?generationSourceLabel(source):!value||missing?'Choose image':'Replace image')+'</strong><small>'+esc(value&&!source&&!missing?String(value).split('/').at(-1):'Paste, drop or click to choose an image')+'</small></span></button><input type="file" accept="image/*" data-image-file hidden></div>';
+ if(b.asset&&['LoadImage','LoadImageMask'].includes(b.contract?.classType||nativeRecipes[c.workflowVersion]?.prompt[b.nodeId]?.class_type))return '<div class="field binding-source image-input" data-image-input="'+i+'">'+inputLabel(b,i,c,label)+'<button type="button" class="image-input-target" aria-label="Replace '+label+'"><img class="native-source-preview" '+(!value||missing||source?'hidden':'src="/spool/api/input/'+encodeURIComponent(value)+'"')+' alt="'+label+'"><span><strong>'+esc(source?generationSourceLabel(source):!value||missing?'Choose image':'Replace image')+'</strong><small>'+esc(value&&!source&&!missing?String(value).split('/').at(-1):(b.optional?'Optional · paste':'Paste')+', drop or click to choose an image')+'</small></span></button><input type="file" accept="image/*" data-image-file hidden></div>';
  let field=typeof value==='boolean'?'<select data-native-control="'+i+'"><option value="true" '+(value?'selected':'')+'>On</option><option value="false" '+(!value?'selected':'')+'>Off</option></select>':isInt(value)&&b.contract?.inputType!=='FLOAT'?'<input type="text" inputmode="numeric" data-exact-integer="true" data-native-control="'+i+'" value="'+esc(decimal(value))+'">':typeof value==='number'?'<input type="number" step="any" data-native-control="'+i+'" value="'+esc(value)+'">':'<textarea data-native-control="'+i+'">'+esc(value??'')+'</textarea>';
  if(source)field='<span class="native-source-value">'+esc(generationSourceLabel(source))+'</span>';
  else if(b.role==='source'||b.options){
@@ -1723,7 +1730,7 @@ function bindImageInputs(c){
  const ticket=++imagePreviewTicket;
  const fields=[...$('inspectorContent').querySelectorAll('[data-image-input]')];
  for(const field of fields){
-  const index=Number(field.dataset.imageInput),button=field.querySelector('button'),picker=field.querySelector('input');
+  const index=Number(field.dataset.imageInput),button=field.querySelector('.image-input-target'),picker=field.querySelector('input');
   const replace=async files=>{if(button.disabled)return;if(files.length!==1){toast('Choose one image for this input.');return;}button.disabled=true;try{await replaceInputImage(c,index,files[0]);}catch(error){toast(error.message);}finally{button.disabled=false;}};
   button.onclick=()=>picker.click();picker.onchange=()=>replace([...picker.files]);
   field.onpaste=e=>{const files=[...e.clipboardData.items].filter(item=>item.kind==='file'&&item.type.startsWith('image/')).map(item=>item.getAsFile()).filter(Boolean);if(files.length){e.preventDefault();e.stopPropagation();void replace(files);}};
@@ -1740,8 +1747,18 @@ function useTimelineVideo(clipId,index){
  const b=c.bindings[index],current=take(c);if(b.slot!=='video'||current.placeholder||current.media.kind!=='video')return;
  inputReplacements.choose(c.id,b.key);
  if(c.shotInputs?.some(s=>s.key===b.key&&s.source==='selected'))return;
- edits.apply('Use timeline video',()=>{c.shotInputs=[...(c.shotInputs||[]).filter(s=>s.key!==b.key),{key:b.key,source:'selected'}];c.revision++;},'inspector');
+ edits.apply('Use timeline video',()=>{c.shotInputs=[...(c.shotInputs||[]).filter(s=>s.key!==b.key),{key:b.key,source:'selected'}];settleGroups(c);c.revision++;},'inspector');
  $('inspectorContent').querySelector('[data-media-input="'+index+'"] [data-use-timeline-video]')?.focus({preventScroll:true});
+}
+// Filled inputs of a group stay in its first slots, so "Image 2" in a prompt is the second one shown.
+function settleGroups(c){
+ if(!(c.bindings||[]).some(b=>b.group))return;
+ const next=compactGroups(c.bindings,c.inputValues||{},c.shotInputs||[]);c.inputValues=next.values;c.shotInputs=next.settings;
+}
+function clearInput(c,index){
+ const b=c.bindings[index];if(!b?.optional)return;
+ inputReplacements.choose(c.id,b.key);
+ edits.apply('Remove '+b.label,()=>{c.inputValues[b.key]='';c.shotInputs=(c.shotInputs||[]).filter(s=>s.key!==b.key);settleGroups(c);c.revision++;},'inspector');
 }
 async function replaceInputMedia(c,index,file){
  const b=c.bindings[index];
@@ -1752,7 +1769,7 @@ async function replaceInputMedia(c,index,file){
  const uploaded=await api.upload('projects/'+projectKey+'/input',file,file.name,{fallback:'Could not save this input.'});
  const current=state.clips.find(clip=>clip.id===c.id);
  if(!replacement.owns(current))throw Error('This input changed while uploading. Choose the file again.');
- edits.apply('Replace '+b.label,()=>{current.inputValues[b.key]=uploaded.file;current.shotInputs=(current.shotInputs||[]).filter(s=>s.key!==b.key);current.revision++;},'inspector');await flushNative();toast(b.label+' replaced');
+ edits.apply('Replace '+b.label,()=>{current.inputValues[b.key]=uploaded.file;current.shotInputs=(current.shotInputs||[]).filter(s=>s.key!==b.key);settleGroups(current);current.revision++;},'inspector');await flushNative();toast(b.label+' replaced');
  }finally{replacement.finish();}
 }
 async function replaceInputImage(c,index,file){
@@ -1766,7 +1783,7 @@ async function replaceInputImage(c,index,file){
  const current=state.clips.find(clip=>clip.id===c.id);
  if(!replacement.owns(current))throw Error('The input changed while uploading. Choose the image again.');
  const value=uploaded.file;
- edits.apply('Replace '+b.label,()=>{current.inputValues[b.key]=value;current.shotInputs=(current.shotInputs||[]).filter(s=>s.key!==b.key);current.revision++;},'inspector');await flushNative();toast(b.label+' replaced');
+ edits.apply('Replace '+b.label,()=>{current.inputValues[b.key]=value;current.shotInputs=(current.shotInputs||[]).filter(s=>s.key!==b.key);settleGroups(current);current.revision++;},'inspector');await flushNative();toast(b.label+' replaced');
  }finally{replacement.finish();}
 }
 const countLabel=document.createElement('label');countLabel.className='native-count';countLabel.innerHTML='Takes <input id="nativeCount" aria-label="Number of takes" type="number" min="1" max="16" value="1">';$('generate').before(countLabel);

@@ -4,7 +4,7 @@ import copy
 from . import attempts, cloud
 from .media import SAVER_GROUPS, contained, sha256
 from .store import Conflict, uid, encode
-from .workflow_inputs import LOADERS
+from .workflow_inputs import LOADERS, compact_groups, input_problem, leave_out
 
 SAVERS = set(SAVER_GROUPS)
 
@@ -100,8 +100,16 @@ def prepare(store, media, project, items, freeze=True):
             if not isinstance(overrides, dict) or set(overrides) - set(bound):
                 raise ValueError("Variations can change only explicitly bound literal controls")
             values.update(overrides)
+            bindings = capture.get("bindings", [])
+            for binding in bindings:
+                if binding.get("asset"):
+                    values.setdefault(binding["key"], capture["prompt"][binding["nodeId"]]["inputs"][binding["input"]])
+            values, settings = compact_groups(bindings, values, item.get("shotInputs", clip.get("shotInputs", [])))
+            problem = input_problem(bindings, values, settings, capture.get("inputRules", []))
+            if problem:
+                raise ValueError(problem)
             shot_inputs = []
-            for setting in item.get("shotInputs", clip.get("shotInputs", [])):
+            for setting in settings:
                 binding = bound.get(setting.get("key"))
                 validate_shot_input(binding, setting)
                 source = setting.get("source")
@@ -131,6 +139,8 @@ def prepare(store, media, project, items, freeze=True):
                 prompt[binding["nodeId"]]["inputs"][binding["input"]] = value
                 if binding.get("asset"):
                     assets.add((binding["nodeId"], binding["input"]))
+            omitted = leave_out(prompt, bindings, values, settings, capture["result"]["nodeId"])
+            assets = {(node_id, name) for node_id, name in assets if node_id in prompt}
             for node_id, node in prompt.items():
                 name = LOADERS.get(node["class_type"])
                 if name and name in node["inputs"]:
@@ -163,7 +173,7 @@ def prepare(store, media, project, items, freeze=True):
                 if node["class_type"] in SAVERS and "filename_prefix" in node["inputs"]:
                     node["inputs"]["filename_prefix"] = namespace
             requests.append((clip, {"capture": capture, "prompt": prompt, "inputValues": values, "shotInputs": shot_inputs, "variantValues": overrides, "variantIndex": variant_index, "repeatIndex": repeat_index,
-                                   "workflowVersion": clip["workflowVersion"], "outputFolder": clip.get("outputFolder"), "assets": frozen, "outputNamespace": namespace,
+                                   "workflowVersion": clip["workflowVersion"], "outputFolder": clip.get("outputFolder"), "assets": frozen, "omittedInputs": omitted, "outputNamespace": namespace,
                                    "requestedExecutionTargets": None, "sequenceFps": project["document"].get("fps", 24), "target": target, "launcherNodeId": launchers[0] if launchers else None}))
     return requests
 

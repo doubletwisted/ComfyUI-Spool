@@ -43,7 +43,7 @@ Replace every placeholder from fresh state. Scope is a command contract, not aut
 
 | Action | Capability | Arguments and behavior |
 | --- | --- | --- |
-| `set_inputs` | `inputs` | `{clipId, values}`; merges literal values by existing binding key. |
+| `set_inputs` | `inputs` | `{clipId, values}`; merges literal values by existing binding key. An empty string empties an `optional` media binding. |
 | `set_shot_inputs` | `inputs` | `{clipId, inputs}`; replaces the entire routing list, so preserve unrelated entries. |
 | `apply_workflow` | `workflow` | `{clipId, workflowVersion}`; uses an existing project recipe as the library does: resets bindings/values to its defaults, sets the recipe's execution target, resets seed behavior to Fixed and removes old shot routing and take setup. Built-in recipes leave media sources empty. |
 | `brief` | `edit` | `{text}`; changes the project brief. |

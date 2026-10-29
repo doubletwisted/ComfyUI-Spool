@@ -45,6 +45,12 @@ First public release.
   (experimental, through ComfyUI-Deadline-Plugin). Every result is collected with
   a durable receipt; interrupted work is recovered without repeating it.
 - Seed modes (fixed, increment, decrement, randomize) with exact 64-bit seeds.
+- Spool ships its own built-in workflows with every media input connected,
+  starting with **MiniMax H3 · Reference to Video** on Comfy Cloud: up to 9
+  reference images, 3 videos and 3 audio clips.
+- Optional media inputs can stay empty and are left out of the request. Repeated
+  inputs show one empty slot at a time, **Remove** moves later ones up, and
+  Generate names a missing required input or an unmet "image or video" rule.
 
 ### Automation
 

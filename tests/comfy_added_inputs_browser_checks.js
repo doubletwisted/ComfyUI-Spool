@@ -27,7 +27,7 @@
   const appliedVersion=shot().workflowVersion;n.undo();await n.flush();check('Undo restores the previous graph and Inspector inputs',shot().workflowVersion===initialVersion&&shot().bindings.length===1);
   n.redo();await n.flush();check('Redo restores both inputs with the same identities and chosen files',shot().workflowVersion===appliedVersion&&shot().inputValues[referenceBinding.key]===stored&&!!field('Style reference'));
   reference.widgets.find(w=>w.name==='image').value='';await apply();
-  check('An unchosen new image stays editable and blocks Generate with a source message',shot().inputValues[referenceBinding.key]===''&&document.getElementById('generate').disabled&&document.querySelector('.workflow-problem').textContent.includes('source media')&&field('Style reference').innerText.includes('Choose image'));
+  check('An unchosen new image stays editable and blocks Generate with a source message',shot().inputValues[referenceBinding.key]===''&&document.getElementById('generate').disabled&&document.querySelector('.workflow-problem').textContent==='Style reference is empty. Choose it in the Inspector.'&&field('Style reference').innerText.includes('Choose image'));
   reference.widgets.find(w=>w.name==='image').value=filename;await apply();
   check('Selecting the file again restores readiness without changing input identity',!document.getElementById('generate').disabled&&shot().inputValues[referenceBinding.key]===stored);
   const oldTakes=new Set(shot().takes.map(t=>t.id));await n.queueClips([shot()]);await wait(async()=>{await n.poll();return shot().takes.some(t=>t.generated&&!oldTakes.has(t.id));});

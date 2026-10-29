@@ -37,6 +37,14 @@ module contracts are in [architecture.md](architecture.md).
 - **Recipe**: an immutable captured workflow version: editor graph, executable API
   prompt, bindings and the chosen result saver output. Stored in `workflows`.
 - **Binding**: an exact (API node ID, input name) pair exposed as a clip control.
+- **Optional input**: a media binding that may stay empty (`optional`). A request
+  leaves it out of the prompt, with the nodes listed in its `omit`.
+- **Input group**: media bindings sharing a `group` that fill one repeatable node
+  input in order, such as MiniMax's reference images. A request moves filled ones
+  into the first slots. A recipe's `inputRules` name groups of which at least one
+  input must be filled.
+- **Spool workflow**: a built-in workflow Spool ships as files in
+  `spool/builtin_workflows/`, as opposed to a curated Comfy template.
 - **Workflow setup**: preparing a workflow, choosing its result and exposed
   controls, then explicitly capturing an immutable Recipe for a Clip.
   `ui/workflow-setup.js` owns those decisions and capture completion; project-edit

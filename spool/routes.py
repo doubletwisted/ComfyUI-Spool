@@ -531,6 +531,11 @@ def register(server, store, media, executor=None):
     async def studio_templates(request):
         return response(list(templates.CATALOG.values()))
 
+    @routes.get('/spool/api/builtin-workflows')
+    @endpoint
+    async def builtin_workflows(request):
+        return response({'templates': {template_id: templates.own_capture(template_id) for template_id in templates.OWN}})
+
     @routes.get('/spool/api/templates/{template}/{extension}')
     @endpoint
     async def studio_template(request):

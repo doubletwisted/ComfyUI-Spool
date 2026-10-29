@@ -13,7 +13,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from PIL import Image
 
-from spool import projects, requests
+from spool import projects, requests, templates
 from spool.media import Media
 from spool.projects import Workspace
 from spool.routes import register
@@ -39,7 +39,9 @@ class WorkflowSaveTests(unittest.IsolatedAsyncioTestCase):
         self.client = TestClient(TestServer(server.app))
         await self.client.start_server()
         self.addAsyncCleanup(self.client.close)
+        # Every built-in the studio offers: the bundled Comfy templates and Spool's own workflows.
         self.captures = json.loads((Path(__file__).resolve().parent.parent / 'ui/builtin-captures.json').read_text(encoding='utf8'))['templates']
+        self.captures.update({identity: templates.own_capture(identity) for identity in templates.OWN})
 
     def clip(self, capture, version, identity='shot'):
         return {'id': identity, 'name': identity, 'in': 0, 'out': 120, 'revision': 1, 'count': 1,

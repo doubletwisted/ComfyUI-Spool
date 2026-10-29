@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from spool.media import Media
 from spool.routes import register
 from spool.store import Store
+from spool.workflow_inputs import compact_groups, input_problem, leave_out
 
 
 def capture(path, api_name="worker/reference.png"):
@@ -121,6 +122,57 @@ class WorkflowInputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "content hash"):
             self.media.prepare_workflow(prepared, True)
         self.assertEqual(target.read_bytes(), b"changed")
+
+
+class OptionalInputTests(unittest.TestCase):
+    """The shared rules for optional and grouped media inputs, and what a request leaves out."""
+    fixture = json.loads((Path(__file__).parent / "fixtures/optional_inputs.json").read_text(encoding="utf-8"))
+
+    def prompt(self):
+        loader = lambda: {"class_type": "LoadImage", "inputs": {"image": ""}}
+        nodes = {node: loader() for node in ("1", "11", "12", "13", "31")}
+        nodes.update({"21": {"class_type": "LoadVideo", "inputs": {"file": ""}}, "22": {"class_type": "LoadVideo", "inputs": {"file": ""}},
+                      "32": {"class_type": "ImageScale", "inputs": {"image": ["31", 0], "width": 512, "height": 512}},
+                      "40": {"class_type": "PrimitiveStringMultiline", "inputs": {"value": "A walk"}},
+                      "50": {"class_type": "Generator", "inputs": {"first": ["1", 0], "prompt": ["40", 0], "last": ["32", 0], "seed": 4,
+                                                                   **{"image_" + str(i): [n, 0] for i, n in enumerate(("11", "12", "13"), 1)},
+                                                                   **{"video_" + str(i): [n, 0] for i, n in enumerate(("21", "22"), 1)}}},
+                      "60": {"class_type": "SaveVideo", "inputs": {"video": ["50", 0], "filename_prefix": "out"}}})
+        return nodes
+
+    def test_shared_cases(self):
+        bindings, rules = self.fixture["bindings"], self.fixture["rules"]
+        for case in self.fixture["cases"]:
+            with self.subTest(case["name"]):
+                values, settings = compact_groups(bindings, case["values"], case["settings"])
+                self.assertEqual({"values": values, "settings": settings}, case["compacted"])
+                self.assertEqual(input_problem(bindings, values, settings, rules), case["problem"])
+                prompt = self.prompt()
+                self.assertEqual(leave_out(prompt, bindings, values, settings, "60"), case["omitted"])
+                left = {b["nodeId"] for b in bindings if b["key"] in case["omitted"]}
+                self.assertFalse(left & set(prompt))
+                self.assertEqual("32" in prompt, "last" not in case["omitted"])
+                links = [value[0] for node in prompt.values() for value in node["inputs"].values() if isinstance(value, list)]
+                self.assertTrue(set(links) <= set(prompt))
+
+    def test_a_gap_moves_later_inputs_into_the_first_slots(self):
+        bindings = self.fixture["bindings"]
+        values, settings = compact_groups(bindings, {"ref2": "b.png", "ref3": "c.png", "first": "a.png"}, [])
+        prompt = self.prompt()
+        leave_out(prompt, bindings, values, settings, "60")
+        self.assertEqual(sorted(k for k in prompt["50"]["inputs"] if k.startswith("image_")), ["image_1", "image_2"])
+        self.assertEqual((values["ref1"], values["ref2"], values["ref3"]), ("b.png", "c.png", ""))
+
+    def test_the_output_is_never_left_out(self):
+        bindings = [{"key": "save", "nodeId": "60", "input": "filename_prefix", "asset": True, "optional": True, "omit": ["60"]}]
+        with self.assertRaisesRegex(ValueError, "cannot remove the clip output"):
+            leave_out(self.prompt(), bindings, {"save": ""}, [], "60")
+
+    def test_nodes_removed_in_comfy_are_ignored(self):
+        bindings = [{"key": "gone", "nodeId": "99", "input": "image", "asset": True, "optional": True, "omit": ["99", "98"]}]
+        prompt = self.prompt()
+        self.assertEqual(leave_out(prompt, bindings, {"gone": ""}, [], "60"), ["gone"])
+        self.assertEqual(prompt, self.prompt())
 
 
 class WorkflowInputRouteTests(unittest.IsolatedAsyncioTestCase):

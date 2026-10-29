@@ -33,7 +33,13 @@ Use ComfyUI's address when Spool runs inside ComfyUI, or the standalone address
 instead.
 
 `status` returns up to 100 shots and the latest 50 takes per shot; follow
-`nextOffset` for more. `focus` reads which clip a studio tab has selected. It
+`nextOffset` for more. Each shot's `bindings` mark media inputs that may stay empty
+with `optional`, and inputs of one kind that fill in order with a shared `group`.
+`inputRules` lists sets of groups that need at least one filled input, and
+`inputProblem` names what blocks generation, as the text beside **Generate** does,
+or is `null`. `set_inputs` with an empty string empties an optional input; a
+request moves a group's filled inputs into its first slots and leaves empty
+optional inputs out. `focus` reads which clip a studio tab has selected. It
 expires after 15 seconds and is context, not permission to edit.
 
 ## Commands

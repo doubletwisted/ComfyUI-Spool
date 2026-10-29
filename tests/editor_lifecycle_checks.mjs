@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as G from '../ui/generation.js';
 import {createInputReplacements} from '../ui/input-replacement.js';
+import {compactGroups} from '../ui/input-groups.js';
 import {createApi} from '../ui/api.js';
 
 // Exercise the production event handlers with deferred transport/decoder dependencies.
@@ -93,8 +94,8 @@ for(const status of [undefined,500,503]){
 const uploadResponse=file=>({ok:true,json:async()=>({file})});
 function inputFixture(slot='video'){
  const c={id:'shot',workflowVersion:'recipe',inputValues:{source:'old'},bindings:[{key:'source',slot,label:'Source'}],shotInputs:[{key:'source',source:'selected'}],revision:1},history=[];
- const context={state:{clips:[c]},inputReplacements:createInputReplacements(),api:createApi({diagnostics:{run:(label,run)=>run()},project:()=>'p',recipes:()=>new Map(),send:(...args)=>context.fetch(...args)}),take:()=>({media:{kind:'video'}}),edits:{apply:(label,change)=>{history.push(label);return change();}},save(){},renderInspector(){},flushNative:async()=>{},toast(){},projectKey:'p',$:()=>({querySelector:()=>null}),createImageBitmap:async()=>({close(){}})};
- const api=vm.runInNewContext(section('function useTimelineVideo(','const countLabel=')+'\n({useTimelineVideo,replaceInputMedia,replaceInputImage})',context);
+ const context={state:{clips:[c]},inputReplacements:createInputReplacements(),compactGroups,api:createApi({diagnostics:{run:(label,run)=>run()},project:()=>'p',recipes:()=>new Map(),send:(...args)=>context.fetch(...args)}),take:()=>({media:{kind:'video'}}),edits:{apply:(label,change)=>{history.push(label);return change();}},save(){},renderInspector(){},flushNative:async()=>{},toast(){},projectKey:'p',$:()=>({querySelector:()=>null}),createImageBitmap:async()=>({close(){}})};
+ const api=vm.runInNewContext(section('function useTimelineVideo(','const countLabel=')+'\n({useTimelineVideo,replaceInputMedia,replaceInputImage,clearInput})',context);
  return {c,context,history,...api};
 }
 {
@@ -149,5 +150,20 @@ for(const action of ['undo','remove','workflow']){
  const pending=f.replaceInputImage(f.c,0,{name:'image.png',type:'image/png',size:4});
  f.context.inputReplacements.invalidate('shot');decode.resolve({close(){}});
  await assert.rejects(pending,/changed while uploading/);
+}
+{
+ // Remove moves a group's later inputs up; required inputs have no Remove.
+ const f=inputFixture('reference'),group=(key,label,extra={})=>({key,slot:'reference',label,optional:true,group:'Reference images',...extra});
+ f.c.bindings=[group('a','Reference image 1'),group('b','Reference image 2'),{key:'c',slot:'video',label:'Reference video 1',optional:true,group:'Reference videos'},{key:'d',slot:'image',label:'First frame'}];
+ f.c.inputValues={a:'one.png',b:'two.png',c:'',d:'first.png'};f.c.shotInputs=[{key:'c',source:'selected'}];
+ f.clearInput(f.c,0);
+ assert.deepEqual(f.c.inputValues,{a:'two.png',b:'',c:'',d:'first.png'});assert.deepEqual(f.c.shotInputs,[{key:'c',source:'selected'}]);assert.deepEqual(f.history,['Remove Reference image 1']);
+ f.clearInput(f.c,3);assert.equal(f.c.inputValues.d,'first.png');assert.equal(f.history.length,1);
+ // A file chosen for a later empty slot lands in the first free one.
+ f.context.fetch=async()=>uploadResponse('three.png');
+ await f.replaceInputImage(f.c,1,{name:'three.png',type:'image/png',size:4});
+ assert.deepEqual([f.c.inputValues.a,f.c.inputValues.b],['two.png','three.png']);
+ f.c.inputValues.a='';f.c.inputValues.b='';await f.replaceInputImage(f.c,1,{name:'three.png',type:'image/png',size:4});
+ assert.deepEqual([f.c.inputValues.a,f.c.inputValues.b],['three.png','']);
 }
 console.log('Editor submission and input replacement lifecycles passed (deferred production handlers; no host or execution).');

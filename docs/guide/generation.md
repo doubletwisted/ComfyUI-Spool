@@ -22,6 +22,11 @@ Built-in workflows choose their output and expose their main inputs without
 questions. Example source images are not included: pick your own source in the
 inspector before generating.
 
+Some built-in workflows are Spool's own versions with every media input
+connected. **MiniMax H3 · Reference to Video** (Cloud) takes up to 9 reference
+images, 3 reference videos and 3 reference audio clips; the inspector shows them
+as they fill (see [Optional and repeated inputs](#optional-and-repeated-inputs)).
+
 ### Your own workflows
 
 - **+ Current Comfy Graph** (or **Project → Add current workflow**) adds the graph
@@ -65,8 +70,24 @@ The inspector shows the selected clip's creative inputs.
 - **Prompt, duration, size, seed:** typed values. Seeds and other whole numbers
   keep every digit, including 64-bit seeds.
 
-A source left empty blocks **Generate** until you choose one. The text beside
-Generate says what is missing.
+A required source left empty blocks **Generate** until you choose one. The text
+beside Generate says what is missing.
+
+### Optional and repeated inputs
+
+Some workflows take several inputs of one kind, such as reference images. The
+inspector shows the ones you have filled plus one empty slot; filling it shows
+the next, up to the workflow's limit. Inputs marked **Optional** can stay empty.
+
+- **Remove** empties an optional input. Later inputs of the same kind move up, so
+  the numbering in the inspector stays continuous. Remove can be undone.
+- Workflows that refer to references by number in the prompt, such as MiniMax's
+  "Image 1" or "Video 2", count them in the order the inspector shows.
+- Some workflows need at least one input from a set. MiniMax Reference to Video
+  needs a reference image or video; Generate says so until one is added.
+
+Spool leaves an empty optional input out of the request, so the node runs as if
+that input were never connected.
 
 Inputs you add are copied into the project, so a clip keeps working when the
 original file moves.

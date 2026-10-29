@@ -148,11 +148,45 @@ timed-out run without submitting again.
 
 ## Built-in workflows
 
-`ui/builtin-captures.json` is generated. To refresh it, run the
-`workflow-capture-bundle` browser check, then pass the QA project ID from its
-`summary.json` to `python tests/build_builtin_captures.py QA_PROJECT_ID`. The
-builder removes example sources and validates every capture before replacing the
-file.
+Spool's own workflows live in `spool/builtin_workflows/<id>/`, one folder per
+workflow. They are read as written; nothing rewrites them at runtime.
+
+| File | Contents |
+| --- | --- |
+| `workflow.json` | The graph, saved from ComfyUI |
+| `prompt.json` | The same graph from ComfyUI's **Export (API)** |
+| `spool.json` | Library name, family, task and target, the result node, and the inspector's inputs in order |
+
+`spool.json` lists each input once. A single input names its `node` and `input`
+(and `label`, `role`, `unit`). A media input may be `optional`, with `alsoRemove`
+naming helper nodes that exist only to feed it, such as a resize. A `group` lists
+the loader `nodes` that fill one repeatable input in order; every slot is
+optional. `inputRules` lists groups of which at least one input must be filled,
+with the message shown beside Generate.
+
+To change one, open `workflow.json` in ComfyUI on a test host, edit it, save it
+over `workflow.json`, export the API prompt over `prompt.json`, and update
+`spool.json` if node IDs or inputs changed. Loaders ship with an empty file name.
+`tests/test_builtin_workflows.py` checks that the three files agree and that
+every slot that can be left out feeds an input its node marks optional. A folder
+with the same ID as a curated Comfy template replaces that template.
+
+`ui/builtin-captures.json` holds the curated Comfy templates and is generated. To
+refresh it, run the `workflow-capture-bundle` browser check, then pass the QA
+project ID from its `summary.json` to
+`python tests/build_builtin_captures.py QA_PROJECT_ID`. The builder removes example
+sources, skips Spool's own workflows and validates every capture before replacing
+the file.
+
+### Why empty inputs are left out
+
+An empty optional input is removed from the request, with the nodes that only
+fed it, instead of filled with a placeholder. A blank image would still reach the
+model as a reference. An empty Load Image passes ComfyUI's validation but fails
+when it runs, because the empty name points at the input folder. Spool also
+freezes every file a request uses and uploads it for Cloud; there is no file to
+freeze. Removing the input is the one behaviour that means "not provided" on
+local ComfyUI, Comfy Cloud and Deadline alike.
 
 ## Releasing
 
