@@ -58,7 +58,7 @@ def capture():
 
 class Queue:
     def __init__(self):
-        self.pending, self.running, self.history = [], [], {}
+        self.pending, self.running, self.history, self.interrupted = [], [], {}, []
 
     def put(self, item):
         self.pending.append(item)
@@ -70,7 +70,15 @@ class Queue:
         return {prompt_id: self.history[prompt_id]} if prompt_id in self.history else {}
 
     def delete_queue_item(self, function):
-        self.pending = [item for item in self.pending if not function(item)]
+        kept = [item for item in self.pending if not function(item)]
+        found, self.pending = len(kept) != len(self.pending), kept
+        return found
+
+    def interrupt_if_running(self, prompt_id):
+        if any(item[1] == prompt_id for item in self.running):
+            self.interrupted.append(prompt_id)
+            return True
+        return False
 
 
 class BackendTests(unittest.TestCase):
@@ -111,8 +119,7 @@ class BackendTests(unittest.TestCase):
 
     def test_cancel_drops_queued_local_work_and_interrupts_only_its_own_running_prompt(self):
         commands_module = importlib.import_module("native_spool.spool.commands")
-        interrupts = []
-        self.executor.interrupt = lambda: interrupts.append(True)
+        interrupts = self.queue.interrupted
 
         def cancel(attempt_id, identity):
             project = self.store.get(self.project["id"])
@@ -159,6 +166,18 @@ class BackendTests(unittest.TestCase):
         asyncio.run(self.executor.reconcile())
         self.assertNotIn(self.store.attempt(finished)["status"], ("cancel_requested", "cancelled"))
         self.assertEqual(len(interrupts), 1)
+
+        # Snapshots go stale: a queued prompt may start, and a running one may finish
+        # while another starts. Neither is marked cancelled nor stops the wrong prompt.
+        started = self.submit()["document"]["jobs"][-1]["id"]
+        cancel(started, "cancel-started")
+        attempt = self.store.attempt(started)
+        self.queue.running, self.queue.pending = self.queue.pending, []
+        self.executor.stop(self.store, attempt, set(), {attempt["prompt_id"]})
+        self.assertEqual((self.store.attempt(started)["status"], len(interrupts)), ("cancel_requested", 1))
+        self.queue.running = [(9, "someone-else", {}, {}, [])]
+        self.executor.stop(self.store, attempt, {attempt["prompt_id"]}, set())
+        self.assertEqual((self.store.attempt(started)["status"], interrupts[1:]), ("cancel_requested", []))
 
     def test_cloud_key_is_private_execution_data_and_never_saved_in_project(self):
         with patch.object(targets_module, "cloud_key", return_value="comfyui-private-fixture"):

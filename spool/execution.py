@@ -30,10 +30,17 @@ def verify_frozen_inputs(media, request, prompt):
             check_frozen(contained(media.host_roots["input"], asset["frozen"]), asset)
 
 
-def interrupt_comfy():
-    import nodes  # Comfy's own interrupt, as its /interrupt route uses.
+def interrupt_if_running(queue, prompt_id):
+    """Interrupt this prompt only while it is the one running, atomically under Comfy's queue lock."""
+    if hasattr(queue, "interrupt_if_running"):
+        return queue.interrupt_if_running(prompt_id)
+    import nodes  # Older Comfy: the same check and signal its /interrupt route makes, under the lock.
 
-    nodes.interrupt_processing()
+    with queue.mutex:
+        if any(item[1] == prompt_id for item in queue.currently_running.values()):
+            nodes.interrupt_processing()
+            return True
+    return False
 
 
 class LocalExecutor:
@@ -50,7 +57,6 @@ class LocalExecutor:
         self.collector = Collector(store, media)
         self.progress = progress
         self.pushed_progress = {}
-        self.interrupt = interrupt_comfy
 
     def notify_progress(self):
         """Progress is ephemeral: wake readers only when the observed values change."""
@@ -273,11 +279,10 @@ class LocalExecutor:
         prompt_id = attempt["prompt_id"]
         queue = self.server.prompt_queue
         if prompt_id in pending_ids:
-            queue.delete_queue_item(lambda item: item[1] == prompt_id)
+            if not queue.delete_queue_item(lambda item: item[1] == prompt_id):
+                return False  # It left the queue since the snapshot; the next pass sees where it went.
         elif prompt_id in running_ids:
-            # Recheck right before interrupting so another prompt is not stopped instead.
-            if any(item[1] == prompt_id for item in queue.get_current_queue()[0]):
-                self.interrupt()
+            interrupt_if_running(queue, prompt_id)
             return False
         else:
             status = (queue.get_history(prompt_id=prompt_id).get(prompt_id) or {}).get("status", {})
