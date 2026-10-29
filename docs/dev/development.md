@@ -260,3 +260,10 @@ local ComfyUI, Comfy Cloud and Deadline alike.
    clean checkout.
 
 `.comfyignore` keeps tests and development material out of the package.
+
+The opt-in `stale-tab` browser check requires an isolated host with a different
+server `API_VERSION` than the studio. To reproduce an update accurately, keep a
+studio tab open, change only `spool/protocol.py` on the isolated host and restart
+that host, then run `tests/stale_tab_browser_checks.js` in that tab. It checks
+save refusal, draft retention, unchanged server state and a single reload notice.
+Restore the version before running the gate or committing.

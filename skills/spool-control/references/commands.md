@@ -84,3 +84,17 @@ Read `shots[].notes` or `audioClips[].notes` first. Use capability `notes`, the 
 | Missing file, unavailable host or unsupported graph serialization | Restore the named prerequisite or use the supported editor path; do not substitute another source/target silently. |
 
 HTTP errors normally contain `{error}`; a project conflict can include `{current}`. Transport errors contain no authoritative acceptance result. Never issue global ComfyUI interrupt to cancel a single Spool attempt.
+
+## Contract and failures
+
+Capabilities advertise `apiVersion`, supported `commandActions` and `commandSchema`
+(`/spool/api/command-schema`), whose `$defs.error` describes flat JSON failures.
+Read `code` rather than parsing message text: `invalid_request`, `not_found`,
+`forbidden`, `revision_conflict` (with `current` when available),
+`operation_id_conflict`, `unavailable`, `studio_outdated`, `internal_error`.
+An error does not prove nothing changed: sidecar writes can fail after a commit.
+Inspect status before retrying, preserving the exact pending operation envelope.
+The CLI reports non-JSON HTTP failures as `http_error`, connection failures as
+`network_error`, and invalid JSON as `invalid_response` on stderr (exit 1).
+Pass `--wire-json` to preserve tagged exact integers in machine stdout; the default
+prints readable integers. Versionless CLI/agent requests remain supported.

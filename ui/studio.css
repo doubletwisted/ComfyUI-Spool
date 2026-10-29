@@ -7990,3 +7990,15 @@ input[type='range'] {
     max-width: 96px;
   }
 }
+
+#spool-outdated {
+  position: fixed;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  padding: 12px 20px;
+  background: #ffb526;
+  color: #171717;
+  border-radius: 6px;
+}

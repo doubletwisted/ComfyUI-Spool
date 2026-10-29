@@ -5,6 +5,11 @@ All notable changes to Spool are recorded here. Versions follow
 
 ## 0.1.0 (unreleased)
 
+- Stabilize API failures with error codes, publish command actions and a command
+  envelope schema, and preserve exact integers with CLI `--wire-json`.
+- Block writes from outdated studio tabs while keeping their draft, and detect
+  outdated Comfy page bridges. Reject malformed exact-integer tags consistently.
+
 First public release.
 
 ### Studio

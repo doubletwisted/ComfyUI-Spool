@@ -4,9 +4,92 @@ import copy
 import json
 import subprocess
 
+from .errors import NotFound, OperationConflict, InvalidRequest
 from . import attempts, farm, ledger, operations, requests, notes
 from .store import Conflict, linked
 from .workflow_inputs import input_problem
+
+
+# Advertised by capabilities; scope and action spelling are a public contract.
+ACTION_CAPABILITIES = {
+    "prepare_experiment": "queue",
+    "queue_experiment": "queue",
+    "set_inputs": "inputs",
+    "set_shot_inputs": "inputs",
+    "apply_workflow": "workflow",
+    "choose_take": "choose_take",
+    "feedback": "feedback",
+    "brief": "edit",
+    "cancel": "cancel",
+    "recover_submission": "recover",
+    "add_note": "notes",
+    "edit_note": "notes",
+    "address_note": "notes",
+    "reopen_note": "notes",
+}
+ARGUMENT_FIELDS = {
+    "prepare_experiment": {"variants": list},
+    "queue_experiment": {"variants": list},
+    "set_inputs": {"clipId": str, "values": dict},
+    "set_shot_inputs": {"clipId": str, "inputs": list},
+    "apply_workflow": {"clipId": str, "workflowVersion": str},
+    "choose_take": {"clipId": str, "takeId": str},
+    "feedback": {"clipId": str, "takeId": str, "verdict": str},
+    "brief": {"text": str},
+    "cancel": {"attemptId": str},
+    "recover_submission": {"attemptId": str},
+    "add_note": {"clipId": str, "text": str},
+    "edit_note": {"clipId": str, "noteId": str, "expectedText": str, "text": str},
+    "address_note": {"clipId": str, "noteId": str, "expectedText": str},
+    "reopen_note": {"clipId": str, "noteId": str, "expectedText": str},
+}
+
+
+def validate_envelope(data):
+    """Validate the external envelope before indexing it; business rules stay below."""
+
+    def require(ok):
+        if not ok:
+            raise InvalidRequest("Supply a valid command envelope; see /spool/api/command-schema")
+
+    require(isinstance(data, dict))
+    for key, limit in (("operationId", 200), ("actor", 100)):
+        require(isinstance(data.get(key), str) and 1 <= len(data[key]) <= limit)
+    require(type(data.get("revision")) is int)
+    action = data.get("action")
+    require(isinstance(action, str) and action in ACTION_CAPABILITIES)
+    arguments = data.get("arguments")
+    require(isinstance(arguments, dict))
+    for key, kind in ARGUMENT_FIELDS[action].items():
+        require(isinstance(arguments.get(key), kind))
+    argument_types = {key: kind for fields in ARGUMENT_FIELDS.values() for key, kind in fields.items()}
+    argument_types.update(summary=str, intent=str, mode=str)
+    for key, kind in argument_types.items():
+        if key in arguments:
+            require(isinstance(arguments[key], kind))
+    if "mode" in arguments:
+        require(arguments["mode"] in ("repeat", "explore"))
+    if "verdict" in arguments:
+        require(arguments["verdict"] in ("keep", "reject", "revise", "unrated"))
+    if "inputs" in arguments:
+        require(isinstance(arguments["inputs"], list))
+        require(all(isinstance(v, dict) and isinstance(v.get("key"), str) for v in arguments["inputs"]))
+    if "variants" in arguments:
+        require(1 <= len(arguments["variants"]) <= 100)
+        for variant in arguments["variants"]:
+            require(isinstance(variant, dict) and isinstance(variant.get("clipId"), str))
+            require(type(variant.get("count", 1)) is int and 1 <= variant.get("count", 1) <= 16)
+            require(isinstance(variant.get("values", {}), dict))
+            require(isinstance(variant.get("shotInputs", []), list))
+            require(all(isinstance(v, dict) and isinstance(v.get("key"), str) for v in variant.get("shotInputs", [])))
+    scope = data.get("scope")
+    require(isinstance(scope, dict) and isinstance(scope.get("projectId"), str))
+    for key in ("clipIds", "capabilities"):
+        require(isinstance(scope.get(key, []), list) and all(isinstance(v, str) for v in scope.get(key, [])))
+    require("capabilities" in scope and set(scope["capabilities"]) <= set(ACTION_CAPABILITIES.values()))
+    for key in ("maxTakes", "maxConcurrent"):
+        if key in scope:
+            require(type(scope[key]) is int and scope[key] >= 1)
 
 
 def scope_check(project_id, scope, capability, clip_ids=(), takes=0):
@@ -34,7 +117,7 @@ def status(store, project_id, clip_id=None, limit=50, offset=0):
     if clip_id is not None:
         shots = [c for c in shots if c["id"] == clip_id]
         if not shots:
-            raise KeyError("Shot not found")
+            raise NotFound("Shot not found")
 
     def inputs(c):
         """The recipe's input rules and, as beside Generate, the first missing media input."""
@@ -178,16 +261,9 @@ def prepare_experiment(store, project_id, revision, arguments):
 
 
 def execute(store, media, project_id, data):
+    validate_envelope(data)
     action, arguments = data["action"], data.get("arguments", {})
     identity, revision, actor = data["operationId"], data["revision"], data["actor"]
-    if (
-        not isinstance(identity, str)
-        or not 1 <= len(identity) <= 200
-        or not isinstance(actor, str)
-        or not 1 <= len(actor) <= 100
-        or type(revision) is not int
-    ):
-        raise ValueError("Supply operation ID, saved revision and actor")
     scope = data.get("scope")
     if action in ("prepare_experiment", "queue_experiment"):
         # Queue replay is resolved by the exact frozen command envelope below.
@@ -203,7 +279,7 @@ def execute(store, media, project_id, data):
         payload = store.operation_payload(identity)
         if payload:
             if payload.get("command") != data:
-                raise Conflict("Operation ID already belongs to another experiment")
+                raise OperationConflict("Operation ID already belongs to another experiment")
             return status(store, project_id)
         preview = prepare_experiment(store, project_id, revision, arguments)
         if scope.get("maxConcurrent") is not None:
@@ -224,23 +300,10 @@ def execute(store, media, project_id, data):
         store.accept_queue(identity, project_id, revision, payload, frozen, actor)
         return status(store, project_id)
     note_actions = {"add_note", "edit_note", "address_note", "reopen_note"}
-    capabilities = {
-        "set_inputs": "inputs",
-        "set_shot_inputs": "inputs",
-        "apply_workflow": "workflow",
-        "choose_take": "choose_take",
-        "feedback": "feedback",
-        "brief": "edit",
-        "cancel": "cancel",
-        "recover_submission": "recover",
-        **{action: "notes" for action in note_actions},
-    }
-    if action not in capabilities:
-        raise ValueError("Unknown typed command")
     clip_id = arguments.get("clipId")
     if action not in ("brief", "cancel", "recover_submission") and not clip_id:
         raise ValueError("Supply an explicit shot ID for this command")
-    scope_check(project_id, scope, capabilities[action], [clip_id] if clip_id else [])
+    scope_check(project_id, scope, ACTION_CAPABILITIES[action], [clip_id] if clip_id else [])
     adopted = None
     cancellation = None
     send_cancellation = False

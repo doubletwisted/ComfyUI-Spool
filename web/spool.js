@@ -1,3 +1,4 @@
+import { BRIDGE_VERSION } from '/spool/ui/protocol.js';
 import { app } from '../../scripts/app.js';
 import { createTemplatePreparation } from './template-prepare.js';
 import {
@@ -89,6 +90,7 @@ const graphActions = {
   [ACTIONS.ping]: () => {
     const record = workflowLinks.current();
     return {
+      bridgeVersion: BRIDGE_VERSION,
       connected: true,
       bridgeId,
       workflowLinks: true,

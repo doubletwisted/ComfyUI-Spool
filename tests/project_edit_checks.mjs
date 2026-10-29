@@ -483,4 +483,20 @@ syncEpoch.setHold((path, body, method, headers) => {
 });
 await syncEpoch.edit.poll();
 check('A stale in-flight response cannot acknowledge a newer sync token', syncEpoch.applied.length === 0);
+
+{
+  const h = fixture();
+  h.state.project = 'Draft after update';
+  h.setHold(async () => {
+    throw Object.assign(Error('Spool was updated. Reload this page.'), { status: 412, code: 'studio_outdated' });
+  });
+  await assert.rejects(h.edit.flush(), /Resolve/);
+  const applied = h.applied.length;
+  await h.edit.poll();
+  check(
+    'An outdated studio retains its dirty draft and blocks remote replacement',
+    h.edit.dirty && h.state.project === 'Draft after update' && h.applied.length === applied,
+  );
+}
+
 console.log(JSON.stringify({ passed: checks.length, checks }, null, 2));

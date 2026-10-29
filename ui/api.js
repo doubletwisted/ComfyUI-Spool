@@ -1,3 +1,5 @@
+import { API_VERSION } from './protocol.js';
+
 // The studio's HTTP client for /spool/api. It owns the editor view header, how a
 // failed reply becomes an Error, the label each request shows in the processing
 // status, which requests are background work, and attaching recipes that exist
@@ -31,6 +33,7 @@ export async function replyValue(response, fallback = 'Spool request failed') {
   }
   if (!response.ok) {
     const error = Error(value?.error || fallback + (value ? '' : ' (' + response.status + ')'));
+    error.code = value?.code || (response.status >= 500 ? 'internal_error' : 'invalid_request');
     error.status = response.status;
     error.current = value?.current;
     throw error;
@@ -38,7 +41,26 @@ export async function replyValue(response, fallback = 'Spool request failed') {
   return value;
 }
 
-export function createApi({ diagnostics, project, recipes, send = (...args) => fetch(...args) }) {
+export function createApi({
+  diagnostics,
+  project,
+  recipes,
+  send = (...args) => fetch(...args),
+  onOutdated = () => {},
+}) {
+  let outdated = null;
+  async function sendValue(path, options, fallback) {
+    if (outdated && !['GET', 'HEAD', 'OPTIONS'].includes(options.method)) throw outdated;
+    try {
+      return await replyValue(await send(url(path), options), fallback);
+    } catch (error) {
+      if (error.code === 'studio_outdated' && !outdated) {
+        outdated = error;
+        onOutdated('Spool was updated. Reload this page.');
+      }
+      throw error;
+    }
+  }
   const url = path => '/spool/api/' + path;
   const projectPath = () => 'projects/' + project();
 
@@ -58,13 +80,16 @@ export function createApi({ diagnostics, project, recipes, send = (...args) => f
     return diagnostics.run(
       requestLabel(path, verb),
       async () => {
-        const value = await replyValue(
-          await send(url(path), {
-            method: verb,
-            headers: { 'Content-Type': 'application/json', 'X-Spool-View': 'editor', ...headers },
-            body: payload === undefined ? undefined : JSON.stringify(payload),
-          }),
-        );
+        const value = await sendValue(path, {
+          method: verb,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Spool-View': 'editor',
+            ...headers,
+            'X-Spool-Api-Version': String(API_VERSION),
+          },
+          body: payload === undefined ? undefined : JSON.stringify(payload),
+        });
         for (const id of Object.keys(pending)) if (value.recipes?.[id]) recipes().delete(id);
         return value;
       },
@@ -80,10 +105,14 @@ export function createApi({ diagnostics, project, recipes, send = (...args) => f
   async function call(path, { method = 'GET', body, headers = {}, json = true, fallback } = {}) {
     const options = {
       method,
-      headers: { ...(json && body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
+      headers: {
+        ...(json && body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...headers,
+        'X-Spool-Api-Version': String(API_VERSION),
+      },
     };
     if (body !== undefined) options.body = json ? JSON.stringify(body) : body;
-    return replyValue(await send(url(path), options), fallback);
+    return sendValue(path, options, fallback);
   }
 
   // Send a file's bytes; the name travels percent-encoded in X-Filename.

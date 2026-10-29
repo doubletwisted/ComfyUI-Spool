@@ -1,3 +1,5 @@
+import { BRIDGE_VERSION } from './protocol.js';
+
 // Every protocol between the Spool studio and a Comfy page, shared by both sides.
 // Literal values are frozen: an open tab and an updated tab must still agree.
 //
@@ -58,7 +60,11 @@ export function createClient(channel, { timeoutMs = 10000 } = {}) {
     if (!request) return;
     clearTimeout(request.timer);
     pending.delete(data.requestId);
-    data.error ? request.reject(Error(data.error)) : request.resolve(data.result);
+    if (!data.error && request.action === ACTIONS.ping && data.result?.bridgeVersion !== BRIDGE_VERSION) {
+      const error = Error('Spool was updated. Reload the ComfyUI page.');
+      error.code = 'bridge_outdated';
+      request.reject(error);
+    } else data.error ? request.reject(Error(data.error)) : request.resolve(data.result);
   };
   channel.addEventListener('message', receive);
   function call(action, values = {}, options = {}) {
@@ -71,8 +77,13 @@ export function createClient(channel, { timeoutMs = 10000 } = {}) {
           error.code = 'SPOOL_BRIDGE_TIMEOUT';
           reject(error);
         }, options.timeoutMs ?? timeoutMs);
-      pending.set(requestId, { resolve, reject, timer });
-      channel.postMessage({ requestId, action, ...values });
+      pending.set(requestId, { resolve, reject, timer, action });
+      channel.postMessage({
+        requestId,
+        action,
+        ...values,
+        ...(action === ACTIONS.ping ? { bridgeVersion: BRIDGE_VERSION } : {}),
+      });
     });
   }
   function close() {
@@ -91,8 +102,11 @@ export function createClient(channel, { timeoutMs = 10000 } = {}) {
 export function serve(channel, handlers) {
   let active = true;
   const receive = async ({ data }) => {
-    if (!data?.requestId || !Object.hasOwn(handlers, data.action)) return;
+    if (!data?.requestId || !data.action) return;
+    // Apply travels in the reverse direction; the studio owns its reply.
+    if (data.action === LINK_APPLY && !Object.hasOwn(handlers, data.action)) return;
     try {
+      if (!Object.hasOwn(handlers, data.action)) throw Error('Unknown Spool bridge action: ' + data.action);
       const result = await handlers[data.action](data);
       if (active) channel.postMessage({ requestId: data.requestId, result });
     } catch (error) {

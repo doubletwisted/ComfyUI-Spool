@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { BRIDGE_VERSION } from '../ui/protocol.js';
 import {
   CHANNEL_PREFIX,
   ACTIONS,
@@ -106,7 +107,7 @@ const stop = serve(server, {
   [ACTIONS.ping]: async data => {
     received++;
     await delay(data.wait || 0);
-    return { value: data.value };
+    return { value: data.value, bridgeVersion: data.old ? 0 : data.bridgeVersion };
   },
   [ACTIONS.capture]: () => {
     throw Error('Serializer changed');
@@ -123,6 +124,10 @@ try {
   );
   await assert.rejects(client.call(ACTIONS.capture), { message: 'Serializer changed' });
   check('Server errors preserve the rejection message', true);
+  await assert.rejects(client.call(ACTIONS.ping, { old: true }), {
+    code: 'bridge_outdated',
+    message: 'Spool was updated. Reload the ComfyUI page.',
+  });
   await delay(10);
   check(
     'Response envelope keys are frozen',
@@ -133,10 +138,11 @@ try {
     ),
   );
   check('Responses clear all request timeouts', activeTimers.size === 0);
-  channel.postMessage({ requestId: 'unknown', action: 'unsupported' });
+  await assert.rejects(client.call('unsupported'), { message: 'Unknown Spool bridge action: unsupported' });
   channel.postMessage({ action: ACTIONS.ping });
   await delay(15);
-  check('Unknown actions and missing requestId are ignored', received === 2 && replies.length === 3);
+  check('Unknown actions answer with an error; missing requestId is ignored', received === 3 && replies.length === 5);
+  check('Ping carries the bridge version', first.bridgeVersion === BRIDGE_VERSION);
   const timeoutChannel = openChannel(crypto.randomUUID()),
     timeout = createClient(timeoutChannel, { timeoutMs: 10 });
   try {

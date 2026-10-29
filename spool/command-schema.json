@@ -1,0 +1,489 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Spool command envelope",
+  "type": "object",
+  "required": [
+    "operationId",
+    "revision",
+    "actor",
+    "scope",
+    "action",
+    "arguments"
+  ],
+  "properties": {
+    "operationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "revision": {
+      "type": "integer"
+    },
+    "actor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "action": {
+      "enum": [
+        "prepare_experiment",
+        "queue_experiment",
+        "set_inputs",
+        "set_shot_inputs",
+        "apply_workflow",
+        "choose_take",
+        "feedback",
+        "brief",
+        "cancel",
+        "recover_submission",
+        "add_note",
+        "edit_note",
+        "address_note",
+        "reopen_note"
+      ]
+    },
+    "arguments": {
+      "type": "object",
+      "properties": {
+        "clipId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "noteId": {
+          "type": "string"
+        },
+        "expectedText": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "attemptId": {
+          "type": "string"
+        },
+        "workflowVersion": {
+          "type": "string"
+        },
+        "takeId": {
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "keep",
+            "reject",
+            "revise",
+            "unrated"
+          ]
+        },
+        "values": {
+          "type": "object"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mode": {
+          "enum": [
+            "repeat",
+            "explore"
+          ]
+        },
+        "intent": {
+          "type": "string"
+        },
+        "variants": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "required": [
+              "clipId"
+            ],
+            "properties": {
+              "clipId": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16
+              },
+              "values": {
+                "type": "object"
+              },
+              "shotInputs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "key"
+                  ],
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "prepare_experiment"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "variants"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "queue_experiment"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "variants"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "set_inputs"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "values"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "set_shot_inputs"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "inputs"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "apply_workflow"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "workflowVersion"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "choose_take"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "takeId"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "feedback"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "takeId",
+              "verdict"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "brief"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "text"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "cancel"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "attemptId"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "recover_submission"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "attemptId"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "add_note"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "text"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "edit_note"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "noteId",
+              "expectedText",
+              "text"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "address_note"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "noteId",
+              "expectedText"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "reopen_note"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "noteId",
+              "expectedText"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "required": [
+        "projectId",
+        "capabilities"
+      ],
+      "properties": {
+        "projectId": {
+          "type": "string"
+        },
+        "clipIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "queue",
+              "inputs",
+              "workflow",
+              "choose_take",
+              "feedback",
+              "edit",
+              "cancel",
+              "recover",
+              "notes"
+            ]
+          }
+        },
+        "maxTakes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxConcurrent": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "error",
+        "code"
+      ],
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "code": {
+          "enum": [
+            "not_found",
+            "invalid_request",
+            "forbidden",
+            "revision_conflict",
+            "operation_id_conflict",
+            "unavailable",
+            "studio_outdated",
+            "internal_error"
+          ]
+        },
+        "current": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

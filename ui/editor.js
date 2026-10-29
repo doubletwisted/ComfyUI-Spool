@@ -103,7 +103,18 @@ async function startEditor(isFailed) {
     { createInterruptions } = await import('/spool/ui/pointer.js'),
     { pictureAt } = await import('/spool/ui/picture.js');
   const interruptions = createInterruptions();
-  const api = createApi({ diagnostics, project: () => bootId, recipes: () => unsavedRecipes }),
+  const api = createApi({
+      diagnostics,
+      project: () => bootId,
+      recipes: () => unsavedRecipes,
+      onOutdated: message => {
+        const notice = document.createElement('div');
+        notice.id = 'spool-outdated';
+        notice.setAttribute('role', 'alert');
+        notice.textContent = message;
+        $('editor').prepend(notice);
+      },
+    }),
     request = api.request;
   if (!bootId) {
     const projects = await api.call('projects');
@@ -7199,7 +7210,8 @@ async function startEditor(isFailed) {
       .then(live => {
         if (bridgeClient === initial) bridgeReady = !!live.connected && !!live.workflowLinks;
       })
-      .catch(() => {
+      .catch(error => {
+        if (error.code === 'bridge_outdated') toast(error.message);
         if (bridgeClient === initial) bridgeReady = false;
       });
   }

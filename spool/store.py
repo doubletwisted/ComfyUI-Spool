@@ -9,6 +9,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+from .errors import NotFound, RevisionConflict, OperationConflict
 from . import attempts, ledger, operations
 
 
@@ -29,8 +30,7 @@ def fingerprint(value):
     return hashlib.sha256(encode(value).encode()).hexdigest()
 
 
-class Conflict(ValueError):
-    pass
+Conflict = RevisionConflict
 
 
 SCHEMA_VERSION = 5
@@ -147,7 +147,7 @@ class Store:
             # Maintenance inspection: report on the file as it is, without running a
             # migration that could drop a table the operator has not agreed to yet.
             if not existing:
-                raise KeyError("No Spool store at " + str(self.path))
+                raise NotFound("No Spool store at " + str(self.path))
             return
         with self.connect() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
@@ -293,7 +293,7 @@ class Store:
                         **{key: value for key, value in json.loads(row[0]).items() if key in ledger.EVIDENCE_KEYS},
                     }
         if not row:
-            raise KeyError("This media has no stored evidence")
+            raise NotFound("This media has no stored evidence")
         return {"mediaId": media_id, **json.loads(row["evidence"])}
 
     def all_evidence(self, project_id):
@@ -476,7 +476,7 @@ class Store:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT revision,document FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
-                raise KeyError("Project not found")
+                raise NotFound("Project not found")
             if row["revision"] != revision:
                 raise Conflict(conflict)
             yield Edit(self, db, project_id, revision, json.loads(row["document"]))
@@ -578,7 +578,7 @@ class Store:
 
     def for_project(self, project_id):
         if not self.exists(project_id):
-            raise KeyError("Project not found")
+            raise NotFound("Project not found")
         return self
 
     def project_stores(self):
@@ -589,7 +589,7 @@ class Store:
             raise ValueError("Unsupported project lookup")
         with self.connect() as db:
             if not db.execute("SELECT 1 FROM " + table + " WHERE id=?", (identity,)).fetchone():
-                raise KeyError("Project record not found")
+                raise NotFound("Project record not found")
         return self
 
     def set_setting(self, key, value):
@@ -651,7 +651,7 @@ class Store:
         with self.connect() as db:
             row = db.execute("SELECT revision FROM projects WHERE id=?", (project_id,)).fetchone()
         if not row:
-            raise KeyError("Project not found")
+            raise NotFound("Project not found")
         return row[0]
 
     def sync_state(self, project_id):
@@ -659,7 +659,7 @@ class Store:
         with self.connect() as db:
             row = db.execute("SELECT revision FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
-                raise KeyError("Project not found")
+                raise NotFound("Project not found")
             cursor = db.execute(
                 "SELECT coalesce(max(cursor),0) FROM events WHERE project_id=?", (project_id,)
             ).fetchone()[0]
@@ -684,7 +684,7 @@ class Store:
         with self.connect() as db:
             row = db.execute("SELECT document FROM projects WHERE id=?", (project_id,)).fetchone()
         if not row:
-            raise KeyError("Project not found")
+            raise NotFound("Project not found")
         return json.loads(row[0])
 
     def frame_rate(self, project_id):
@@ -692,7 +692,7 @@ class Store:
         with self.connect() as db:
             row = db.execute("SELECT json_extract(document,'$.fps') FROM projects WHERE id=?", (project_id,)).fetchone()
         if not row:
-            raise KeyError("Project not found")
+            raise NotFound("Project not found")
         return row[0] or 24
 
     def projected(self, project_id):
@@ -705,7 +705,7 @@ class Store:
         with self.connect() as db:
             row = db.execute("SELECT document FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
-                raise KeyError("Project not found")
+                raise NotFound("Project not found")
             document = json.loads(row["document"])
             attempts = [
                 dict(r)
@@ -755,7 +755,7 @@ class Store:
         with self.connect() as db:
             row = db.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
-                raise KeyError("Project not found")
+                raise NotFound("Project not found")
             document = json.loads(row["document"])
             attempts = [
                 dict(r)
@@ -823,7 +823,7 @@ class Store:
         with self.connect() as db:
             row = db.execute("SELECT document FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
-                raise KeyError("Project not found")
+                raise NotFound("Project not found")
             document = json.loads(row[0])
             generated = (
                 db.execute(
@@ -835,7 +835,7 @@ class Store:
             )
         clip = next((c for c in document["clips"] if c["id"] == clip_id), None)
         if not clip:
-            raise KeyError("Clip not found")
+            raise NotFound("Clip not found")
         if take_id is not None:
             take = next((t for t in clip["takes"] if t["id"] == take_id and not t.get("placeholder")), None)
             if (
@@ -1109,7 +1109,7 @@ class Store:
         if row is None:
             return None
         if row["project_id"] != project_id or row["digest"] != fingerprint(payload):
-            raise Conflict("This operation ID already belongs to a different request")
+            raise OperationConflict("This operation ID already belongs to a different request")
         return json.loads(row["attempt_ids"])
 
     def accept_queue(self, operation_id, project_id, revision, payload, requests, actor):
@@ -1118,11 +1118,11 @@ class Store:
             row = db.execute("SELECT * FROM operations WHERE id=?", (operation_id,)).fetchone()
             if row:
                 if row["project_id"] != project_id or row["digest"] != fingerprint(payload):
-                    raise Conflict("This operation ID already belongs to a different request")
+                    raise OperationConflict("This operation ID already belongs to a different request")
                 return json.loads(row["attempt_ids"])
             current = db.execute("SELECT revision FROM projects WHERE id=?", (project_id,)).fetchone()
             if not current:
-                raise KeyError("Project not found")
+                raise NotFound("Project not found")
             if current[0] != revision:
                 raise Conflict("Project changed while preparing generation; reload before queueing")
             scope = payload.get("command", {}).get("scope", payload.get("scope", {}))
@@ -1244,7 +1244,7 @@ class Store:
             old = db.execute("SELECT * FROM operations WHERE id=?", (identity,)).fetchone()
             if old:
                 if old["project_id"] != project_id or old["digest"] != fingerprint(payload):
-                    raise Conflict("Operation ID already contains another command")
+                    raise OperationConflict("Operation ID already contains another command")
                 return json.loads(
                     db.execute("SELECT result FROM command_results WHERE id=?", (identity,)).fetchone()[0]
                 )
@@ -1284,7 +1284,7 @@ class Store:
                 (clip_id, clip_id, project_id),
             ).fetchone()
         if row is None:
-            raise KeyError("Project not found")
+            raise NotFound("Project not found")
         if not row[0]:
             raise ValueError("Focus points to an unavailable shot")
         with self.focus_store.connect() as db:
@@ -1308,7 +1308,7 @@ class Store:
         with self.connect() as db:
             row = db.execute("SELECT * FROM attempts WHERE id=?", (attempt_id,)).fetchone()
         if not row:
-            raise KeyError("Attempt not found")
+            raise NotFound("Attempt not found")
         result = dict(row)
         result["request"] = json.loads(result["request"])
         return result

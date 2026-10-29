@@ -106,6 +106,7 @@ Comfy templates without touching the user's graph.
 | Document fields | `spool/ledger.py` | `ui/ledger.js` | `tests/fixtures/document_fields.json` |
 | Take ownership | `spool/ledger.py` | `ui/ledger.js` | `tests/fixtures/ledger_cases.json` |
 | Optional and grouped inputs | `spool/workflow_inputs.py` | `ui/input-groups.js` | `tests/fixtures/optional_inputs.json` |
+| API version | `spool/protocol.py` | `ui/protocol.js` | `tests/fixtures/protocol_versions.json` |
 | Bridge messages | — | `ui/bridge.js` | `tests/bridge_checks.mjs` |
 
 ## Constraints
@@ -116,3 +117,17 @@ Comfy templates without touching the user's graph.
 - Generation never selects a take. Only an explicit choice changes the edit.
 - A request is frozen before dispatch, and nothing is resubmitted automatically
   when its outcome is uncertain.
+
+## API compatibility
+
+`spool/errors.py` defines expected failures; the route middleware maps unexpected
+exceptions to a generic 500 and logs their traceback. `ValueError` messages remain
+user-facing 400s. Explicit missing resources use `NotFound`; ordinary `KeyError`
+and `TypeError` indicate bugs. `ROUTE_AUDIENCES` declares each route's audience.
+
+The integer `apiVersion` is independent of package versions. Bump it for changes
+to the API or authored document that an older studio cannot safely write. Pin the
+Python and JS values in the protocol fixture. Versioned studio writes must match;
+versionless tools retain the public automation contract. The Comfy bridge has a
+separate `bridgeVersion` on ping; keep its literal names unchanged. See
+[durable names](durable-names.md) before renaming persistent identifiers.

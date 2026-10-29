@@ -1,7 +1,12 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { API_VERSION, BRIDGE_VERSION } from '../ui/protocol.js';
 // The studio's HTTP client: labels, background rules, recipe attachment, errors.
 // node tests/api_checks.mjs
 import { createApi, requestLabel } from '../ui/api.js';
 
+const versions = JSON.parse(fs.readFileSync(new URL('./fixtures/protocol_versions.json', import.meta.url), 'utf8'));
+assert.deepEqual(versions, { apiVersion: API_VERSION, bridgeVersion: BRIDGE_VERSION });
 const checks = [];
 const check = (label, ok) => {
   if (!ok) throw Error(label);
@@ -20,7 +25,9 @@ function harness(replies) {
   const sent = [],
     runs = [],
     recipes = new Map();
+  const notices = [];
   const api = createApi({
+    onOutdated: message => notices.push(message),
     diagnostics: {
       run: (label, run, options) => {
         runs.push({ label, ...options });
@@ -34,7 +41,7 @@ function harness(replies) {
       return replies.shift();
     },
   });
-  return { api, sent, runs, recipes };
+  return { api, sent, runs, recipes, notices };
 }
 
 check(
@@ -135,4 +142,18 @@ check(
   );
 }
 
+{
+  const h = harness([
+    reply(412, { code: 'studio_outdated', error: 'Spool was updated. Reload this page.' }),
+    reply(200, {}),
+  ]);
+  const body = { document: { clips: [] } };
+  await assert.rejects(h.api.request('projects/p1', body, 'PUT'), { code: 'studio_outdated' });
+  await assert.rejects(h.api.upload('upload', 'bytes', 'a.png'), { code: 'studio_outdated' });
+  assert.equal(h.notices.length, 1);
+  assert.equal(h.sent.length, 1);
+  await h.api.call('capabilities');
+  assert.ok(h.sent.every(r => r.headers['X-Spool-Api-Version'] === String(API_VERSION)));
+  check('Stale writes notify once, block subsequent writes, and still allow reads', true);
+}
 console.log(JSON.stringify({ passed: checks.length, checks }, null, 2));

@@ -88,7 +88,7 @@ ID is a conflict. A queue retry never creates a second batch. On a revision
 conflict, read the project again and reapply the change.
 
 Integers beyond JavaScript's safe range, such as 64-bit seeds, travel as
-`{"__spool_int__": "18446744073709551615"}`. The CLI converts them.
+`{"__spool_int__": "18446744073709551615"}`. The CLI converts them by default. Use `--wire-json` to preserve tagged integers in stdout for machine consumers.
 
 ## Clip notes
 
@@ -111,3 +111,80 @@ changes an agent's scope.
 
 Scope is a command contract, not authentication. Keep Spool on loopback, or on a
 trusted network, as described in [Security and network access](security.md).
+
+## Stable HTTP contract
+
+`GET /spool/api/capabilities` advertises `apiVersion`, `commandActions` and the
+`commandSchema` URL (`/spool/api/command-schema`). The JSON Schema describes the
+envelope, action arguments, scope and `$defs.error`. Scope/budget checks and
+project-dependent validation still happen on the server.
+
+Failures are flat JSON: `{"error":"message","code":"invalid_request"}`.
+Read `code`, not message text: `not_found` (404), `invalid_request` (400),
+`forbidden` (403), `revision_conflict` (409, with `current` when available),
+`operation_id_conflict` (409), `unavailable` (503), `studio_outdated` (412), or
+`internal_error` (500; details in the host log). An error does not prove nothing
+changed: a sidecar write can fail after a commit. Inspect state and reuse the
+identical operation envelope when retrying uncertain operations.
+
+The studio sends `X-Spool-Api-Version` on every HTTP request. A mismatching
+version blocks writes and asks for a reload while keeping the tab's draft.
+Versionless requests from the CLI, agents and curl remain supported. A bridge
+version mismatch asks you to reload the ComfyUI page. These rules apply both
+inside ComfyUI and standalone, independently of local, Cloud or Deadline targets.
+
+The CLI writes JSON errors to stderr and returns 1, including `network_error`,
+`http_error` for non-JSON HTTP failures, and `invalid_response` for invalid JSON.
+
+### Public routes
+
+These are the supported automation surface; paths are relative to the host.
+Audience declarations live in `spool/routes.py` (`ROUTE_AUDIENCES`). Studio and
+admin/host routes are implementation/host controls and carry no automation
+compatibility promise. Audience does not grant access; local-control guards still
+apply to public routes that reach beyond project files.
+
+| Method | Path |
+| --- | --- |
+| GET | `/spool/media/{project}/{path:.*}` |
+| GET | `/spool/api/projects` |
+| POST | `/spool/api/projects` |
+| GET | `/spool/api/projects/{project}` |
+| POST | `/spool/api/projects/{project}/input` |
+| POST | `/spool/api/projects/{project}/generation-preview` |
+| GET | `/spool/api/projects/{project}/status` |
+| POST | `/spool/api/projects/{project}/commands` |
+| GET | `/spool/api/projects/{project}/focus` |
+| POST | `/spool/api/projects/{project}/comparison` |
+| GET | `/spool/api/projects/{project}/media/{media}/original` |
+| GET | `/spool/api/projects/{project}/media/{media}/evidence` |
+| GET | `/spool/api/projects/{project}/evidence` |
+| POST | `/spool/api/projects/{project}/media/{media}/preview` |
+| GET | `/spool/api/projects/{project}/export` |
+| POST | `/spool/api/import-project` |
+| PUT | `/spool/api/projects/{project}` |
+| POST | `/spool/api/projects/{project}/import-workflow` |
+| POST | `/spool/api/projects/{project}/capture/{clip}` |
+| GET | `/spool/api/projects/{project}/take-workflow/{clip}/{take}` |
+| GET | `/spool/api/projects/{project}/take-file/{clip}/{take}` |
+| POST | `/spool/api/projects/{project}/use-take/{clip}` |
+| POST | `/spool/api/prepare-workflow` |
+| POST | `/spool/api/projects/{project}/delete-takes/{clip}` |
+| GET | `/spool/api/workflows/{version}` |
+| POST | `/spool/api/projects/{project}/queue` |
+| GET | `/spool/api/projects/{project}/events` |
+| GET | `/spool/api/templates` |
+| GET | `/spool/api/builtin-workflows` |
+| GET | `/spool/api/templates/{template}/{extension}` |
+| GET | `/spool/api/command-schema` |
+| GET | `/spool/api/capabilities` |
+| GET | `/spool/api/input/{path:.*}` |
+| GET | `/spool/api/attempts/{attempt}` |
+| POST | `/spool/api/upload` |
+| POST | `/spool/api/import-footage` |
+| POST | `/spool/api/export` |
+| POST | `/spool/api/export/otio` |
+| POST | `/spool/api/projects/{project}/detect-cuts` |
+| POST | `/spool/api/projects/{project}/frame` |
+| POST | `/spool/api/open-project` |
+| GET | `/spool/api/health` |

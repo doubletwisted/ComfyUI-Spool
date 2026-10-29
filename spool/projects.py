@@ -12,6 +12,7 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 
+from .errors import NotFound
 from . import take_files
 from .media import Media
 from .ownership import file_lock, atomic_replace
@@ -217,7 +218,7 @@ class Workspace(Store):
     def for_project(self, project_id):
         row = next((r for r in self.folders() if r["id"] == project_id), None)
         if row is None:
-            raise KeyError("Project not found")
+            raise NotFound("Project not found")
         folder = Path(row["folder"])
         if not (folder / "project.spool").is_file():
             raise ValueError("Project folder is unavailable: " + str(folder))
@@ -266,7 +267,7 @@ class Workspace(Store):
                 return store.lookup(table, identity)
             except KeyError:
                 continue
-        raise KeyError("Project record not found")
+        raise NotFound("Project record not found")
 
     def import_project(self, value):
         parent = Path(self.setting("projects_directory") or self.root / "projects").resolve()

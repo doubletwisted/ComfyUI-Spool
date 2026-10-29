@@ -61,3 +61,7 @@ refused. Adding or editing a note never authorizes execution. See
 ## Reporting a vulnerability
 
 See the [security policy](../../.github/SECURITY.md).
+
+API audience labels and version headers are compatibility contracts, not
+permissions. Local-control and same-origin checks apply regardless of audience
+or API version; see [automation](automation.md#stable-http-contract).

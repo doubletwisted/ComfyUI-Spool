@@ -7,7 +7,11 @@ from concurrent.futures import ThreadPoolExecutor
 import unittest
 from unittest.mock import patch
 
+import jsonschema
+from pathlib import Path
+
 from spool import commands, requests, templates
+from spool.wire import wire
 from spool.store import Conflict
 import test_queue_operations as fixtures
 
@@ -60,7 +64,10 @@ class CommandTests(unittest.TestCase):
         }
 
     def execute(self, data):
-        return commands.execute(self.store, self.media, self.project["id"], data)
+        value = commands.execute(self.store, self.media, self.project["id"], data)
+        schema = json.loads((Path(__file__).resolve().parent.parent / "spool/command-schema.json").read_text())
+        jsonschema.validate(wire(data), schema)
+        return value
 
     def test_explore_respects_float_contract_with_integral_default(self):
         recipe = self.store.workflow(self.project["document"]["clips"][0]["workflowVersion"])

@@ -3,7 +3,6 @@ import hashlib
 import json
 import logging
 import os
-import subprocess
 import time
 from pathlib import Path
 from urllib.parse import unquote
@@ -11,6 +10,8 @@ from urllib.parse import unquote
 from aiohttp import web
 from aiohttp.helpers import content_disposition_header
 
+from .errors import NotFound, SpoolError, Forbidden, RevisionConflict, StudioOutdated
+from .protocol import API_VERSION
 from .editor import editor_html
 from .media import EXTENSIONS, contained, staged_relative
 from .workflows import parse_import
@@ -23,7 +24,6 @@ from .launcher import ComfyLauncher
 from . import credentials, system, templates
 from . import __version__, cloud as cloud_module, requirements
 from .cloud import CloudExecutor
-from .store import Conflict
 from .wire import wire, unwire
 
 
@@ -31,6 +31,67 @@ UPLOAD_LIMIT = 512 * 1024 * 1024
 LOOPBACK_PEERS = ("127.0.0.1", "::1")
 # 0.0.0.0 is what ComfyUI prints for --listen; browsers on this computer reach it locally.
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+
+
+# Audience is documentation, not authorization; the request guard applies to all routes.
+ROUTE_AUDIENCES = {
+    ("GET", "/spool/"): "studio",
+    ("GET", "/spool/index.html"): "studio",
+    ("GET", "/spool/ui/{file}"): "studio",
+    ("GET", "/spool/media/{project}/{path:.*}"): "public automation",
+    ("GET", "/spool/api/projects"): "public automation",
+    ("POST", "/spool/api/projects"): "public automation",
+    ("POST", "/spool/api/open-project"): "public automation",
+    ("GET", "/spool/api/projects/{project}"): "public automation",
+    ("POST", "/spool/api/projects/{project}/input"): "public automation",
+    ("POST", "/spool/api/projects/{project}/generation-preview"): "public automation",
+    ("GET", "/spool/api/projects/{project}/status"): "public automation",
+    ("POST", "/spool/api/projects/{project}/commands"): "public automation",
+    ("POST", "/spool/api/projects/{project}/focus/{view}"): "studio",
+    ("GET", "/spool/api/projects/{project}/focus"): "public automation",
+    ("POST", "/spool/api/projects/{project}/comparison"): "public automation",
+    ("GET", "/spool/api/projects/{project}/media/{media}/original"): "public automation",
+    ("GET", "/spool/api/projects/{project}/media/{media}/evidence"): "public automation",
+    ("GET", "/spool/api/projects/{project}/evidence"): "public automation",
+    ("POST", "/spool/api/projects/{project}/media/{media}/preview"): "public automation",
+    ("GET", "/spool/api/projects/{project}/export"): "public automation",
+    ("POST", "/spool/api/import-project"): "public automation",
+    ("PUT", "/spool/api/projects/{project}"): "public automation",
+    ("POST", "/spool/api/projects/{project}/import-workflow"): "public automation",
+    ("POST", "/spool/api/projects/{project}/capture/{clip}"): "public automation",
+    ("GET", "/spool/api/projects/{project}/take-workflow/{clip}/{take}"): "public automation",
+    ("GET", "/spool/api/projects/{project}/take-file/{clip}/{take}"): "public automation",
+    ("POST", "/spool/api/projects/{project}/take-file/{clip}/{take}/reveal"): "admin/host",
+    ("POST", "/spool/api/projects/{project}/clip-folder/{clip}/reveal"): "admin/host",
+    ("POST", "/spool/api/projects/{project}/use-take/{clip}"): "public automation",
+    ("POST", "/spool/api/prepare-workflow"): "public automation",
+    ("POST", "/spool/api/projects/{project}/delete-takes/{clip}"): "public automation",
+    ("GET", "/spool/api/workflows/{version}"): "public automation",
+    ("POST", "/spool/api/projects/{project}/handoffs"): "studio",
+    ("GET", "/spool/api/handoffs/{handoff}"): "studio",
+    ("POST", "/spool/api/handoffs/{handoff}/complete"): "studio",
+    ("POST", "/spool/api/projects/{project}/queue"): "public automation",
+    ("GET", "/spool/api/projects/{project}/events"): "public automation",
+    ("GET", "/spool/api/comfy"): "admin/host",
+    ("PUT", "/spool/api/comfy/settings"): "admin/host",
+    ("GET", "/spool/api/templates"): "public automation",
+    ("GET", "/spool/api/builtin-workflows"): "public automation",
+    ("GET", "/spool/api/templates/{template}/{extension}"): "public automation",
+    ("POST", "/spool/api/comfy/start"): "admin/host",
+    ("GET", "/spool/api/comfy/log"): "admin/host",
+    ("GET", "/spool/api/command-schema"): "public automation",
+    ("GET", "/spool/api/capabilities"): "public automation",
+    ("GET", "/spool/api/input/{path:.*}"): "public automation",
+    ("POST", "/spool/api/reconcile"): "admin/host",
+    ("GET", "/spool/api/attempts/{attempt}"): "public automation",
+    ("POST", "/spool/api/upload"): "public automation",
+    ("POST", "/spool/api/import-footage"): "public automation",
+    ("POST", "/spool/api/export"): "public automation",
+    ("POST", "/spool/api/export/otio"): "public automation",
+    ("POST", "/spool/api/projects/{project}/detect-cuts"): "public automation",
+    ("POST", "/spool/api/projects/{project}/frame"): "public automation",
+    ("GET", "/spool/api/health"): "public automation",
+}
 
 
 def inside(path, root):
@@ -100,22 +161,46 @@ def register(server, store, media, executor=None):
     def local_control(request, message="Use this from the Spool studio on the computer running Spool"):
         """Guard requests that reach beyond project files: paths, programs, folders."""
         if not is_local(request):
-            raise PermissionError(message)
+            raise Forbidden(message)
 
     @web.middleware
     async def guard(request, handler):
         # Every Spool change must come from Spool's own pages or from tools that
         # send no Origin (the CLI and agents). Comfy's origin check is off under
         # --enable-cors-header and absent in standalone mode.
-        if (
-            request.path.startswith("/spool/")
-            and request.method not in ("GET", "HEAD", "OPTIONS")
-            and not same_origin(request)
-        ):
-            return web.json_response(
-                {"error": "Spool accepts changes only from its own pages and local tools"}, status=403
-            )
-        return await handler(request)
+        if not request.path.startswith("/spool/"):
+            return await handler(request)
+        try:
+            if request.method not in ("GET", "HEAD", "OPTIONS"):
+                if not same_origin(request):
+                    raise Forbidden("Spool accepts changes only from its own pages and local tools")
+                version = request.headers.get("X-Spool-Api-Version")
+                if version is not None and version != str(API_VERSION):
+                    raise StudioOutdated("Spool was updated. Reload this page.")
+            return await handler(request)
+        except Exception as error:
+            if isinstance(error, SpoolError):
+                status, code, message = error.status, error.code, str(error)
+            elif isinstance(error, ValueError):
+                status, code, message = 400, "invalid_request", str(error)
+            elif isinstance(error, web.HTTPException) and error.status < 500:
+                status = error.status
+                code = "not_found" if status == 404 else "invalid_request"
+                message = error.reason
+            else:
+                logging.exception("Spool request failed: %s %s", request.method, request.path)
+                status, code, message = 500, "internal_error", "Spool request failed. See the host log for details."
+            value = {"error": message, "code": code}
+            if (
+                isinstance(error, RevisionConflict)
+                and error.code == "revision_conflict"
+                and "project" in request.match_info
+            ):
+                try:
+                    value["current"] = await asyncio.to_thread(store.get, request.match_info["project"])
+                except Exception:
+                    logging.exception("Spool could not read the current project after a conflict")
+            return web.json_response(wire(value), status=status)
 
     server.app.middlewares.append(guard)
 
@@ -158,17 +243,6 @@ def register(server, store, media, executor=None):
                 result = await handler(request)
                 result.headers["Server-Timing"] = f"spool;dur={(time.perf_counter() - started) * 1000:.1f}"
                 return result
-            except Conflict as error:
-                value = {"error": str(error)}
-                if "project" in request.match_info:
-                    value["current"] = await asyncio.to_thread(store.get, request.match_info["project"])
-                return web.json_response(wire(value), status=409)
-            except KeyError as error:
-                return web.json_response({"error": str(error)}, status=404)
-            except PermissionError as error:
-                return web.json_response({"error": str(error)}, status=403)
-            except (ValueError, TypeError, OSError, subprocess.SubprocessError) as error:
-                return web.json_response({"error": str(error)}, status=400)
             finally:
                 elapsed = time.perf_counter() - started
                 if elapsed >= 3:
@@ -186,7 +260,7 @@ def register(server, store, media, executor=None):
     async def ui(request):
         path = contained(assets, request.match_info["file"])
         if not path.is_file():
-            raise KeyError("Asset not found")
+            raise NotFound("Asset not found")
         return file_response(path)
 
     @routes.get("/spool/media/{project}/{path:.*}")
@@ -197,6 +271,7 @@ def register(server, store, media, executor=None):
         return file_response(path)
 
     @routes.get("/spool/api/projects")
+    @endpoint
     async def projects(request):
         return response(await asyncio.to_thread(store.list))
 
@@ -463,7 +538,7 @@ def register(server, store, media, executor=None):
             (t for t in clip["takes"] if t["id"] == request.match_info["take"] and not t.get("placeholder")), None
         )
         if not take:
-            raise KeyError("Take not found")
+            raise NotFound("Take not found")
         path = project_media.original_source(take["media"])["path"]
         roots = [selected.root, *project_media.host_roots.values()]
         if not any(inside(path, root) for root in roots):
@@ -681,6 +756,11 @@ def register(server, store, media, executor=None):
         local_control(request)
         return response({"text": await asyncio.to_thread(launcher.log)})
 
+    @routes.get("/spool/api/command-schema")
+    @endpoint
+    async def command_schema(request):
+        return file_response(Path(__file__).with_name("command-schema.json"))
+
     @routes.get("/spool/api/capabilities")
     @endpoint
     async def capabilities(request):
@@ -693,6 +773,9 @@ def register(server, store, media, executor=None):
         value["cloudExecution"] = cloud_module.available()
         value["requirements"] = requirements.report()
         value["version"] = __version__
+        value["apiVersion"] = API_VERSION
+        value["commandActions"] = sorted(commands.ACTION_CAPABILITIES)
+        value["commandSchema"] = "/spool/api/command-schema"
         if types != "":
             value["cloudDefinitions"] = templates.cloud_templates()["definitions"]
         if types is not None:
@@ -829,6 +912,7 @@ def register(server, store, media, executor=None):
         return response(await asyncio.to_thread(media.export_frame, selected, data["frame"], fps))
 
     @routes.get("/spool/api/health")
+    @endpoint
     async def health(request):
         host = await asyncio.to_thread(store.host, include_definitions=False)
         return web.json_response(

@@ -25,6 +25,7 @@ def run():
     parser.add_argument("--view")
     parser.add_argument("--file", type=Path, help="Command JSON envelope; '-' reads stdin")
     parser.add_argument("--takes", nargs="+")
+    parser.add_argument("--wire-json", action="store_true", help="Keep tagged exact integers in machine output")
     args = parser.parse_args()
     path = "/spool/api/projects/" + urllib.parse.quote(args.project, safe="")
     body = None
@@ -56,9 +57,24 @@ def run():
     )
     try:
         with urllib.request.urlopen(request, timeout=120) as response:
-            value = unwire(json.load(response))
+            value = json.load(response)
+            if not args.wire_json:
+                value = unwire(value)
     except urllib.error.HTTPError as error:
-        print(json.dumps(unwire(json.load(error)), ensure_ascii=False), file=sys.stderr)
+        try:
+            value = json.load(error)
+            if not isinstance(value, dict) or not isinstance(value.get("error"), str):
+                raise ValueError("Invalid error reply")
+        except (ValueError, UnicodeError):
+            value = {"error": "Spool returned HTTP " + str(error.code), "code": "http_error"}
+        value.setdefault("code", "http_error")
+        print(json.dumps(value if args.wire_json else unwire(value), ensure_ascii=False), file=sys.stderr)
+        return 1
+    except (urllib.error.URLError, OSError) as error:
+        print(json.dumps({"error": "Could not reach Spool: " + str(error), "code": "network_error"}), file=sys.stderr)
+        return 1
+    except (ValueError, UnicodeError):
+        print(json.dumps({"error": "Spool returned invalid JSON", "code": "invalid_response"}), file=sys.stderr)
         return 1
     print(json.dumps(value, ensure_ascii=False, indent=2))
     return 0

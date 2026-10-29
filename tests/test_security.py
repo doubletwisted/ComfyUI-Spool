@@ -104,7 +104,7 @@ class RouteGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tool.status, 200, await tool.text())
 
     async def test_rebound_host_name_cannot_reach_local_only_routes(self):
-        with patch("spool.routes.subprocess.Popen") as launch:
+        with patch("subprocess.Popen") as launch:
             response = await self.client.post(
                 "/spool/api/import-footage", json={"path": str(self.outside)}, headers=REBOUND
             )

@@ -519,6 +519,7 @@ async function firstWorkflowFixture() {
   return { id: project.id };
 }
 const CHECKS = {
+  'stale-tab': { fixture: workflowPreviewFixture, modes: ['full'], file: 'stale_tab_browser_checks.js' },
   'frame-interpretation': {
     fixture: frameInterpretationFixture,
     modes: ['full'],
@@ -2090,7 +2091,7 @@ async function runLibraryDrop(page, evaluate, label) {
   const names = requested.length
     ? requested
     : Object.keys(CHECKS).filter(
-        name => !['workflow-project-profile', 'workflow-capture-bundle', 'cloud-smoke'].includes(name),
+        name => !['workflow-project-profile', 'workflow-capture-bundle', 'cloud-smoke', 'stale-tab'].includes(name),
       );
   for (const name of names) if (!CHECKS[name]) throw Error('Unknown check: ' + name);
   // Frontend checks can share an older CPU host. Cover new backend routes with
@@ -2181,6 +2182,7 @@ async function runLibraryDrop(page, evaluate, label) {
                       'x-spool-view',
                       'x-spool-since',
                       'x-spool-revision',
+                      'x-spool-api-version',
                       'range',
                     ].includes(key.toLowerCase()),
                   ),

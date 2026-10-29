@@ -6,6 +6,7 @@ import copy
 import json
 from functools import lru_cache
 
+from .errors import NotFound
 from .graph_inputs import named_bindings
 from .workflow_inputs import LOADERS
 
@@ -228,7 +229,7 @@ def cloud_capture(template_id):
 
 def asset(template_id, extension):
     if template_id not in CATALOG or extension not in ("json", "webp"):
-        raise KeyError("Unknown studio template")
+        raise NotFound("Unknown studio template")
     if get_asset_path is None:
         raise ValueError("Install the ComfyUI workflow templates package")
     filename = template_id + (".json" if extension == "json" else "-1.webp")
