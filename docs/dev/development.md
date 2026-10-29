@@ -96,7 +96,8 @@ Comfy Cloud and refuses to run unless `SPOOL_CLOUD_SMOKE=1`. Start its host with
 the key in `COMFY_API_KEY` (the host keeps no saved key), and set
 `SPOOL_CLOUD_SMOKE_TARGET=local` to run it as Partner Nodes on the host.
 
-`controlnet-comfy` needs a host started with `--partner-nodes`, and
+`controlnet-comfy` and `reference-comfy-link` need a host started with
+`--partner-nodes`, and
 `comfy-link-placeholder` one started with `--deadline`. The `-mac` checks
 (`take-file-actions-mac`, `clip-folder-mac`) report a Mac platform and a host
 that names Finder, so the macOS labels are checked from Windows too; they are
@@ -167,6 +168,16 @@ with the message shown beside Generate.
 To change one, open `workflow.json` in ComfyUI on a test host, edit it, save it
 over `workflow.json`, export the API prompt over `prompt.json`, and update
 `spool.json` if node IDs or inputs changed. Loaders ship with an empty file name.
+ComfyUI must reopen the saved graph unchanged, because **Edit in Comfy** loads it
+the same way; the `reference-comfy-link` browser check opens MiniMax Reference to
+Video through Edit in Comfy and applies it back.
+
+MiniMax Reference to Video connects 4 of the node's 9 reference images, 1 of its 3
+videos and 1 of its 3 audio clips. ComfyUI frontend 1.55.18 cannot reopen this node
+with more connections: Autogrow inputs inside its model selector lose or swap
+links on reload
+([ComfyUI_frontend#10136](https://github.com/Comfy-Org/ComfyUI_frontend/issues/10136)).
+Add slots when a frontend release reopens them intact.
 `tests/test_builtin_workflows.py` checks that the three files agree and that
 every slot that can be left out feeds an input its node marks optional. A folder
 with the same ID as a curated Comfy template replaces that template.

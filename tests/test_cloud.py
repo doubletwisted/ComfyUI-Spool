@@ -212,23 +212,23 @@ class CloudSDKTests(unittest.IsolatedAsyncioTestCase):
     async def test_reference_to_video_sends_only_the_chosen_references(self):
         (self.root / 'input' / 'motion.mp4').write_bytes(self.video)
         # The image sits in the second slot; it is sent as Image 1.
-        self.reference_shot({'4/image': 'source.png', '12/file': 'motion.mp4'})
+        self.reference_shot({'4/image': 'source.png', '7/file': 'motion.mp4'})
         attempt = await self.accept()
         await self.executor.observe(attempt)
         submitted = self.submissions[0]['body']['workflow']
         self.assertEqual(sorted(n['class_type'] for n in submitted.values()), ['LoadImage', 'LoadVideo', 'MinimaxHailuo03ReferenceNode', 'SaveVideo'])
         references = {k: v for k, v in submitted['2']['inputs'].items() if '.reference_' in k}
-        self.assertEqual(references, {'model.reference_images.image_1': ['3', 0], 'model.reference_videos.video_1': ['12', 0]})
+        self.assertEqual(references, {'model.reference_images.image_1': ['3', 0], 'model.reference_videos.video_1': ['7', 0]})
         self.assertEqual(len(self.uploads), 2)
         request = self.store.attempt(attempt['id'])['request']
-        self.assertEqual(len(request['omittedInputs']), 13)
+        self.assertEqual(request['omittedInputs'], ['4/image', '5/image', '6/image', '8/audio'])
         self.assertEqual(request['inputValues']['3/image'], 'source.png')
         await self.executor.observe(self.store.attempt(attempt['id']))
         self.assertEqual(self.store.attempt(attempt['id'])['status'], 'complete')
 
     async def test_reference_to_video_needs_an_image_or_video(self):
         (self.root / 'input' / 'voice.wav').write_bytes(b'RIFF')
-        self.reference_shot({'15/audio': 'voice.wav'})
+        self.reference_shot({'8/audio': 'voice.wav'})
         with self.assertRaisesRegex(ValueError, 'Add a reference image or video'):
             await self.accept()
         self.assertFalse(self.submissions)

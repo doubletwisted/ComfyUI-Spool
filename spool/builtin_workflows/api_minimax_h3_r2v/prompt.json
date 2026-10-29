@@ -40,48 +40,12 @@
         "6",
         0
       ],
-      "model.reference_images.image_5": [
+      "model.reference_videos.video_1": [
         "7",
         0
       ],
-      "model.reference_images.image_6": [
-        "8",
-        0
-      ],
-      "model.reference_images.image_7": [
-        "9",
-        0
-      ],
-      "model.reference_images.image_8": [
-        "10",
-        0
-      ],
-      "model.reference_images.image_9": [
-        "11",
-        0
-      ],
-      "model.reference_videos.video_1": [
-        "12",
-        0
-      ],
-      "model.reference_videos.video_2": [
-        "13",
-        0
-      ],
-      "model.reference_videos.video_3": [
-        "14",
-        0
-      ],
       "model.reference_audios.audio_1": [
-        "15",
-        0
-      ],
-      "model.reference_audios.audio_2": [
-        "16",
-        0
-      ],
-      "model.reference_audios.audio_3": [
-        "17",
+        "8",
         0
       ]
     },
@@ -128,101 +92,20 @@
   },
   "7": {
     "inputs": {
-      "image": ""
+      "file": ""
     },
-    "class_type": "LoadImage",
+    "class_type": "LoadVideo",
     "_meta": {
-      "title": "Reference image 5"
+      "title": "Reference video"
     }
   },
   "8": {
     "inputs": {
-      "image": ""
-    },
-    "class_type": "LoadImage",
-    "_meta": {
-      "title": "Reference image 6"
-    }
-  },
-  "9": {
-    "inputs": {
-      "image": ""
-    },
-    "class_type": "LoadImage",
-    "_meta": {
-      "title": "Reference image 7"
-    }
-  },
-  "10": {
-    "inputs": {
-      "image": ""
-    },
-    "class_type": "LoadImage",
-    "_meta": {
-      "title": "Reference image 8"
-    }
-  },
-  "11": {
-    "inputs": {
-      "image": ""
-    },
-    "class_type": "LoadImage",
-    "_meta": {
-      "title": "Reference image 9"
-    }
-  },
-  "12": {
-    "inputs": {
-      "file": ""
-    },
-    "class_type": "LoadVideo",
-    "_meta": {
-      "title": "Reference video 1"
-    }
-  },
-  "13": {
-    "inputs": {
-      "file": ""
-    },
-    "class_type": "LoadVideo",
-    "_meta": {
-      "title": "Reference video 2"
-    }
-  },
-  "14": {
-    "inputs": {
-      "file": ""
-    },
-    "class_type": "LoadVideo",
-    "_meta": {
-      "title": "Reference video 3"
-    }
-  },
-  "15": {
-    "inputs": {
       "audio": ""
     },
     "class_type": "LoadAudio",
     "_meta": {
-      "title": "Reference audio 1"
-    }
-  },
-  "16": {
-    "inputs": {
-      "audio": ""
-    },
-    "class_type": "LoadAudio",
-    "_meta": {
-      "title": "Reference audio 2"
-    }
-  },
-  "17": {
-    "inputs": {
-      "audio": ""
-    },
-    "class_type": "LoadAudio",
-    "_meta": {
-      "title": "Reference audio 3"
+      "title": "Reference audio"
     }
   }
 }

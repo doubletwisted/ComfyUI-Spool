@@ -24,6 +24,8 @@ export:'<path d="M12 15V3m-4 4 4-4 4 4M4 13v8h16v-8"/>',
 bin:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 9v11"/>',
 sidebar:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
 plus:'<path d="M12 4v16M4 12h16"/>',
+image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 17-5-5-8 8"/>',
+video:'<rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3"/>',
 import:'<path d="M12 3v12m-4-4 4 4 4-4M4 15v6h16v-6"/>',
 clipboard:'<rect x="5" y="5" width="14" height="16" rx="2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h6"/>',
 sliders:'<path d="M4 7h8m4 0h4M4 17h3m4 0h9"/><circle cx="14" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
@@ -1695,10 +1697,9 @@ function bindWorkflowControls(c,bindings){
  c.inputValues={...Object.fromEntries(bindings.map(b=>[b.key,copy(capture.prompt[b.nodeId].inputs[b.input])])),...c.inputValues};
  c.bindings=copy(bindings);c.workflowVersion=version;nativeRecipes[version]=capture;unsavedRecipes.set(version,capture);
 }
-function inputLabel(b,i,c,label){
- const remove=b.optional&&inputFilled(b,c.inputValues||{},c.shotInputs||[]);
- return remove?'<span class="input-label">'+label+'<button type="button" class="input-clear" data-clear-input="'+i+'" aria-label="Remove '+label+'">Remove</button></span>':'<span>'+label+'</span>';
-}
+// Media inputs are compact rows: a thumbnail, the label and chosen file, then their actions.
+function mediaLabel(b,label,empty){return '<span class="media-label">'+label+(empty&&b.optional?'<em>Optional</em>':'')+'</span>';}
+function mediaRemove(b,i,c,label){return b.optional&&inputFilled(b,c.inputValues||{},c.shotInputs||[])?'<button type="button" class="media-action input-clear" data-clear-input="'+i+'" aria-label="Remove '+label+'" title="Remove">'+svg('close')+'</button>':'';}
 function controlField(b,i,c){
  const value=Object.hasOwn(c.inputValues||{},b.key)?c.inputValues[b.key]:nativeRecipes[c.workflowVersion]?.prompt[b.nodeId]?.inputs[b.input],label=esc(b.label||b.input),source=(c.shotInputs||[]).find(s=>s.key===b.key);
  if(b.role==='resolution'&&b.options?.length&&b.options.every(v=>/^\d+x\d+$/.test(v))){
@@ -1709,10 +1710,13 @@ function controlField(b,i,c){
  const missing=nativeRecipes[c.workflowVersion]?.inputRecovery?.missing?.some(m=>m.nodeId===b.nodeId&&m.input===b.input&&m.sources.includes(value));
  if(b.asset&&['video','audio'].includes(b.slot)){
   const video=b.slot==='video',current=take(c),available=!current.placeholder&&current.media.kind==='video',timeline=video&&source?.source==='selected';
-  const description=source?(timeline?'Timeline video · '+c.name:generationSourceLabel(source)):!value||missing?(b.optional?'Optional · no ':'No ')+b.slot+' selected':String(value).split('/').at(-1);
-  return '<div class="field binding-source" data-media-input="'+i+'">'+inputLabel(b,i,c,label)+'<span class="native-source-value" data-media-source>'+esc(description)+'</span><div class="media-input-actions">'+(video?'<button class="outline" type="button" data-use-timeline-video aria-pressed="'+timeline+'" '+(!available?'disabled':'')+' title="'+(available?'Use this clip’s selected take and timeline trim':'This clip needs a video take first')+'">Use timeline video</button>':'')+'<button class="outline" type="button" data-media-upload>Choose file…</button></div><input type="file" accept="'+b.slot+'/*" hidden></div>';
+  const empty=!source&&(!value||missing),description=source?(timeline?'Timeline video · '+c.name:generationSourceLabel(source)):empty?'No '+b.slot+' selected':String(value).split('/').at(-1);
+  return '<div class="field binding-source media-slot'+(empty?' empty':'')+'" data-media-input="'+i+'"><div class="media-row"><span class="media-thumb">'+svg(video?'video':'audio')+'</span><span class="media-text">'+mediaLabel(b,label,empty)+'<span class="native-source-value" data-media-source>'+esc(description)+'</span></span><span class="media-input-actions">'+(video?'<button class="media-action" type="button" data-use-timeline-video aria-pressed="'+timeline+'" '+(!available?'disabled':'')+' aria-label="Use timeline video" title="'+(available?'Use this clip’s selected take and timeline trim':'This clip needs a video take first')+'">'+svg('timeline')+'</button>':'')+'<button class="media-action" type="button" data-media-upload aria-label="Choose '+b.slot+' file" title="Choose file…">'+svg('folder')+'</button>'+mediaRemove(b,i,c,label)+'</span></div><input type="file" accept="'+b.slot+'/*" hidden></div>';
  }
- if(b.asset&&['LoadImage','LoadImageMask'].includes(b.contract?.classType||nativeRecipes[c.workflowVersion]?.prompt[b.nodeId]?.class_type))return '<div class="field binding-source image-input" data-image-input="'+i+'">'+inputLabel(b,i,c,label)+'<button type="button" class="image-input-target" aria-label="Replace '+label+'"><img class="native-source-preview" '+(!value||missing||source?'hidden':'src="/spool/api/input/'+encodeURIComponent(value)+'"')+' alt="'+label+'"><span><strong>'+esc(source?generationSourceLabel(source):!value||missing?'Choose image':'Replace image')+'</strong><small>'+esc(value&&!source&&!missing?String(value).split('/').at(-1):(b.optional?'Optional · paste':'Paste')+', drop or click to choose an image')+'</small></span></button><input type="file" accept="image/*" data-image-file hidden></div>';
+ if(b.asset&&['LoadImage','LoadImageMask'].includes(b.contract?.classType||nativeRecipes[c.workflowVersion]?.prompt[b.nodeId]?.class_type)){
+  const empty=!source&&(!value||missing),name=source?generationSourceLabel(source):empty?'Choose image':String(value).split('/').at(-1);
+  return '<div class="field binding-source image-input media-slot'+(empty?' empty':'')+'" data-image-input="'+i+'"><button type="button" class="image-input-target media-row" aria-label="'+(empty?'Choose ':'Replace ')+label+'" title="Click, paste or drop an image"><span class="media-thumb"><img class="native-source-preview" '+(!value||missing||source?'hidden':'src="/spool/api/input/'+encodeURIComponent(value)+'"')+' alt="">'+svg('image')+'</span><span class="media-text">'+mediaLabel(b,label,empty)+'<strong>'+esc(name)+'</strong></span></button>'+mediaRemove(b,i,c,label)+'<input type="file" accept="image/*" data-image-file hidden></div>';
+ }
  let field=typeof value==='boolean'?'<select data-native-control="'+i+'"><option value="true" '+(value?'selected':'')+'>On</option><option value="false" '+(!value?'selected':'')+'>Off</option></select>':isInt(value)&&b.contract?.inputType!=='FLOAT'?'<input type="text" inputmode="numeric" data-exact-integer="true" data-native-control="'+i+'" value="'+esc(decimal(value))+'">':typeof value==='number'?'<input type="number" step="any" data-native-control="'+i+'" value="'+esc(value)+'">':'<textarea data-native-control="'+i+'">'+esc(value??'')+'</textarea>';
  if(source)field='<span class="native-source-value">'+esc(generationSourceLabel(source))+'</span>';
  else if(b.role==='source'||b.options){

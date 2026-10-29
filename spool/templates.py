@@ -82,7 +82,8 @@ def own_capture(template_id):
     bindings = []
     for entry in manifest['inputs']:
         if 'group' in entry:
-            bindings += [media(node_id, entry['label'] + ' ' + str(index + 1), entry['slot'], optional=True, group=entry['group'], omit=[node_id])
+            number = (lambda index: ' ' + str(index + 1)) if len(entry['nodes']) > 1 else (lambda index: '')
+            bindings += [media(node_id, entry['label'] + number(index), entry['slot'], optional=True, group=entry['group'], omit=[node_id])
                          for index, node_id in enumerate(entry['nodes'])]
         elif prompt[entry['node']]['class_type'] in LOADERS:
             optional = {'optional': True, 'omit': [entry['node'], *entry.get('alsoRemove', [])]} if entry.get('optional') else {}

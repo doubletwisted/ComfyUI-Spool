@@ -22,10 +22,10 @@ Built-in workflows choose their output and expose their main inputs without
 questions. Example source images are not included: pick your own source in the
 inspector before generating.
 
-Some built-in workflows are Spool's own versions with every media input
-connected. **MiniMax H3 · Reference to Video** (Cloud) takes up to 9 reference
-images, 3 reference videos and 3 reference audio clips; the inspector shows them
-as they fill (see [Optional and repeated inputs](#optional-and-repeated-inputs)).
+Some built-in workflows are Spool's own versions with more of their media inputs
+connected. **MiniMax H3 · Reference to Video** (Cloud) takes up to 4 reference
+images, a reference video and a reference audio clip; the inspector shows them as
+they fill (see [Optional and repeated inputs](#optional-and-repeated-inputs)).
 
 ### Your own workflows
 
@@ -57,12 +57,13 @@ inputs before generating from it.
 
 ## Clip inputs
 
-The inspector shows the selected clip's creative inputs.
+The inspector shows the selected clip's creative inputs. Each image, video or
+audio input is one row with a thumbnail, its name and the chosen file.
 
-- **Images:** paste (Ctrl+V when the field has focus), drop a file, or click to
-  browse. Replacing an image can be undone.
-- **Video:** **Choose file…** or **Use timeline video**, which uses the clip's take
-  in the edit with its current trim. Spool cuts the trimmed part from the original
+- **Images:** paste (Ctrl+V when the row has focus), drop a file, or click the row
+  to browse. Replacing an image can be undone.
+- **Video:** the folder button chooses a file; the timeline button (**Use timeline
+  video**) uses the clip's take in the edit with its current trim. Spool cuts the trimmed part from the original
   at full resolution.
 - **Image from a video:** choose the first, middle or last frame of the trim.
 - **Audio:** the original or selected shot, another clip, or the A1 or A2 lane

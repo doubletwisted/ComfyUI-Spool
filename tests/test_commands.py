@@ -205,7 +205,7 @@ class CommandTests(unittest.TestCase):
         shot = commands.status(self.store, self.project["id"])["shots"][0]
         self.assertEqual(shot["inputProblem"], "Add a reference image or video.")
         self.assertEqual(shot["inputRules"], capture["inputRules"])
-        self.assertEqual([b["label"] for b in shot["bindings"] if b.get("group") == "Reference videos"], ["Reference video 1", "Reference video 2", "Reference video 3"])
+        self.assertEqual([b["label"] for b in shot["bindings"] if b.get("group") == "Reference images"], ["Reference image 1", "Reference image 2", "Reference image 3", "Reference image 4"])
         self.execute(self.envelope("set_inputs", {"clipId": "shot", "values": {"4/image": "subject.png"}}, "fill", "inputs"))
         self.assertIsNone(commands.status(self.store, self.project["id"])["shots"][0]["inputProblem"])
         self.project = self.store.get(self.project["id"])

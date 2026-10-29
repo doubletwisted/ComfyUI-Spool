@@ -1,8 +1,8 @@
 {
-  "id": "70906299-66df-4c9a-bf83-7601ea44cf16",
+  "id": "e7dd4e90-6cc3-4559-8c5f-5c2276f6294f",
   "revision": 0,
-  "last_node_id": 17,
-  "last_link_id": 16,
+  "last_node_id": 8,
+  "last_link_id": 7,
   "nodes": [
     {
       "id": 1,
@@ -16,7 +16,7 @@
         120
       ],
       "flags": {},
-      "order": 16,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -55,10 +55,10 @@
       ],
       "size": [
         420,
-        536
+        520
       ],
       "flags": {},
-      "order": 15,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -89,67 +89,31 @@
           "name": "model.reference_images.image_5",
           "shape": 7,
           "type": "IMAGE",
-          "link": 6
-        },
-        {
-          "name": "model.reference_images.image_6",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 7
-        },
-        {
-          "name": "model.reference_images.image_7",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 8
-        },
-        {
-          "name": "model.reference_images.image_8",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 9
-        },
-        {
-          "name": "model.reference_images.image_9",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 10
+          "link": null
         },
         {
           "name": "model.reference_videos.video_1",
           "shape": 7,
           "type": "VIDEO",
-          "link": 11
+          "link": 6
         },
         {
           "name": "model.reference_videos.video_2",
           "shape": 7,
           "type": "VIDEO",
-          "link": 12
-        },
-        {
-          "name": "model.reference_videos.video_3",
-          "shape": 7,
-          "type": "VIDEO",
-          "link": 13
+          "link": null
         },
         {
           "name": "model.reference_audios.audio_1",
           "shape": 7,
           "type": "AUDIO",
-          "link": 14
+          "link": 7
         },
         {
           "name": "model.reference_audios.audio_2",
           "shape": 7,
           "type": "AUDIO",
-          "link": 15
-        },
-        {
-          "name": "model.reference_audios.audio_3",
-          "shape": 7,
-          "type": "AUDIO",
-          "link": 16
+          "link": null
         }
       ],
       "outputs": [
@@ -191,7 +155,7 @@
       "id": 3,
       "type": "LoadImage",
       "pos": [
-        -1150,
+        -790,
         0
       ],
       "size": [
@@ -233,7 +197,7 @@
       "id": 4,
       "type": "LoadImage",
       "pos": [
-        -780,
+        -420,
         0
       ],
       "size": [
@@ -275,8 +239,8 @@
       "id": 5,
       "type": "LoadImage",
       "pos": [
-        -410,
-        0
+        -790,
+        380
       ],
       "size": [
         340,
@@ -317,7 +281,7 @@
       "id": 6,
       "type": "LoadImage",
       "pos": [
-        -1150,
+        -420,
         380
       ],
       "size": [
@@ -357,10 +321,10 @@
     },
     {
       "id": 7,
-      "type": "LoadImage",
+      "type": "LoadVideo",
       "pos": [
-        -780,
-        380
+        -790,
+        860
       ],
       "size": [
         340,
@@ -372,41 +336,36 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "IMAGE",
-          "type": "IMAGE",
+          "name": "VIDEO",
+          "type": "VIDEO",
           "links": [
             6
           ]
-        },
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": null
         }
       ],
-      "title": "Reference image 5",
+      "title": "Reference video",
       "properties": {
-        "Node name for S&R": "LoadImage"
+        "Node name for S&R": "LoadVideo"
       },
       "widgets_values": [
         "",
         "image"
       ],
       "widgets_values_named": {
-        "image": "",
+        "file": "",
         "upload": "image"
       }
     },
     {
       "id": 8,
-      "type": "LoadImage",
+      "type": "LoadAudio",
       "pos": [
-        -410,
-        380
+        -420,
+        860
       ],
       "size": [
         340,
-        330
+        130
       ],
       "flags": {},
       "order": 5,
@@ -414,367 +373,14 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "IMAGE",
-          "type": "IMAGE",
+          "name": "AUDIO",
+          "type": "AUDIO",
           "links": [
             7
           ]
-        },
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": null
         }
       ],
-      "title": "Reference image 6",
-      "properties": {
-        "Node name for S&R": "LoadImage"
-      },
-      "widgets_values": [
-        "",
-        "image"
-      ],
-      "widgets_values_named": {
-        "image": "",
-        "upload": "image"
-      }
-    },
-    {
-      "id": 9,
-      "type": "LoadImage",
-      "pos": [
-        -1150,
-        760
-      ],
-      "size": [
-        340,
-        330
-      ],
-      "flags": {},
-      "order": 6,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            8
-          ]
-        },
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": null
-        }
-      ],
-      "title": "Reference image 7",
-      "properties": {
-        "Node name for S&R": "LoadImage"
-      },
-      "widgets_values": [
-        "",
-        "image"
-      ],
-      "widgets_values_named": {
-        "image": "",
-        "upload": "image"
-      }
-    },
-    {
-      "id": 10,
-      "type": "LoadImage",
-      "pos": [
-        -780,
-        760
-      ],
-      "size": [
-        340,
-        330
-      ],
-      "flags": {},
-      "order": 7,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            9
-          ]
-        },
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": null
-        }
-      ],
-      "title": "Reference image 8",
-      "properties": {
-        "Node name for S&R": "LoadImage"
-      },
-      "widgets_values": [
-        "",
-        "image"
-      ],
-      "widgets_values_named": {
-        "image": "",
-        "upload": "image"
-      }
-    },
-    {
-      "id": 11,
-      "type": "LoadImage",
-      "pos": [
-        -410,
-        760
-      ],
-      "size": [
-        340,
-        330
-      ],
-      "flags": {},
-      "order": 8,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            10
-          ]
-        },
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": null
-        }
-      ],
-      "title": "Reference image 9",
-      "properties": {
-        "Node name for S&R": "LoadImage"
-      },
-      "widgets_values": [
-        "",
-        "image"
-      ],
-      "widgets_values_named": {
-        "image": "",
-        "upload": "image"
-      }
-    },
-    {
-      "id": 12,
-      "type": "LoadVideo",
-      "pos": [
-        -1150,
-        1240
-      ],
-      "size": [
-        340,
-        330
-      ],
-      "flags": {},
-      "order": 9,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "VIDEO",
-          "type": "VIDEO",
-          "links": [
-            11
-          ]
-        }
-      ],
-      "title": "Reference video 1",
-      "properties": {
-        "Node name for S&R": "LoadVideo"
-      },
-      "widgets_values": [
-        "",
-        "image"
-      ],
-      "widgets_values_named": {
-        "file": "",
-        "upload": "image"
-      }
-    },
-    {
-      "id": 13,
-      "type": "LoadVideo",
-      "pos": [
-        -780,
-        1240
-      ],
-      "size": [
-        340,
-        330
-      ],
-      "flags": {},
-      "order": 10,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "VIDEO",
-          "type": "VIDEO",
-          "links": [
-            12
-          ]
-        }
-      ],
-      "title": "Reference video 2",
-      "properties": {
-        "Node name for S&R": "LoadVideo"
-      },
-      "widgets_values": [
-        "",
-        "image"
-      ],
-      "widgets_values_named": {
-        "file": "",
-        "upload": "image"
-      }
-    },
-    {
-      "id": 14,
-      "type": "LoadVideo",
-      "pos": [
-        -410,
-        1240
-      ],
-      "size": [
-        340,
-        330
-      ],
-      "flags": {},
-      "order": 11,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "VIDEO",
-          "type": "VIDEO",
-          "links": [
-            13
-          ]
-        }
-      ],
-      "title": "Reference video 3",
-      "properties": {
-        "Node name for S&R": "LoadVideo"
-      },
-      "widgets_values": [
-        "",
-        "image"
-      ],
-      "widgets_values_named": {
-        "file": "",
-        "upload": "image"
-      }
-    },
-    {
-      "id": 15,
-      "type": "LoadAudio",
-      "pos": [
-        -1150,
-        1760
-      ],
-      "size": [
-        340,
-        130
-      ],
-      "flags": {},
-      "order": 12,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "AUDIO",
-          "type": "AUDIO",
-          "links": [
-            14
-          ]
-        }
-      ],
-      "title": "Reference audio 1",
-      "properties": {
-        "Node name for S&R": "LoadAudio"
-      },
-      "widgets_values": [
-        "",
-        ""
-      ],
-      "widgets_values_named": {
-        "audio": "",
-        "upload": ""
-      }
-    },
-    {
-      "id": 16,
-      "type": "LoadAudio",
-      "pos": [
-        -780,
-        1760
-      ],
-      "size": [
-        340,
-        130
-      ],
-      "flags": {},
-      "order": 13,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "AUDIO",
-          "type": "AUDIO",
-          "links": [
-            15
-          ]
-        }
-      ],
-      "title": "Reference audio 2",
-      "properties": {
-        "Node name for S&R": "LoadAudio"
-      },
-      "widgets_values": [
-        "",
-        ""
-      ],
-      "widgets_values_named": {
-        "audio": "",
-        "upload": ""
-      }
-    },
-    {
-      "id": 17,
-      "type": "LoadAudio",
-      "pos": [
-        -410,
-        1760
-      ],
-      "size": [
-        340,
-        130
-      ],
-      "flags": {},
-      "order": 14,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "AUDIO",
-          "type": "AUDIO",
-          "links": [
-            16
-          ]
-        }
-      ],
-      "title": "Reference audio 3",
+      "title": "Reference audio",
       "properties": {
         "Node name for S&R": "LoadAudio"
       },
@@ -834,87 +440,15 @@
       7,
       0,
       2,
-      4,
-      "IMAGE"
-    ],
-    [
-      7,
-      8,
-      0,
-      2,
       5,
-      "IMAGE"
+      "VIDEO"
     ],
     [
+      7,
       8,
-      9,
-      0,
-      2,
-      6,
-      "IMAGE"
-    ],
-    [
-      9,
-      10,
       0,
       2,
       7,
-      "IMAGE"
-    ],
-    [
-      10,
-      11,
-      0,
-      2,
-      8,
-      "IMAGE"
-    ],
-    [
-      11,
-      12,
-      0,
-      2,
-      9,
-      "VIDEO"
-    ],
-    [
-      12,
-      13,
-      0,
-      2,
-      10,
-      "VIDEO"
-    ],
-    [
-      13,
-      14,
-      0,
-      2,
-      11,
-      "VIDEO"
-    ],
-    [
-      14,
-      15,
-      0,
-      2,
-      12,
-      "AUDIO"
-    ],
-    [
-      15,
-      16,
-      0,
-      2,
-      13,
-      "AUDIO"
-    ],
-    [
-      16,
-      17,
-      0,
-      2,
-      14,
       "AUDIO"
     ]
   ],
@@ -923,21 +457,21 @@
       "id": 1,
       "title": "Reference images",
       "bounding": [
-        -1170,
+        -810,
         -60,
-        1120,
-        1170
+        750,
+        790
       ],
       "color": "#3f789e",
       "flags": {}
     },
     {
       "id": 2,
-      "title": "Reference videos",
+      "title": "Reference video",
       "bounding": [
-        -1170,
-        1180,
-        1120,
+        -810,
+        800,
+        380,
         410
       ],
       "color": "#3f789e",
@@ -947,9 +481,9 @@
       "id": 3,
       "title": "Reference audio",
       "bounding": [
-        -1170,
-        1700,
-        1120,
+        -440,
+        800,
+        380,
         210
       ],
       "color": "#3f789e",
