@@ -1,6 +1,6 @@
 import * as T from './timeline.js';
 import { pictureAt } from './picture.js';
-import { createPreviews, QUALITY } from './preview.js';
+import { createPreviews } from './preview.js';
 import { videoFrameCount } from './video-seek-guard.js';
 
 // Owns viewer presentation, media elements, seeking and the playback clock.
@@ -92,18 +92,6 @@ export function createViewer({
     }
   }
   function viewerHead(d) {
-    $('previewQuality').value = previewQuality();
-    const size = resolution();
-    for (const option of $('previewQuality').options) {
-      const divisor = { full: 1, half: 2, quarter: 4 }[option.value],
-        label =
-          (divisor === 1 ? 'Full' : divisor === 2 ? '1/2' : '1/4') +
-          ' · ' +
-          previewDimension(size.width, divisor) +
-          ' × ' +
-          previewDimension(size.height, divisor);
-      if (option.textContent !== label) option.textContent = label;
-    }
     const src = review.mode === 'source',
       c = d?.clip,
       t = d?.take,
@@ -292,22 +280,9 @@ export function createViewer({
     shownVideo = videos[lead];
     if (shownVideo?.videoWidth) text('viewerResolution', shownVideo.videoWidth + ' × ' + shownVideo.videoHeight);
   }
-  function previewQuality() {
-    return ['full', 'half', 'quarter'].includes(getState().previewQuality) ? getState().previewQuality : 'full';
-  }
-  function previewDimension(value, divisor) {
-    return Math.max(2, Math.round(value / divisor / 2) * 2);
-  }
   function previewTarget() {
-    const size = resolution(),
-      quality = previewQuality(),
-      divisor = QUALITY[quality];
-    return {
-      width: previewDimension(size.width, divisor),
-      height: previewDimension(size.height, divisor),
-      fps: getFps(),
-      quality,
-    };
+    const size = resolution();
+    return { width: size.width, height: size.height, fps: getFps() };
   }
   // Preparing a preview states the size it wants, so it never has to save the project
   // for the server to read one from the document.
@@ -343,10 +318,7 @@ export function createViewer({
       return m.kind === 'image' ? url(m.file) : null;
     }
     if (entry.state === 'preparing') {
-      text(
-        'viewerResolution',
-        'Preparing ' + (previewQuality() === 'full' ? 'Full' : previewQuality() === 'half' ? '1/2' : '1/4') + '…',
-      );
+      text('viewerResolution', 'Preparing…');
       return m.kind === 'image' ? url(m.file) : null;
     }
     return entry.file ? url(entry.file) : m.kind === 'image' ? url(m.file) : null;
@@ -354,31 +326,10 @@ export function createViewer({
   function videoTime(v) {
     return Math.max(0, v.currentTime - Number(v.dataset.sourceOffset || 0));
   }
-  const reviewSources = new Map();
   function reviewSource(m, rate = getFps()) {
     if (m.frameRateMode !== 'interpret' || (m.review?.frameRateMode === 'interpret' && m.sequenceFps === rate))
       return { file: m.file, offset: 0 };
-    const key = (m.originalFile || m.file) + '|' + rate;
-    let entry = reviewSources.get(key);
-    if (!entry) {
-      entry = {};
-      reviewSources.set(key, entry);
-      entry.pending = request('projects/' + projectKey + '/media/' + encodeURIComponent(m.id) + '/preview', {
-        divisor: 4,
-        width: 320,
-        height: 180,
-        fps: rate,
-      })
-        .then(result => {
-          entry.file = result.file;
-          entry.pending = null;
-          updateViewer();
-        })
-        .catch(error => {
-          reviewSources.delete(key);
-          throw error;
-        });
-    }
+    const entry = previews.status(m);
     return { ...entry, offset: (m.sourceRange?.start || 0) / rate };
   }
   function videoTiming(v, m) {
@@ -392,7 +343,7 @@ export function createViewer({
   function videoFor(m, key) {
     const file = previewFile(m);
     if (!file) return null;
-    key = (key || file) + '|' + previewQuality() + '|' + file;
+    key = (key || file) + '|' + file;
     let v = pool.get(key);
     if (v) {
       pool.delete(key);
@@ -685,6 +636,7 @@ export function createViewer({
   }
   function audioFor(id, m) {
     const source = m.fps ? reviewSource(m) : { file: m.file, offset: 0 };
+    if (source.state === 'failed') return null;
     if (source.pending) {
       void source.pending.catch(error => toast(error.message));
       return null;
@@ -796,20 +748,6 @@ export function createViewer({
     }
   }
 
-  function setPreviewQuality(quality) {
-    const resume = playing;
-    pause();
-    hideTrimPreview();
-    getState().previewQuality = quality;
-    previews.clear();
-    shownVideo = null;
-    for (const v of pool.values()) releaseMedia(v);
-    pool.clear();
-    updateViewer(true);
-    saveView();
-    setStatus('Preview ' + (quality === 'full' ? 'Full' : quality === 'half' ? '1/2' : '1/4'));
-    if (resume) play();
-  }
   return {
     renderPlaceholderState,
     get currentClip() {
@@ -819,8 +757,6 @@ export function createViewer({
     viewerData,
     text,
     updateViewer,
-    previewQuality,
-    previewDimension,
     previewFile,
     videoTime,
     reviewSource,
@@ -839,7 +775,6 @@ export function createViewer({
     releaseMedia,
     audioFor,
     syncAudio,
-    setPreviewQuality,
     previews,
     get playing() {
       return playing;

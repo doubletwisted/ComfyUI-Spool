@@ -44,8 +44,7 @@ keyboard navigation, dismissal and focus return; callers still build actions.
 `ui/viewer.js` owns picture presentation, comparison panes, playback clock,
 video pool and eviction, bounded seeking, image decoding, preview preparation,
 and audio players/mixing. Current document and pixel scale come from getters;
-repaint/save/trim adapters keep the original operation order. Preview quality
-and preparation policy are unchanged. `take-actions.js` owns take-review
+repaint/save/trim adapters keep the original operation order. Playback preparation polls a shared background copy at the project size. `take-actions.js` owns take-review
 transitions; `layout-controls.js` owns viewer zoom and pan controls.
 
 `ui/timeline-renderer.js` retains clip-lane nodes, markup memoization and the

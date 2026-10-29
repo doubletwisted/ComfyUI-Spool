@@ -74,7 +74,7 @@ export function createHistoryActions({
     setState(preserveTakes(step.restored));
     review.reconcile();
     setSelectionAnchor(getState().selectedAudio || getState().selected);
-    for (const key of ['zoom', 'snap', 'muted', 'loop', 'previewQuality']) getState()[key] = view[key];
+    for (const key of ['zoom', 'snap', 'muted', 'loop']) getState()[key] = view[key];
     render();
     save();
     setStatus(verb + ' ' + (step.label || 'edit'));

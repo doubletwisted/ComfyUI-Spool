@@ -38,7 +38,6 @@ VIEW_FIELDS = (
     "loop",
     "trimSingle",
     "viewerZoom",
-    "previewQuality",
     "activeVideoTrack",
 )
 SERVER_OWNED = ("jobs", "recoverableResults")
@@ -142,7 +141,7 @@ def compose(document, evidence, in_place=False):
 
 
 def authored(document):
-    working = {key: value for key, value in document.items() if key not in VIEW_KEYS}
+    working = {key: value for key, value in document.items() if key not in (*VIEW_KEYS, "previewQuality")}
     working["clips"] = [
         {**clip, "takes": [t for t in clip.get("takes", []) if not t.get("generated")]} for clip in document["clips"]
     ]
@@ -223,6 +222,7 @@ def job(attempt, request):
 
 
 def attach(document, attempts):
+    document.pop("previewQuality", None)
     document["jobs"] = []
     document.pop("recoverableResults", None)
     ordinals = {}

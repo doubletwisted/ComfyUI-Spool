@@ -75,7 +75,7 @@ const document = (clipCount = 8, takesPerClip = 3) => ({
 // --- what a step carries ----------------------------------------------------
 {
   const history = createHistory();
-  const before = document();
+  const before = { ...document(), previewQuality: 'quarter' };
   const entry = history.remember(before, 'Trim clip');
   check(
     'A step names takes instead of copying them',
@@ -98,7 +98,8 @@ const document = (clipCount = 8, takesPerClip = 3) => ({
   const entrySize = JSON.stringify(entry).length,
     documentSize = JSON.stringify(before).length;
   check('A step is much smaller than the document', entrySize * 4 < documentSize);
-  const restored = history.hydrate(entry);
+  const restored = history.hydrate({ ...entry, previewQuality: 'half' });
+  check('Old history drops playback quality', !('previewQuality' in restored));
   check('Hydration restores the same clips and takes', JSON.stringify(restored.clips) === JSON.stringify(before.clips));
   check(
     'Hydration restores the audio clips',

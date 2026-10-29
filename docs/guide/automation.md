@@ -210,3 +210,12 @@ apply to public routes that reach beyond project files.
 | POST | `/spool/api/projects/{project}/frame` |
 | POST | `/spool/api/open-project` |
 | GET | `/spool/api/health` |
+
+Playback preparation (`POST /spool/api/projects/{project}/media/{media}/preview`)
+accepts `{ "width": 960, "height": 540, "fps": 24 }`, using the current project
+size and frame rate. It returns `{ "state": "preparing" }` immediately while a
+copy is queued or encoding. Poll the same request until `state` is `ready`; the
+response then includes `file` (served through the project's media route) and
+`offset` in seconds for that shot's source range. Sources share one machine-local
+copy, without upscaling. Preparation does not save the document or change its
+revision. The endpoint works with or without ComfyUI.

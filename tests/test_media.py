@@ -313,24 +313,23 @@ class MediaTests(unittest.TestCase):
         self.assertEqual(cached["offset"], 0.5)
         self.assertEqual(path.stat().st_mtime_ns, stamp)
         video = next(s for s in _probe(path)["streams"] if s["codec_type"] == "video")
-        self.assertEqual((video["width"], video["height"], int(video["nb_frames"])), (128, 72, 48))
+        self.assertEqual((video["width"], video["height"], int(video["nb_frames"])), (64, 36, 48))
         half = self.media.preview(first, 64, 36, 24)
         self.assertNotEqual(full["file"], half["file"])
         self.assertEqual(_probe(self.media.resolve(half["file"]))["streams"][0]["width"], 64)
         conformed = self.media.preview(first, 64, 36, 30)
         self.assertEqual(int(_probe(self.media.resolve(conformed["file"]))["streams"][0]["nb_frames"]), 48)
 
-    def test_playback_image_preserves_transparency_and_timeline_canvas(self):
+    def test_playback_image_preserves_transparency_without_upscaling(self):
         source = self.root / "transparent.png"
         Image.new("RGBA", (8, 4), (20, 90, 170, 128)).save(source)
         metadata = {"kind": "image", "file": source.name, "originalFile": source.name}
         result = self.media.preview(metadata, 16, 16, 24)
         with Image.open(self.media.resolve(result["file"])) as image:
-            self.assertEqual(image.size, (16, 16))
-            pixel = image.getpixel((8, 8))
+            self.assertEqual(image.size, (8, 4))
+            pixel = image.getpixel((4, 2))
             self.assertEqual(pixel[3], 128)
             self.assertTrue(all(abs(a - b) <= 1 for a, b in zip(pixel[:3], (20, 90, 170))))
-            self.assertEqual(image.getpixel((8, 0)), (0, 0, 0, 0))
         old = result["file"]
         Image.new("RGBA", (8, 4), (255, 0, 0, 255)).save(source)
         self.assertNotEqual(self.media.preview(metadata, 16, 16, 24)["file"], old)

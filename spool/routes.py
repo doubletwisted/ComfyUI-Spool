@@ -14,6 +14,7 @@ from .errors import NotFound, SpoolError, Forbidden, RevisionConflict, StudioOut
 from .protocol import API_VERSION
 from .editor import editor_html
 from .media import EXTENSIONS, contained, staged_relative
+from .playback import PlaybackQueue
 from .workflows import parse_import
 from . import attempts, ledger
 from . import requests
@@ -105,7 +106,12 @@ def register(server, store, media, executor=None):
     """Executor is None when Spool runs without ComfyUI; editing, import and export still work."""
     routes = server.routes
     assets = Path(__file__).resolve().parent.parent / "ui"
-    preview_jobs = {}
+    media.playback = PlaybackQueue()
+
+    async def close_playback(app):
+        await asyncio.to_thread(media.playback.close)
+
+    server.app.on_cleanup.append(close_playback)
     collector = executor.collector if executor is not None else Collector(store, media)
     cloud = CloudExecutor(store, media, collector)
     launcher = ComfyLauncher(store)
@@ -132,6 +138,9 @@ def register(server, store, media, executor=None):
         return result
 
     async def project_response(request, value):
+        selected_store, selected_media = await asyncio.to_thread(services, request)
+        await asyncio.to_thread(selected_media.prepare_playback, value["document"])
+
         def serialize():
             return response(ledger.editor_project(value) if request.headers.get("X-Spool-View") == "editor" else value)
 
@@ -433,9 +442,6 @@ def register(server, store, media, executor=None):
         # The caller states the playback size it wants, so preparing never has to
         # save the project for the server to read one from the document.
         data = await request.json()
-        divisor = data.get("divisor")
-        if type(divisor) is not int or divisor not in (1, 2, 4):
-            raise ValueError("Choose Full, 1/2 or 1/4 playback resolution")
         width, height = data.get("width"), data.get("height")
         if any(type(value) is not int or value < 2 or value > 8192 or value % 2 for value in (width, height)):
             raise ValueError("Choose an even playback size between 2 and 8192 pixels")
@@ -452,13 +458,8 @@ def register(server, store, media, executor=None):
             )
         if selected["kind"] == "audio" and not selected.get("fps"):
             raise ValueError("This audio source does not contain video frames")
-        key = await asyncio.to_thread(media.preview_path, selected, width, height, fps)
-        if key not in preview_jobs:
-            preview_jobs[key] = asyncio.create_task(asyncio.to_thread(media.preview, selected, width, height, fps))
-            preview_jobs[key].add_done_callback(lambda task: preview_jobs.pop(key, None))
-        result = await asyncio.shield(preview_jobs[key])
-        # Concurrent shots share the encoding task, but keep their own source clock.
-        return response({**result, "offset": selected.get("sourceRange", {}).get("start", 0) / fps})
+        result = await asyncio.to_thread(media.playback.status, media, selected, width, height, fps)
+        return response(result)
 
     @routes.get("/spool/api/projects/{project}/export")
     @endpoint
@@ -848,6 +849,9 @@ def register(server, store, media, executor=None):
             description["workflowData"] = await prepare_inputs(
                 {"workflow": description["workflow"], "prompt": description.get("prompt")}, request
             )
+        if request.query.get("projectId"):
+            document = await asyncio.to_thread(store.document, request.query["projectId"])
+            await asyncio.to_thread(media.prepare_playback, {**document, "clips": [], "media": [description]})
         return response(description)
 
     @routes.post("/spool/api/import-footage")
@@ -866,6 +870,9 @@ def register(server, store, media, executor=None):
             )
             for shot in footage["shots"]:
                 shot.update({key: source[key] for key in ("workflow", "prompt", "workflowData") if key in source})
+        if request.query.get("projectId"):
+            document = await asyncio.to_thread(store.document, request.query["projectId"])
+            await asyncio.to_thread(media.prepare_playback, {**document, "clips": [], "media": [source]})
         return response(footage)
 
     @routes.post("/spool/api/export")
@@ -904,7 +911,11 @@ def register(server, store, media, executor=None):
         if not take or take.get("placeholder"):
             raise ValueError("Select a video take in this project")
         fps = await asyncio.to_thread(store.frame_rate, request.match_info["project"])
-        cuts = await asyncio.to_thread(media.find_cuts, take["media"], fps, clip["in"], clip["out"])
+        document = await asyncio.to_thread(store.document, request.match_info["project"])
+        size = document.get("resolution") or {"width": 960, "height": 540}
+        cuts = await asyncio.to_thread(
+            media.find_cuts, take["media"], fps, clip["in"], clip["out"], size["width"], size["height"]
+        )
         return response({"cuts": cuts})
 
     @routes.post("/spool/api/projects/{project}/frame")

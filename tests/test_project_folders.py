@@ -1139,6 +1139,70 @@ class ProjectFolderTests(unittest.TestCase):
         self.assertEqual(clip["out"] - clip["in"], 12)
         self.assertEqual(clip["takes"][-1]["media"], metadata)
 
+    def test_single_media_lookup_reads_only_matching_media(self):
+        project = requests.accept(
+            self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}]
+        )
+        attempt = self.store.attempt(project["document"]["jobs"][0]["id"])
+        metadata = {"id": "render", "artifactId": "artifact", "kind": "image", "file": "assets/black.png", "frames": 12}
+        self.store.accept_execution(attempt["id"], "execution", None, {"primary": metadata, "artifacts": [metadata]})
+        with (
+            patch.object(self.store, "projected", side_effect=AssertionError("No projection")),
+            patch.object(self.store, "_projection_attempts", side_effect=AssertionError("No attempts")),
+        ):
+            self.assertEqual(self.store.media_record(project["id"], "render"), metadata)
+            self.assertEqual(self.store.media_record(project["id"], "original-media")["id"], "original-media")
+            with self.assertRaisesRegex(ValueError, "no longer"):
+                self.store.media_record(project["id"], "missing")
+        project = self.store.get(project["id"])
+        project["document"]["deletedTakeIds"] = [attempt["take_id"]]
+        self.store.save(project["id"], project["revision"], project["document"])
+        with self.assertRaisesRegex(ValueError, "no longer"):
+            self.store.media_record(project["id"], "render")
+
+    def test_preview_returns_preparing_while_encoder_is_blocked(self):
+        async def check():
+            server = SimpleNamespace(routes=web.RouteTableDef(), app=web.Application())
+            register(server, self.workspace, self.base_media)
+            server.app.cleanup_ctx.clear()
+            server.app.add_routes(server.routes)
+            entered, release = Event(), Event()
+            original = Media.preview
+            calls = []
+
+            def blocked(media, *args):
+                calls.append(args)
+                entered.set()
+                if not release.wait(10):
+                    raise AssertionError("Encoder not released")
+                return original(media, *args)
+
+            async with TestClient(TestServer(server.app)) as client:
+                with patch.object(Media, "preview", blocked):
+                    endpoint = "/spool/api/projects/" + self.project["id"] + "/media/original-media/preview"
+                    size = {"width": 96, "height": 64, "fps": 24}
+                    try:
+                        response = await client.post(endpoint, json=size)
+                        self.assertEqual(await response.json(), {"state": "preparing"})
+                        self.assertTrue(await asyncio.to_thread(entered.wait, 2))
+                        response = await client.post(endpoint, json=size)
+                        self.assertEqual(await response.json(), {"state": "preparing"})
+                        self.assertEqual(len(calls), 1)
+                    finally:
+                        release.set()
+                    queue = self.base_media.playback
+                    await asyncio.to_thread(queue.submit(self.media, calls[0][0], 96, 64, 24).result)
+                    response = await client.post(endpoint, json=size)
+                    result = await response.json()
+                    self.assertEqual(result["state"], "ready")
+                    path = self.media.resolve(result["file"])
+                    self.assertTrue(path.is_relative_to(self.store.runtime.parent))
+                    self.assertEqual(
+                        (await client.get("/spool/media/" + self.project["id"] + "/" + result["file"])).status, 200
+                    )
+
+        asyncio.run(check())
+
     def test_picture_preview_skips_audio_usage_with_a_shared_media_id(self):
         project = self.store.get(self.project["id"])
         picture = project["document"]["clips"][0]["takes"][0]["media"]
@@ -1168,10 +1232,17 @@ class ProjectFolderTests(unittest.TestCase):
             async with TestClient(TestServer(server.app)) as client:
                 response = await client.post(
                     "/spool/api/projects/" + project["id"] + "/media/" + picture["id"] + "/preview",
-                    json={"divisor": 1, "width": 96, "height": 64, "fps": 24},
+                    json={"width": 96, "height": 64, "fps": 24},
                 )
                 self.assertEqual(response.status, 200, await response.text())
                 result = await response.json()
+                if result.get("state") == "preparing":
+                    await asyncio.to_thread(self.base_media.playback.submit(self.media, picture, 96, 64, 24).result)
+                    response = await client.post(
+                        "/spool/api/projects/" + project["id"] + "/media/" + picture["id"] + "/preview",
+                        json={"width": 96, "height": 64, "fps": 24},
+                    )
+                    result = await response.json()
                 self.assertTrue(result["file"].endswith(".png"))
 
         asyncio.run(check())

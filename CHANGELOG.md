@@ -8,6 +8,11 @@ All notable changes to Spool are recorded here. Versions follow
 - Discard unpublished local changes after an interrupted save or project upgrade.
 - Keep project downloads and portable draft evidence working after takes are deleted from disk.
 - Prevent folder discovery from importing pending render outputs or duplicating takes when a receipt arrives during a scan.
+- Prepare one playback copy per source in a bounded background queue, at project
+  size without upscaling. Keep copies in the machine-local workspace cache and
+  remove the Full / 1/2 / 1/4 playback setting. Single-media reads skip take-ledger
+  projection, and playback requests return immediately while encoding continues.
+
 - Fetch compact take summaries in the studio and load full take evidence on demand.
   Current local reads bypass the shared project lock; settled receipts are checked
   less often. Keep completion times when diagnostic history expires after 30 days,

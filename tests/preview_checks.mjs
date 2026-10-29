@@ -1,5 +1,5 @@
 // Viewer playback preparation: sizing, in-flight sharing, failure and retry.
-import { createPreviews, QUALITY } from '../ui/preview.js';
+import { createPreviews } from '../ui/preview.js';
 
 const checks = [];
 const check = (label, ok) => {
@@ -14,12 +14,10 @@ const media = (id, kind = 'video') => ({
 });
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-check('Quality fractions are explicit', QUALITY.full === 1 && QUALITY.half === 2 && QUALITY.quarter === 4);
-
 // --- sizing ----------------------------------------------------------------
 {
   const asked = [];
-  let target = { width: 960, height: 540, fps: 24, quality: 'full' };
+  let target = { width: 960, height: 540, fps: 24 };
   const previews = createPreviews({
     target: () => target,
     request: async (m, size) => {
@@ -31,7 +29,7 @@ check('Quality fractions are explicit', QUALITY.full === 1 && QUALITY.half === 2
   check('An image or video needs preparing', previews.status(media('a')).state === 'preparing');
   check(
     'The size the caller wants is what is requested',
-    asked[0][1].width === 960 && asked[0][1].height === 540 && asked[0][1].divisor === 1 && asked[0][1].fps === 24,
+    asked[0][1].width === 960 && asked[0][1].height === 540 && asked[0][1].fps === 24,
   );
   await tick();
   check(
@@ -39,7 +37,7 @@ check('Quality fractions are explicit', QUALITY.full === 1 && QUALITY.half === 2
     previews.status(media('a')).state === 'ready' && previews.status(media('a')).file === 'previews/a.mp4',
   );
   check('The same media is not prepared twice', asked.length === 1);
-  target = { width: 480, height: 270, fps: 24, quality: 'half' };
+  target = { width: 480, height: 270, fps: 24 };
   check('A different playback size is prepared separately', previews.status(media('a')).state === 'preparing');
   await tick();
   check('Both sizes are remembered', asked.length === 2 && previews.size === 2);
@@ -60,7 +58,7 @@ check('Quality fractions are explicit', QUALITY.full === 1 && QUALITY.half === 2
     calls = 0;
   const changes = [];
   const previews = createPreviews({
-    target: () => ({ width: 960, height: 540, fps: 24, quality: 'full' }),
+    target: () => ({ width: 960, height: 540, fps: 24 }),
     request: async m => {
       calls++;
       if (fail) throw Error('ffmpeg is unavailable');
@@ -90,7 +88,7 @@ check('Quality fractions are explicit', QUALITY.full === 1 && QUALITY.half === 2
 {
   let release = null;
   const previews = createPreviews({
-    target: () => ({ width: 960, height: 540, fps: 24, quality: 'full' }),
+    target: () => ({ width: 960, height: 540, fps: 24 }),
     request: () =>
       new Promise(resolve => {
         release = () => resolve({ file: 'previews/shared.mp4' });
@@ -105,11 +103,11 @@ check('Quality fractions are explicit', QUALITY.full === 1 && QUALITY.half === 2
   check('A shared preparation completes once', previews.status(media('shared')).file === 'previews/shared.mp4');
 }
 
-// --- clearing on a quality change ------------------------------------------
+// --- clearing a project ------------------------------------------
 {
   let calls = 0;
   const previews = createPreviews({
-    target: () => ({ width: 960, height: 540, fps: 24, quality: 'full' }),
+    target: () => ({ width: 960, height: 540, fps: 24 }),
     request: async m => {
       calls++;
       return { file: 'previews/' + m.id + '.mp4' };
@@ -121,6 +119,33 @@ check('Quality fractions are explicit', QUALITY.full === 1 && QUALITY.half === 2
   previews.clear();
   check('Clearing forgets every preparation', previews.size === 0);
   check('A cleared media is prepared again', previews.status(media('c')).state === 'preparing' && calls === 2);
+}
+
+// Polling remains preparing until the server exposes the completed file.
+{
+  let release,
+    calls = 0;
+  const changes = [];
+  const previews = createPreviews({
+    target: () => ({ width: 960, height: 540, fps: 24 }),
+    request: async () => (++calls === 1 ? { state: 'preparing' } : { state: 'ready', file: '_playback/done.mp4' }),
+    wait: () =>
+      new Promise(resolve => {
+        release = resolve;
+      }),
+    changed: (_, entry) => changes.push(entry.state),
+  });
+  const entry = previews.status(media('poll'));
+  await Promise.resolve();
+  check('A queued response is still preparing', entry.state === 'preparing' && calls === 1);
+  const pending = entry.pending;
+  release();
+  await pending;
+  check(
+    'Polling discovers the ready copy',
+    entry.state === 'ready' && entry.file === '_playback/done.mp4' && calls === 2,
+  );
+  check('Completion notifies once', changes.join() === 'ready');
 }
 
 console.log('Previews: sizing, sharing, failure, retry and clearing passed');

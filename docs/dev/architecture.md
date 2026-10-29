@@ -60,7 +60,8 @@ executor. `__main__.py` runs the same routes standalone (`python -m spool`).
   optional and grouped media inputs: what blocks a request and what it leaves
   out), `graph_inputs.py`, `templates.py` (built-ins: Spool's own workflow files
   in `builtin_workflows/` and curated Comfy templates), `cloud_templates.json`.
-- **Media:** `media.py` (probing, proxies, staging, playback copies), `timing.py`
+- **Media:** `media.py` (probing, proxies, staging, playback copies),
+  `playback.py` (one host-wide background encoder and source-job deduplication), `timing.py`
   (source-frame clocks), `cuts.py` (hard-cut detection), `export.py` (MP4),
   `interchange.py` (OpenTimelineIO JSON, written without the OTIO package).
 - **Host:** `launcher.py` (starts a configured ComfyUI), `system.py` (what
@@ -68,8 +69,10 @@ executor. `__main__.py` runs the same routes standalone (`python -m spool`).
   showing files in the file manager), `credentials.py` (Cloud key), `requirements.py` (reported requirements), `wire.py` (exact integers).
 
 Storage and project-folder work runs off ComfyUI's event loop through
-`asyncio.to_thread`. Live SQLite stays on the local disk; project folders hold
-the published snapshot.
+`asyncio.to_thread`. Live SQLite and playback copies stay on the local disk; project folders hold
+the published snapshot, import proxies and other referenced media. Playback cache
+keys include source path/size/mtime, project size/FPS and the cache format version.
+The preview route enqueues work and returns preparing until its local file is ready.
 
 ## Project format
 

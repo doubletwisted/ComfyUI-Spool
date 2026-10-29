@@ -13,7 +13,7 @@ from pathlib import Path, PurePath
 from urllib.parse import quote
 
 from .errors import NotFound, RevisionConflict, OperationConflict
-from . import attempts, embedded, ledger, operations
+from . import attempts, embedded, ledger, operations, timing
 
 
 def read_only_uri(path):
@@ -1057,9 +1057,42 @@ class Store:
         return [t["media"] for c in document.get("clips", []) for t in c.get("takes", []) if not t.get("placeholder")]
 
     def media_record(self, project_id, media_id, kinds=None):
-        for record in ledger.media_records(self.projected(project_id)):
-            if record.get("id") == media_id and (kinds is None or record.get("kind") in kinds):
-                return record
+        with self.reading() as db:
+            row = db.execute("SELECT document FROM projects WHERE id=?", (project_id,)).fetchone()
+            if not row:
+                raise NotFound("Project not found")
+            document = json.loads(row[0])
+            for record in ledger.media_records(document):
+                if record.get("id") == media_id and (kinds is None or record.get("kind") in kinds):
+                    record = self._load(encode(record), db)
+                    timing.interpret(document, [record])
+                    return record
+            # Receipts share blobs; inspect only their primary media, never requests or graphs.
+            rows = db.execute(
+                """WITH receipts AS (
+                       SELECT a.take_id,a.created,a.rowid AS ordinal,coalesce(b.data,a.result) AS data
+                       FROM attempts a LEFT JOIN blobs b ON b.hash=json_extract(a.result,'$.__spool_blob__')
+                       WHERE a.project_id=? AND a.status='complete'
+                   )
+                   SELECT take_id,j.value AS media FROM receipts,
+                       json_each(CASE WHEN json_type(data,'$.primary')='object'
+                           THEN json_array(json_extract(data,'$.primary'))
+                           ELSE json_extract(data,'$.artifacts') END) j
+                   WHERE json_extract(j.value,'$.id')=?
+                     AND json_extract(j.value,'$.kind') IN ('video','image','audio')
+                     AND (json_type(data,'$.primary')='object' OR
+                          coalesce(json_extract(j.value,'$.artifactId'),json_extract(j.value,'$.id'))=
+                          json_extract(data,'$.primaryArtifactId'))
+                   ORDER BY created,ordinal""",
+                (project_id, media_id),
+            )
+            for row in rows:
+                if row["take_id"] in document.get("deletedTakeIds", []):
+                    continue
+                record = self._load(row["media"], db)
+                if kinds is None or record.get("kind") in kinds:
+                    timing.interpret(document, [record])
+                    return record
         raise ValueError("This footage is no longer in the project")
 
     def active_attempts(self, project_id):

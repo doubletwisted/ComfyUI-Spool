@@ -19,6 +19,8 @@ from .workflow_inputs import sources
 from .ownership import file_lock, atomic_replace
 from .timing import rate, frames_filter, tempo_filter
 
+PLAYBACK_VERSION = "playback-2"
+
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".opus"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".mkv", ".m4v"}
@@ -146,8 +148,10 @@ def check_frozen(path, asset, message="A frozen input changed before execution")
 
 
 class Media:
-    def __init__(self, root, input_root, output_root, temp_root, project_id=None):
+    def __init__(self, root, input_root, output_root, temp_root, project_id=None, playback_cache=None, playback=None):
         self.root = Path(root).resolve()
+        self.playback = playback
+        self.playback_cache = Path(playback_cache) if playback_cache else self.root / "cache" / "previews"
         self.project_id = project_id
         self.cache = self.root / ".spool" if project_id else self.root
         self.cache.mkdir(parents=True, exist_ok=True)
@@ -164,7 +168,38 @@ class Media:
     def for_project(self, store, project_id):
         if self.root == store.root:
             return self
-        return Media(store.root, *self.host_roots.values(), project_id=project_id)
+        return Media(
+            store.root,
+            *self.host_roots.values(),
+            project_id=project_id,
+            playback_cache=store.runtime.parent / "previews",
+            playback=self.playback,
+        )
+
+    def prepare_playback(self, document):
+        if self.playback is None:
+            return
+        from .ledger import media_records
+
+        size = document.get("resolution") or {"width": 960, "height": 540}
+        records = []
+        for clip in document.get("clips", []):
+            records.extend(
+                t["media"]
+                for t in clip.get("takes", [])
+                if t.get("id") == clip.get("takeId") and not t.get("placeholder")
+            )
+        records.extend(media_records(document))
+        for record in records:
+            if record.get("kind") not in ("image", "video") and not (
+                record.get("kind") == "audio" and record.get("fps")
+            ):
+                continue
+            try:
+                self.playback.submit(self, record, size["width"], size["height"], document.get("fps", 24))
+            except (ValueError, OSError):
+                # Missing sources do not prevent opening a project.
+                continue
 
     def input_source(self, value):
         """The file a Comfy input value names: the project file Spool staged it from, else Comfy's input folder."""
@@ -248,7 +283,11 @@ class Media:
         return folder / (artifact_id + extension)
 
     def resolve(self, relative):
-        path = contained(self.root, relative)
+        path = (
+            contained(self.playback_cache, relative.removeprefix("_playback/"))
+            if relative.startswith("_playback/")
+            else contained(self.root, relative)
+        )
         if not path.is_file() or path.suffix.lower() not in EXTENSIONS:
             raise ValueError("Source media is missing or unsupported")
         return path
@@ -996,7 +1035,7 @@ class Media:
                 pending.unlink(missing_ok=True)
         return {"file": output.relative_to(self.host_roots["input"]).as_posix(), "settings": settings}
 
-    def find_cuts(self, metadata, fps, start, end):
+    def find_cuts(self, metadata, fps, start, end, width=960, height=540):
         if metadata["kind"] != "video":
             raise ValueError("Select a video clip to detect cuts")
         file = metadata["file"]
@@ -1004,7 +1043,11 @@ class Media:
             metadata.get("frameRateMode") == "interpret"
             and metadata.get("review", {}).get("frameRateMode") != "interpret"
         ):
-            file = self.preview(metadata, 960, 540, fps)["file"]
+            if self.playback:
+                self.playback.submit(self, metadata, width, height, fps).result()
+                file = self.preview_result(metadata, width, height, fps)["file"]
+            else:
+                file = self.preview(metadata, width, height, fps)["file"]
             offset = metadata.get("sourceRange", {}).get("start", 0)
             start, end = start + offset, end + offset
         scores = scene_scores(find_tool("ffmpeg"), self.resolve(file), self.cache / "previews" / "cut-scores")
@@ -1013,27 +1056,26 @@ class Media:
     def preview_path(self, metadata, width, height, fps):
         source = self.original_source(metadata)["path"].resolve()
         stat = source.stat()
-        signature = json.dumps([str(source), stat.st_size, stat.st_mtime_ns, width, height, fps, "interpret-preview-1"])
+        signature = json.dumps(
+            [str(source), stat.st_size, stat.st_mtime_ns, width, height, float(fps), PLAYBACK_VERSION]
+        )
         key = hashlib.sha256(signature.encode()).hexdigest()[:24]
         extension = ".png" if metadata["kind"] == "image" else ".mp4"
-        return self.cache / "previews" / (key + extension)
+        return self.playback_cache / (key + extension)
 
     def preview(self, metadata, width, height, fps):
         """Cache a timeline-sized playback source, shared by shots from the same original."""
         source = self.original_source(metadata)
         output = self.preview_path(metadata, width, height, fps)
-        output.parent.mkdir(exist_ok=True)
+        output.parent.mkdir(parents=True, exist_ok=True)
         if not output.exists():
             pending = output.with_name(output.stem + "-" + uid() + output.suffix)
             try:
                 if metadata["kind"] == "image":
                     with Image.open(source["path"]) as image:
-                        picture = ImageOps.contain(
-                            ImageOps.exif_transpose(image).convert("RGBA"), (width, height), Image.Resampling.LANCZOS
-                        )
-                        canvas = Image.new("RGBA", (width, height))
-                        canvas.paste(picture, ((width - picture.width) // 2, (height - picture.height) // 2))
-                        canvas.save(pending)
+                        picture = ImageOps.exif_transpose(image).convert("RGBA")
+                        picture.thumbnail((width, height), Image.Resampling.LANCZOS)
+                        picture.save(pending)
                 else:
                     ffmpeg = find_tool("ffmpeg")
                     if not ffmpeg:
@@ -1053,11 +1095,13 @@ class Media:
                             "0:a?",
                             "-vf",
                             frames_filter(fps)
-                            + f",scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1",
+                            + f",scale=w='min({width},iw)':h='min({height},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1",
                             "-r",
                             str(fps),
                             "-c:v",
                             "libx264",
+                            "-threads",
+                            "2",
                             "-crf",
                             "18",
                             "-preset",
@@ -1085,11 +1129,16 @@ class Media:
                 pending.replace(output)
             finally:
                 pending.unlink(missing_ok=True)
+        return self.preview_result(metadata, width, height, fps)
+
+    def preview_result(self, metadata, width, height, fps):
+        output = self.preview_path(metadata, width, height, fps)
         return {
-            "file": output.relative_to(self.root).as_posix(),
+            "state": "ready",
+            "file": "_playback/" + output.name,
             "width": width,
             "height": height,
-            "offset": source["offset"] / fps,
+            "offset": metadata.get("sourceRange", {}).get("start", 0) / fps,
         }
 
     def export_frame(self, metadata, frame, fps):

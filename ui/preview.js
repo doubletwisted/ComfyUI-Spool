@@ -1,47 +1,43 @@
-// Viewer playback preparation: which size a media needs, which preparation is in
-// flight, what failed and how a failure is retried.
-//
-// The viewer used to own this as a cache of half-built entries plus a null return
-// value, and a failure wrote `entry.error` permanently: the only recovery was to
-// change preview resolution, which happened to clear the cache. Preparing also
-// saved the whole project so the server could read two numbers from the document;
-// the caller now states the size it wants.
-export const QUALITY = { full: 1, half: 2, quarter: 4 };
-
-export function createPreviews({ target, request, changed }) {
+// Shared playback preparation for the viewer, review audio and thumbnails.
+export function createPreviews({
+  target,
+  request,
+  changed,
+  wait = () => new Promise(resolve => setTimeout(resolve, 250)),
+}) {
   const entries = new Map();
-
   const keyFor = media => {
     const size = target();
-    return [media.originalFile || media.file, size.width, size.height, size.fps, size.quality].join('|');
+    return [media.originalFile || media.file, size.width, size.height, size.fps].join('|');
   };
 
-  // Returns the current entry and starts preparing on first use.
   function status(media) {
-    if (!media?.id || !['video', 'image'].includes(media.kind)) return { state: 'direct' };
+    if (!media?.id || !['video', 'image', 'audio'].includes(media.kind)) return { state: 'direct' };
     const key = keyFor(media),
       held = entries.get(key);
     if (held) return held;
-    const entry = { state: 'preparing' };
+    const entry = { state: 'preparing', file: undefined, error: undefined, pending: null };
     entries.set(key, entry);
-    (async () => {
-      const size = target();
+    const size = target();
+    entry.pending = (async () => {
       try {
-        Object.assign(
-          entry,
-          await request(media, {
-            divisor: QUALITY[size.quality],
-            width: size.width,
-            height: size.height,
-            fps: size.fps,
-          }),
-        );
-        entry.state = 'ready';
+        while (entries.get(key) === entry) {
+          const result = await request(media, { width: size.width, height: size.height, fps: size.fps });
+          if (entries.get(key) !== entry) return;
+          if (result.state === 'preparing') {
+            await wait();
+            continue;
+          }
+          Object.assign(entry, result);
+          entry.state = 'ready';
+          break;
+        }
       } catch (error) {
         entry.state = 'failed';
         entry.error = error.message;
       }
-      changed(media, entry);
+      entry.pending = null;
+      if (entries.get(key) === entry) changed(media, entry);
     })();
     return entry;
   }
@@ -57,7 +53,6 @@ export function createPreviews({ target, request, changed }) {
   function clear() {
     entries.clear();
   }
-
   return {
     status,
     retry,

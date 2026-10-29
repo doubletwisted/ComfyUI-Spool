@@ -112,7 +112,7 @@
       check('A take without a graph disables inspector Open', d.getElementById('editClipWorkflow').disabled);
     check('A take without a graph omits the irrelevant context action', !menu());
     close();
-    const size = { divisor: 1, width: 32, height: 32, fps: 24 };
+    const size = { width: 32, height: 32, fps: 24 };
     const preview = (media, body) =>
       fetch('/spool/api/projects/' + n.projectKey + '/media/' + media + '/preview', {
         method: 'POST',
@@ -123,7 +123,7 @@
       'Preparing a preview accepts the playback size it was asked for',
       (await preview('embedded-source', size)).ok,
     );
-    check('Preparing a preview requires that size', (await preview('embedded-source', { divisor: 1 })).status === 400);
+    check('Preparing a preview requires that size', (await preview('embedded-source', {})).status === 400);
     check(
       'Preparing a preview rejects odd dimensions',
       (await preview('embedded-source', { ...size, width: 31 })).status === 400,

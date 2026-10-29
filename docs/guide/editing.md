@@ -114,9 +114,13 @@ shorter than the take.
 
 - **Space** plays and pauses, the arrow keys step frames and cuts, **Home** and
   **End** jump to the ends, **F** goes fullscreen.
-- **Preview resolution** offers Full, 1/2 and 1/4 of the timeline size. The first
-  use of a size prepares a playback copy; later uses reuse it. Export always reads
-  the original files at full timeline resolution.
+- Playback copies prepare in the background when you import footage, receive takes
+  or open a project. One copy per source uses the project size without enlarging
+  the original, at the project frame rate. The viewer shows **Preparing…** until
+  it is ready. Copies stay in this computer's workspace cache beside its working
+  database; shared project folders keep originals, import proxies and shot files.
+  Export always reads the originals. Older `.spool/previews` playback copies are
+  unused and can be reclaimed with `python -m spool prune`.
 - Right-click the viewer for **Export frame** (a full-resolution PNG), **Fit to
   viewer** and **Fullscreen**.
 

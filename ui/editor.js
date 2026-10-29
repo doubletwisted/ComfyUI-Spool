@@ -227,7 +227,9 @@ async function startEditor(isFailed) {
   const thumbnails = createThumbnails(url, diagnostics, $('viewerStage'), async (m, rate) => {
     const entry = reviewSource(m, rate);
     if (entry.pending) await entry.pending;
-    return reviewSource(m, rate);
+    const ready = reviewSource(m, rate);
+    if (ready.state === 'failed') throw Error(ready.error);
+    return ready;
   });
   const takeHoverLabel = document.createElement('span');
   takeHoverLabel.className = 'take-hover-label';
@@ -348,6 +350,7 @@ async function startEditor(isFailed) {
       trimSingle = !!view.trimSingle;
     }
   } catch (error) {}
+  delete state.previewQuality;
   let selectedTakeClip = state.takeSelection?.clipId || null,
     selectedTakeIds = state.takeSelection?.ids || [],
     takeSelectionAnchor = state.takeSelection?.anchor || null;
@@ -362,7 +365,6 @@ async function startEditor(isFailed) {
       snap: state.snap,
       muted: state.muted,
       loop: state.loop,
-      previewQuality: previewQuality(),
       trimSingle,
       viewerZoom,
       activeVideoTrack,
@@ -1775,7 +1777,6 @@ async function startEditor(isFailed) {
     setFrame,
     viewerData,
     updateViewer,
-    previewQuality,
     previewFile,
     renderPlaceholderState,
     reviewSource,
@@ -1788,7 +1789,6 @@ async function startEditor(isFailed) {
     frameStep,
     ensureAudioContext,
     syncAudio,
-    setPreviewQuality,
     previews,
   } = viewer;
 
@@ -2602,7 +2602,6 @@ async function startEditor(isFailed) {
   function viewerHit(e) {
     return layoutControlsOwner.viewerHit(e);
   }
-  $('previewQuality').onchange = e => setPreviewQuality(e.target.value);
   // A failed preparation is retryable in place instead of for the rest of the session.
   $('viewerResolution').title = 'Click to retry a failed playback preparation';
   $('viewerResolution').addEventListener('click', () => {
@@ -2728,7 +2727,7 @@ async function startEditor(isFailed) {
     $('editor').classList.add('studio-sidebar');
     const settings = document.createElement('div');
     settings.className = 'viewer-settings';
-    settings.append($('viewerZoom'), $('previewQuality'));
+    settings.append($('viewerZoom'));
     $('viewer').querySelector('.viewer-meta').prepend(settings, $('monitorMute'));
     document.querySelector('.tools').append(document.querySelector('.history-tools'));
   }

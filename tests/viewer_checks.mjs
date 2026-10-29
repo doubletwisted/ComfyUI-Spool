@@ -46,13 +46,13 @@ try {
   });
   const media = { id: 'movie', kind: 'video', file: 'movie.mp4' };
   assert.equal(viewer.previewFile(media), null);
-  assert.deepEqual(requests[0].size, { divisor: 2, width: 480, height: 270, fps: 24 });
-  assert.ok(nodes.get('viewerResolution').textContent.startsWith('Preparing 1/2'));
+  assert.deepEqual(requests[0].size, { width: 960, height: 540, fps: 24 });
+  assert.equal(nodes.get('viewerResolution').textContent, 'Preparing\u2026');
   // A replaced project and changed frame rate must be read at request time.
   state = { previewQuality: 'quarter', muted: false };
   fps = 30;
   viewer.previewFile(media);
-  assert.deepEqual(requests[1].size, { divisor: 4, width: 240, height: 136, fps: 30 });
+  assert.deepEqual(requests[1].size, { width: 960, height: 540, fps: 30 });
   viewer.ensureAudioContext();
   assert.equal(resumed, 1, 'A suspended audio context resumes using its native state property');
 } finally {

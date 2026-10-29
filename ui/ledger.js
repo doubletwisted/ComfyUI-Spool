@@ -49,7 +49,6 @@ export const VIEW_FIELDS = Object.freeze([
   'loop',
   'trimSingle',
   'viewerZoom',
-  'previewQuality',
   'activeVideoTrack',
 ]);
 export const EDITOR_TAKE_FIELDS = Object.freeze([
@@ -63,7 +62,7 @@ export const EDITOR_TAKE_FIELDS = Object.freeze([
   'recipeGraph',
 ]);
 export const TAKE_SUMMARY_FIELDS = Object.freeze(['attemptId', 'workflowVersion', 'inputValues', 'bindings']);
-export const UNDO_SKIPS = Object.freeze([...RECORD_FIELDS, 'zoom', 'snap', 'muted', 'loop', 'previewQuality']);
+export const UNDO_SKIPS = Object.freeze([...RECORD_FIELDS, 'zoom', 'snap', 'muted', 'loop']);
 // What the editor saves, in its established order; the server owns jobs' recoverable results.
 const SAVED_ORDER = [
   'deletedTakeIds',
@@ -106,6 +105,7 @@ export function savedDocument(state) {
 /** @param {import('./types.js').Document} doc */
 export function authored(doc) {
   const { jobs, recoverableResults, ...document } = doc;
+  delete document['previewQuality'];
   return copy({ ...document, clips: doc.clips.map(c => ({ ...c, takes: c.takes.filter(t => !t.generated) })) });
 }
 // How each edit field compares: defaults stand in for absent values and id sets ignore order.

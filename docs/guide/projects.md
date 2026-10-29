@@ -23,7 +23,11 @@ opened. A clip keeps its folder when renamed.
 `ComfyUI/user/spool/cache` and publishes the snapshot to the folder under a lock,
 so the live database never runs on a network drive. The local cache can always be
 rebuilt from the project folder. After an interrupted save or upgrade, reopening
-restores the last published snapshot and retries any required upgrade.
+restores the last published snapshot and retries any required upgrade. Playback
+copies also live in this machine-local cache, under each project's `previews`
+folder. They prepare in the background and are never published to shared storage.
+Import proxies, posters, waveforms and shot files remain in the project folder
+because the edit references them.
 
 **Download project file** in the top bar saves a project file; **Open project
 file** imports one. The file contains the edit, workflow versions and media
@@ -106,7 +110,9 @@ python -m spool reclaim --storage "D:/Projects/My project" --json
 ```
 
 Both report what they would do. Add `--confirm` to act. `prune` removes previews
-no clip uses; inputs and outputs are kept. `reclaim` also compacts the project
+no clip uses, including obsolete playback copies from older versions in
+`.spool/previews`; inputs and outputs are kept. The preview budget and grace
+window still apply. `reclaim` also compacts the project
 database and publishes a new snapshot.
 
 ## Diagnostics

@@ -14,7 +14,7 @@ export const BUDGET = 1800000;
 const slim = state => {
   const entry = {};
   for (const [key, value] of Object.entries(state))
-    if (!VIEW_KEYS.includes(key) && key !== '_label') entry[key] = value;
+    if (!VIEW_KEYS.includes(key) && key !== '_label' && key !== 'previewQuality') entry[key] = value;
   entry.clips = (state.clips || []).map(clip => ({ ...clip, takes: (clip.takes || []).map(take => take.id) }));
   entry.audioClips = state.audioClips || [];
   return entry;
@@ -37,7 +37,8 @@ export function createHistory({ limit = LIMIT, budget = BUDGET } = {}) {
   function hydrate(entry) {
     if (!entry || !Array.isArray(entry.clips)) return null;
     const restored = {};
-    for (const [key, value] of Object.entries(entry)) if (key !== '_label') restored[key] = value;
+    for (const [key, value] of Object.entries(entry))
+      if (key !== '_label' && key !== 'previewQuality') restored[key] = value;
     restored.clips = [];
     for (const clip of entry.clips) {
       const members = [];
@@ -171,7 +172,10 @@ export function createHistory({ limit = LIMIT, budget = BUDGET } = {}) {
     for (const [id, take] of Object.entries(parsed.takes || {})) if (!takes.has(id)) takes.set(id, take);
     // Adopt only a chain that reconstructs completely, so a trimmed or corrupt
     // blob cannot make an undo restore a partial edit.
-    for (const entry of [...parsed.undo, ...parsed.redo]) if (!hydrate(entry)) return 0;
+    for (const entry of [...parsed.undo, ...parsed.redo]) {
+      if (!hydrate(entry)) return 0;
+      delete entry.previewQuality;
+    }
     undo.length = 0;
     redo.length = 0;
     undo.push(...parsed.undo);
