@@ -3321,8 +3321,7 @@ async function startEditor(isFailed) {
   async function pollProject(automatic) {
     const active = visibleJobs().some(j => !G.TERMINAL.includes(j.status));
     if (!automatic || (!viewer.playing && projectSync.due(active))) {
-      projectSync.didPoll();
-      await projectEdit.poll();
+      projectSync.didPoll(await projectEdit.poll());
     }
     // Agent focus expires after 15 seconds; a small heartbeat keeps it current.
     if (Date.now() - focusPoll >= 10000 && editorVisible()) {

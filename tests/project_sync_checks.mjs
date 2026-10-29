@@ -136,10 +136,14 @@ const guarded = createProjectSync({
   projectId: 'p',
   url: '/ws',
   open: () => fake,
+  // The studio's scheduler: poll when due, and settle the hint only if the poll settled.
   refresh: () => {
-    latest = edit.poll();
+    latest = tick();
   },
 });
+const tick = async () => {
+  if (guarded.due(false)) guarded.didPoll(await edit.poll());
+};
 guarded.start();
 const push = async () => {
   fake.onmessage({ data: JSON.stringify({ ...contract, data: { ...contract.data, projectId: 'p' } }) });
@@ -162,6 +166,14 @@ assert.equal(authored.project, 'local', 'Push cannot replace a focused field wit
 focused = false;
 await push();
 assert.equal(authored.project, 'remote', 'The next hint adopts once the field is released');
+remote.revision = 3;
+remote.document.project = 'after gesture';
+gesture = true;
+await push();
+assert.equal(authored.project, 'remote', 'A gesture defers the hinted read');
+gesture = false;
+await tick();
+assert.equal(authored.project, 'after gesture', 'A deferred hint is read on the next tick without another hint');
 const beforeDraft = reads;
 authored.project = 'unsaved draft';
 await push();

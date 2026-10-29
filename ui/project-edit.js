@@ -115,8 +115,9 @@ export function createProjectEdit({ project, document, apply, request, blocked, 
       signature() !== last
     );
   }
+  // False when local editing skipped or deferred the read, so a pushed hint stays pending.
   async function poll() {
-    if (polling || pollBlocked()) return;
+    if (polling || pollBlocked()) return false;
     polling = true;
     const started = checkpoint();
     try {
@@ -128,7 +129,7 @@ export function createProjectEdit({ project, document, apply, request, blocked, 
         signature() !== started.signature ||
         value.revision < revision
       )
-        return;
+        return false;
       const withoutJobs = ({ jobs, ...document }) => document;
       const progressOnly =
         !value.document ||
@@ -155,12 +156,12 @@ export function createProjectEdit({ project, document, apply, request, blocked, 
         }
         syncToken = value.syncToken;
         status();
-        return;
+        return true;
       }
       if (value.revision !== revision || JSON.stringify(value.document.jobs) !== JSON.stringify(projectJobs())) {
         if (blocked('replace')) {
           // Ledger arrivals can merge without repainting an input being edited.
-          if (value.revision !== revision) return;
+          if (value.revision !== revision) return false;
           applyProject(value, false);
           status();
         } else accept(value);
@@ -168,8 +169,10 @@ export function createProjectEdit({ project, document, apply, request, blocked, 
         syncToken = value.syncToken;
         status();
       }
+      return true;
     } catch (error) {
       notify({ kind: 'connection', message: error.message });
+      return true;
     } finally {
       polling = false;
     }

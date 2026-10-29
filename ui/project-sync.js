@@ -58,7 +58,9 @@ export function createProjectSync({
       connect();
       return pending || now() - lastPoll >= (connected ? 30000 : active ? 1200 : 15000);
     },
-    didPoll() {
+    // A poll that local editing skipped or deferred keeps its hint for the next tick.
+    didPoll(settled = true) {
+      if (!settled) return;
       lastPoll = now();
       pending = false;
     },
