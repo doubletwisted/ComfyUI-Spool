@@ -30,46 +30,56 @@
   n.selectClip('shot');
   await n.flush();
   check(
-    $('inspectorContent').querySelector('.generation-summary').textContent.includes('18446744073709551615'),
+    $('inspectorContent').querySelector('[data-exact-integer]').value === '18446744073709551615',
     'Summary shows the exact saved uint64 seed',
   );
-  edit('generationSeedMode', 'same');
+  const seedMode = value => {
+    const field = d.querySelector('[data-seed-mode]');
+    field.value = value;
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  seedMode('same');
   edit('nativeCount', '3');
   await n.flush();
   const before = await read(),
     jobsBefore = before.document.jobs.length;
-  $('reviewGenerationInputs').click();
-  await wait(() => field('generationInputsDone'));
-  const image = root().querySelector('.generation-input img');
-  await wait(() => image.complete && image.naturalWidth > 0);
-  check(
-    image.naturalWidth === 64 &&
-      root().querySelector('.generation-values').textContent.includes('18446744073709551615'),
-    'Actual input review decodes the source and retains exact control values',
-  );
+  const preview = await w
+    .fetch('/spool/api/projects/' + n.projectKey + '/generation-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revision: before.revision, clipId: 'shot' }),
+    })
+    .then(async response => {
+      const value = await response.json();
+      if (!response.ok) throw Error(value.error);
+      return value;
+    });
+  const image = new Image();
+  image.src = '/spool/api/input/' + encodeURIComponent(preview.assets[0].frozen);
+  await image.decode();
+  check(image.naturalWidth === 64, 'Actual input preview decodes the 64-pixel source');
   check(
     JSON.stringify(await read()) === JSON.stringify(before),
-    'Reviewing actual inputs changes no project revision, clip, takes or queue',
+    'Preparing actual inputs changes no authored project, takes or queue',
   );
-  field('generationInputsDone').click();
   $('generate').click();
-  await wait(() => field('generationReviewQueue'));
+  await wait(() => !field('modalOverlay').hidden && field('generationReviewQueue'));
   check(
-    root().getElementById('modal').textContent.includes('Same saved settings'),
+    root().getElementById('modal').textContent.includes('Fixed seeds'),
     'Same-settings batches are explicit before submission',
   );
   field('generationReviewCancel').click();
   check((await read()).document.jobs.length === jobsBefore, 'Cancelling generation review submits nothing');
-  edit('generationSeedMode', 'different');
+  seedMode('increment');
   await n.flush();
   const saved = await read();
-  check(saved.document.clips[0].seedMode === 'different', 'Seed choice persists in the shared shot');
+  check(saved.document.clips[0].seedMode === 'increment', 'Seed choice persists in the shared shot');
   $('generate').click();
-  await wait(() => field('generationReviewQueue'));
+  await wait(() => !field('modalOverlay').hidden && field('generationReviewQueue'));
   const review = root().getElementById('modal').textContent;
   check(
-    review.includes('18446744073709551615') && review.includes('Seed: 0') && review.includes('Seed: 1'),
-    'Batch review shows exact distinct seeds including uint64 wrap',
+    ['Seed: 0', 'Seed: 1', 'Seed: 2'].every(seed => review.includes(seed)),
+    'Batch review increments before generation and wraps uint64 to 0, 1, 2',
   );
   const fetch = w.fetch;
   let queuedBody,
@@ -106,14 +116,15 @@
   const jobs = after.document.jobs.slice(jobsBefore),
     requests = await Promise.all(jobs.map(j => w.fetch('/spool/api/attempts/' + j.id).then(r => r.json())));
   check(
-    requests.map(a => JSON.stringify(a.request.inputValues.seed)).join('|') ===
-      JSON.stringify({ __spool_int__: '18446744073709551615' }) + '|0|1',
+    requests.map(a => String(a.request.inputValues.seed?.__spool_int__ ?? a.request.inputValues.seed)).join('|') ===
+      '0|1|2',
     'Real CPU attempts freeze the exact reviewed seeds',
   );
   check(
     after.document.clips[0].takeId === 'original' &&
-      JSON.stringify(after.document.clips[0].inputValues) === JSON.stringify(before.document.clips[0].inputValues),
-    'New results preserve the chosen take and baseline controls',
+      String(after.document.clips[0].inputValues.seed?.__spool_int__ ?? after.document.clips[0].inputValues.seed) ===
+        '2',
+    'Accepted retry advances Increment seeds once and preserves the chosen take',
   );
   check(
     jobs.every(j => j.takeNumber && j.createdAt && j.finishedAt && j.seeds.length === 1),
@@ -140,7 +151,7 @@
   if (!$('rendersPanel').hidden) $('closeRenders').click();
   $('showQueue').click();
   check(
-    field('queueList').querySelector('progress')?.value === 3 && field('queueList').textContent.includes('3 of 8'),
+    field('queueList').querySelector('progress')?.value === 37.5 && field('queueList').textContent.includes('3 of 8'),
     'Observed node progress is shown as node steps, separate from job stage',
   );
   Object.keys(chosen).forEach(k => delete chosen[k]);

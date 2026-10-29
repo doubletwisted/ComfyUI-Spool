@@ -106,8 +106,9 @@ async function connect(url) {
             await sleep(50);
           }
         }
+        await evaluate("window.spoolNative.selectClip('shot')");
         const geometry = await evaluate(
-          "(()=>{const w=window,d=w.document,s=d.querySelector('.generation-summary'),c=d.getElementById('inspectorContent');return {width:s.getBoundingClientRect().width,contentWidth:c.clientWidth,overflow:c.scrollWidth>c.clientWidth};})()",
+          "(()=>{const w=window,d=w.document,s=d.querySelector('.seed-controls'),c=d.getElementById('inspectorContent');return {width:s.getBoundingClientRect().width,contentWidth:c.clientWidth,overflow:c.scrollWidth>c.clientWidth};})()",
         );
         assert.ok(geometry.width > 180 && !geometry.overflow, 'Visible generation summary fits the actual editor');
         const result = await evaluate(fs.readFileSync(path.join(__dirname, 'generation_browser_checks.js'), 'utf8'));
