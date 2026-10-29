@@ -9,10 +9,20 @@ import threading
 import uuid
 from collections import OrderedDict
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePath
+from urllib.parse import quote
 
 from .errors import NotFound, RevisionConflict, OperationConflict
 from . import attempts, embedded, ledger, operations
+
+
+def read_only_uri(path):
+    """A SQLite URI that opens path read-only and unchanging, on UNC shares too.
+
+    SQLite accepts only an empty or "localhost" URI authority, so a UNC host stays in the path.
+    """
+    posix = (path if isinstance(path, PurePath) else Path(path)).as_posix()
+    return "file:" + ("//" if posix.startswith("/") else "///") + quote(posix, safe="/:") + "?mode=ro&immutable=1"
 
 
 def uid():
@@ -737,7 +747,7 @@ class Store:
     @contextmanager
     def connect(self):
         db = (
-            sqlite3.connect(self.path.as_uri() + "?mode=ro&immutable=1", uri=True)
+            sqlite3.connect(read_only_uri(self.path), uri=True)
             if self.read_only
             else sqlite3.connect(self.path, timeout=30)
         )

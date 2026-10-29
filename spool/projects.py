@@ -17,7 +17,7 @@ from .errors import NotFound
 from . import take_files
 from .media import Media
 from .ownership import file_lock, atomic_replace
-from .store import Store, Conflict, uid, SCHEMA_VERSION, validate_import
+from .store import Store, Conflict, uid, SCHEMA_VERSION, validate_import, read_only_uri
 from .durable import atomic_json, write as durable_write
 from . import __version__
 
@@ -46,7 +46,7 @@ class ProjectStore(Store):
         self.snapshot = folder / "project.spool"
         # Refuse newer SQLite formats before creating even the lock/cache folders.
         if self.snapshot.exists():
-            with closing(sqlite3.connect(self.snapshot.as_uri() + "?mode=ro&immutable=1", uri=True)) as db:
+            with closing(sqlite3.connect(read_only_uri(self.snapshot), uri=True)) as db:
                 if db.execute("PRAGMA user_version").fetchone()[0] > SCHEMA_VERSION:
                     raise ValueError("This Spool project needs a newer extension version")
         key = hashlib.sha256(str(folder).encode()).hexdigest()
@@ -197,7 +197,7 @@ class ProjectStore(Store):
                         atomic_json(self.read_stamp, signature)
                     finally:
                         pending.unlink(missing_ok=True)
-            with closing(sqlite3.connect(self.read_runtime.as_uri() + "?mode=ro&immutable=1", uri=True)) as db:
+            with closing(sqlite3.connect(read_only_uri(self.read_runtime), uri=True)) as db:
                 db.row_factory = sqlite3.Row
                 yield db
 

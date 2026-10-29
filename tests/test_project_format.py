@@ -16,7 +16,8 @@ from PIL import Image, PngImagePlugin
 
 from spool import durable, ledger, maintenance, receipts, sidecars, take_workflow
 from spool.projects import ProjectStore, Workspace
-from spool.store import Conflict, SCHEMA_VERSION, Store, encode
+from spool.store import Conflict, SCHEMA_VERSION, Store, encode, read_only_uri
+from pathlib import PurePosixPath, PureWindowsPath
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -70,6 +71,26 @@ class ProjectFormatTests(unittest.TestCase):
 
     def store(self):
         return Store(self.folder, filename="project.spool")
+
+    def test_read_only_uris_open_shares_and_unusual_names(self):
+        # SQLite refuses a URI host, so pathlib's file://server/share form fails for every UNC project.
+        self.assertEqual(
+            read_only_uri(PureWindowsPath("//NAS02/Comfy/spool/Shot #1/project.spool")),
+            "file:////NAS02/Comfy/spool/Shot%20%231/project.spool?mode=ro&immutable=1",
+        )
+        self.assertEqual(
+            read_only_uri(PureWindowsPath("C:/Spool/a%b/project.spool")),
+            "file:///C:/Spool/a%25b/project.spool?mode=ro&immutable=1",
+        )
+        self.assertEqual(
+            read_only_uri(PurePosixPath("/srv/x?y/p.spool")), "file:///srv/x%3Fy/p.spool?mode=ro&immutable=1"
+        )
+        folder = self.root / "Shot #1 50% done"
+        folder.mkdir()
+        with closing(sqlite3.connect(folder / "p.spool")) as db:
+            db.execute("PRAGMA user_version=6")
+        with closing(sqlite3.connect(read_only_uri(folder / "p.spool"), uri=True)) as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 6)
 
     def test_fixture_migration_preserves_every_read_contract(self):
         self.media_file()
