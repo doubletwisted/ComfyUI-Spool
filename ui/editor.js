@@ -1945,6 +1945,7 @@ async function startEditor(isFailed) {
     getExperimentRetry: () => experimentRetry,
     submitExperiment,
     getAddGraphButton: () => addGraphButton,
+    renderInspector: () => renderInspector(),
   });
   function projectSettings() {
     return projectDialogsOwner.projectSettings();
