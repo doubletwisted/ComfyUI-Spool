@@ -8,10 +8,11 @@
   if (location.origin !== window.__spoolBrowserOrigin || !n || n.state.project !== 'Embedded take workflow QA')
     throw Error('Use the owned embedded-workflow QA project on the runner host');
   const B = await import('/spool/ui/bridge.js'),
+    P = await import('/spool/ui/protocol.js'),
     channel = B.openChannel('embedded-workflow-qa'),
     opened = [];
   const stop = B.serve(channel, {
-    ping: () => ({ connected: true, workflowLinks: true }),
+    ping: () => ({ bridgeVersion: P.BRIDGE_VERSION, connected: true, workflowLinks: true }),
     open: payload => {
       opened.push(payload);
       return { opened: true };

@@ -3,6 +3,7 @@
   const n = spoolNative,
     $ = id => document.getElementById(id),
     B = await import('/spool/ui/bridge.js'),
+    P = await import('/spool/ui/protocol.js'),
     checks = [],
     opened = [],
     requests = [];
@@ -19,7 +20,7 @@
     };
   const channel = B.openChannel('new-workflow-qa'),
     stop = B.serve(channel, {
-      ping: () => ({ connected: true, workflowLinks: true }),
+      ping: () => ({ bridgeVersion: P.BRIDGE_VERSION, connected: true, workflowLinks: true }),
       open: payload => {
         opened.push(payload);
         return { opened: true };

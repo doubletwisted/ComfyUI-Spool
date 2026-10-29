@@ -3,7 +3,8 @@
     $ = selector => document.querySelector(selector),
     checks = [],
     shot = () => n.state.clips.find(c => c.id === 'shot'),
-    B = await import('/spool/ui/bridge.js');
+    B = await import('/spool/ui/bridge.js'),
+    P = await import('/spool/ui/protocol.js');
   const check = (label, ok) => {
     if (!ok) throw Error(label);
     checks.push(label);
@@ -99,7 +100,7 @@
   const channel = B.openChannel('controlnet-controls-qa'),
     opened = [],
     stop = B.serve(channel, {
-      ping: () => ({ connected: true, workflowLinks: true }),
+      ping: () => ({ bridgeVersion: P.BRIDGE_VERSION, connected: true, workflowLinks: true }),
       open: data => {
         opened.push(data);
         return { opened: true };
