@@ -161,6 +161,10 @@ before sending it. Results are copied into the clip's folder and checked against
 that record before they become takes. New takes never replace the take in the
 edit.
 
+Queue requests use the same defaults in embedded and standalone Spool: an
+omitted count means one take. An explicit empty item list is rejected rather
+than replaced with another selection. Scoped experiments use the same item form.
+
 Local and Deadline dispatch refuse host hooks that change the frozen workflow's
 controls, dependencies or saver paths. Apply a compatible graph before trying
 again.

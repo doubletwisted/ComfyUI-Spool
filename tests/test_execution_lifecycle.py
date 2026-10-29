@@ -4,10 +4,14 @@ import asyncio
 import unittest
 from types import SimpleNamespace
 
+from aiohttp import web
+from aiohttp.test_utils import TestClient, TestServer
+
 from spool import requests
 from spool.execution import LocalExecutor
 from spool.media import Media
 from spool.projects import Workspace
+from spool.routes import register
 import test_project_folders as fixtures
 
 
@@ -63,3 +67,37 @@ class ExecutionLifecycleTests(unittest.TestCase):
         self.assertTrue(self.store.accept_execution(identity, "verified-late-receipt", None, {}))
         self.assertEqual(self.store.attempt(identity)["status"], "complete")
         self.assertFalse(self.store.transition(identity, "failed", expected="complete"))
+
+    def test_queue_normalization_matches_in_both_hosts(self):
+        async def check():
+            for embedded in (False, True):
+                server = SimpleNamespace(routes=web.RouteTableDef(), app=web.Application())
+                executor = self.executor(self.workspace, self.base_media) if embedded else None
+                if executor:
+                    executor.disabled_reason = "Test accepts without dispatch"
+                register(server, self.workspace, self.base_media, executor)
+                server.app.cleanup_ctx.clear()
+                server.app.add_routes(server.routes)
+                async with TestClient(TestServer(server.app)) as client:
+                    for index, (payload, count) in enumerate(
+                        [
+                            ({"clips": ["clip-a"]}, 1),
+                            ({"clips": ["clip-a"], "items": []}, 0),
+                            ({"clips": ["clip-a"], "count": 2}, 2),
+                            ({"clips": [], "items": [{"clipId": "clip-a", "count": 1}]}, 1),
+                        ]
+                    ):
+                        before = len(self.store.get(self.project["id"])["document"]["jobs"])
+                        response = await client.post(
+                            "/spool/api/projects/" + self.project["id"] + "/queue",
+                            json={
+                                **payload,
+                                "revision": self.project["revision"],
+                                "operationId": f"{embedded}-{index}",
+                            },
+                        )
+                        self.assertEqual(response.status, 200 if count else 400, await response.text())
+                        after = len(self.store.get(self.project["id"])["document"]["jobs"])
+                        self.assertEqual(after - before, count)
+
+        asyncio.run(check())

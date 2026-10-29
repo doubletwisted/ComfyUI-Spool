@@ -41,6 +41,8 @@ First public release.
 
 ### Generation
 
+- Embedded and standalone queue requests use the same defaults: omitted count
+  means one take, and an explicit empty item list is rejected.
 - Cloud storage, frozen-input checks and download checksums run off the host's
   event loop so slow shared folders do not stall the studio.
 - An interrupted Deadline cancellation can be retried after checking job

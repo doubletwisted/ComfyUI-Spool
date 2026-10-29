@@ -331,6 +331,16 @@ def preview(store, media, project_id, revision, clip_id):
     }
 
 
+def queue_items(data):
+    """Normalize the two queue forms before either host or commands freeze requests."""
+    items = data.get("items")
+    if items is None:
+        items = [{"clipId": clip_id, "count": data.get("count", 1)} for clip_id in data.get("clips", [])]
+    if not isinstance(items, list) or not 1 <= len(items) <= 100:
+        raise ValueError("Supply 1-100 clip requests")
+    return items
+
+
 def accept(store, media, project_id, revision, items, operation_id=None, actor="human", experiment=None, scope=None):
     operation_id = operation_id or uid()
     if not isinstance(operation_id, str) or not 1 <= len(operation_id) <= 200:

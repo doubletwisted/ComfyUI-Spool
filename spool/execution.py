@@ -71,7 +71,7 @@ class LocalExecutor:
             ]
         return project
 
-    async def queue(self, project_id, revision, clip_ids, count, operation_id=None, actor="human", items=None):
+    async def queue(self, project_id, revision, items, operation_id=None, actor="human"):
         store = self.store.for_project(project_id)
         media = self.media.for_project(store, project_id)
         async with self.lock:
@@ -81,7 +81,7 @@ class LocalExecutor:
                 media,
                 project_id,
                 revision,
-                items or [{"clipId": c, "count": count} for c in clip_ids],
+                items,
                 operation_id,
                 actor,
             )

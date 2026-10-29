@@ -101,7 +101,9 @@ class BackendTests(unittest.TestCase):
         self.temp.cleanup()
 
     def submit(self):
-        return asyncio.run(self.executor.queue(self.project["id"], self.project["revision"], ["clip-a"], 1))
+        return asyncio.run(
+            self.executor.queue(self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}])
+        )
 
     def test_cloud_key_is_private_execution_data_and_never_saved_in_project(self):
         with patch.object(execution_module, "cloud_key", return_value="comfyui-private-fixture"):
@@ -849,7 +851,7 @@ class BackendTests(unittest.TestCase):
         b.update({"id": "clip-b", "takeSourceIds": ["clip-a"]})
         p["document"]["clips"].append(b)
         p = self.store.save(p["id"], p["revision"], p["document"])
-        p = asyncio.run(self.executor.queue(p["id"], p["revision"], ["clip-b"], 2))
+        p = asyncio.run(self.executor.queue(p["id"], p["revision"], [{"clipId": "clip-b", "count": 2}]))
         fork_jobs = [j for j in p["document"]["jobs"] if j["clipId"] == "clip-b"]
         self.success(fork_jobs[0]["id"], filename="b1.png")
         asyncio.run(self.executor.reconcile())

@@ -255,7 +255,7 @@ def prepare_experiment(store, project_id, revision, arguments):
         "intent": arguments.get("intent", ""),
         "mode": mode,
         "variants": resolved,
-        "items": items,
+        "items": requests.queue_items({"items": items}),
         "takeCount": sum(i["count"] for i in items),
     }
 

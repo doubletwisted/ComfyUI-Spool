@@ -660,16 +660,14 @@ def register(server, store, media, executor=None):
         store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
         project_id = request.match_info["project"]
-        items = data.get("items")
+        items = requests.queue_items(data)
         if executor is not None:
             value = await executor.queue(
                 project_id,
                 data["revision"],
-                data.get("clips", []),
-                data.get("count", 1),
+                items,
                 data.get("operationId"),
                 data.get("actor", "human"),
-                items,
             )
         else:
             value = await asyncio.to_thread(
@@ -678,7 +676,7 @@ def register(server, store, media, executor=None):
                 media,
                 project_id,
                 data["revision"],
-                items if items is not None else [{"clipId": c, "count": data["count"]} for c in data["clips"]],
+                items,
                 data.get("operationId"),
                 data.get("actor", "human"),
             )
