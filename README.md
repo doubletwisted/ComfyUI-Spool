@@ -30,7 +30,7 @@ Your workflows stay as they are: Spool needs no custom nodes in the graph.
 
 ## Requirements
 
-- ComfyUI 0.39.0 or newer (tested with 0.42.1 / frontend 1.55.18 on Windows,
+- ComfyUI 0.39.0 or newer (tested with 0.43.1 / frontend 1.57.4 on Windows,
   and 0.43.0 / frontend 1.57.4 on Apple Silicon)
 - Python 3.11 or newer
 - `ffmpeg` and `ffprobe` on the PATH of the process running ComfyUI (on macOS,

@@ -5,35 +5,6 @@ All notable changes to Spool are recorded here. Versions follow
 
 ## 0.1.0 (unreleased)
 
-- Refresh project changes, take arrivals and render progress through ComfyUI's
-  websocket, with fewer idle project reads and polling recovery. Standalone
-  Spool retains its existing polling behavior.
-- Discard unpublished local changes after an interrupted save or project upgrade.
-- Keep project downloads and portable draft evidence working after takes are deleted from disk.
-- Prevent folder discovery from importing pending render outputs or duplicating takes when a receipt arrives during a scan.
-- Prepare one playback copy per source in a bounded background queue, at project
-  size without upscaling. Keep copies in the machine-local workspace cache and
-  remove the Full / 1/2 / 1/4 playback setting. Single-media reads skip take-ledger
-  projection, and playback requests return immediately while encoding continues.
-- Refresh browser playback when a source is replaced, prepare newly collected
-  takes without an edit, and stop active playback encoding during shutdown.
-  First-video imports prepare at the resolved footage frame rate.
-
-- Fetch compact take summaries in the studio and load full take evidence on demand.
-  Current local reads bypass the shared project lock; settled receipts are checked
-  less often. Keep completion times when diagnostic history expires after 30 days,
-  and retain operation identities to prevent expired commands from running again.
-- Track newly discovered external files across same-folder renames. Replacements
-  become new takes and never silently replace the take already in the edit.
-- Add scoped video clip rename/trim commands and full prepared Use take adoption with safe replay.
-- Busy queue and processing indicators use steady highlights instead of opacity pulses.
-- Job progress refreshes Renders and clip badges without rebuilding the current edit.
-
-- Stabilize API failures with error codes, publish command actions and a command
-  envelope schema, and preserve exact integers with CLI `--wire-json`.
-- Block writes from outdated studio tabs while keeping their draft, and detect
-  outdated Comfy page bridges. Reject malformed exact-integer tags consistently.
-
 First public release.
 
 ### Studio
@@ -45,14 +16,19 @@ First public release.
   box selection and undo/redo.
 - Takes: every clip collects candidate results; review them in Source or
   side by side, choose the take used in the edit, and remove or permanently
-  delete takes. Copy files into a clip's folder to add them as takes.
+  delete takes. Copy files into a clip's folder to add them as takes; a renamed
+  file keeps its take, and a replaced file becomes a new take.
 - Projects live in self-contained folders (a project file plus media), can be
-  opened from shared storage, downloaded and imported. Immutable render evidence
-  is shared inside the project file, while embedded take workflows and prompts
-  are read from the original media when needed. Project and take reads avoid
-  rebuilding repeated evidence. Older projects upgrade with a backup
-  of their previous snapshot; a manifest protects against opening newer formats.
-  Storage maintenance reports leave projects untouched.
+  opened from shared storage, downloaded and imported. The project file stays
+  small: render evidence is stored once, and workflows embedded in takes are read
+  from the media. Opening a project from an earlier format upgrades it after a
+  backup, a project from a newer Spool is refused, and an interrupted save or
+  upgrade restores the last published project.
+- Playback copies are prepared in the background at the project size, never
+  upscaled, and kept on this computer rather than in the project folder.
+- Inside ComfyUI, new takes, render progress and changes made by agents appear
+  at once. Standalone Spool, and changes made on another computer, arrive by
+  polling.
 - Export the sequence, a range or selected clips to MP4 with an audio mix, or
   export a single frame.
 - Export the timeline as OpenTimelineIO (`.otio`) for Resolve, Premiere Pro and
@@ -70,18 +46,6 @@ First public release.
 
 ### Generation
 
-- Embedded and standalone queue requests use the same defaults: omitted count
-  means one take, and an explicit empty item list is rejected.
-- Cloud storage, frozen-input checks and download checksums run off the host's
-  event loop so slow shared folders do not stall the studio.
-- An interrupted Deadline cancellation can be retried after checking job
-  ownership and current status; confirmed stop requests are not repeated.
-- Stale execution observations cannot undo cancellation or terminal states.
-  Verified late receipts can still recover a result without choosing it.
-- Local dispatch refuses host hooks that change a frozen workflow, matching
-  Deadline's protection of the exact requested controls and files.
-- Shared-project local attempts are marked uncertain only by the workspace
-  that dispatched them, including after that workspace restarts.
 - Add workflows from a curated library of built-in templates, the current Comfy
   graph or a saved workflow file. Spool captures an immutable recipe and exposes
   the workflow's key inputs (prompt, seed, duration, size, sources) on the clip.
@@ -90,6 +54,13 @@ First public release.
 - Generate on the local ComfyUI, on Comfy Cloud, or on a Thinkbox Deadline farm
   (experimental, through ComfyUI-Deadline-Plugin). Every result is collected with
   a durable receipt; interrupted work is recovered without repeating it.
+- A request is frozen before it runs: a ComfyUI hook that changes a frozen
+  workflow is refused, and work whose outcome is uncertain is never resubmitted
+  automatically. On a project shared between computers, only the computer that
+  started a local render decides whether it was lost. An interrupted Deadline
+  cancellation can be sent again.
+- Detailed render diagnostics are pruned after 30 days; results and their
+  completion times are kept.
 - Seed modes (fixed, increment, decrement, randomize) with exact 64-bit seeds.
 - Spool ships its own built-in workflows with more of their media inputs
   connected: MiniMax H3 and H3 Max Reference to Video on Comfy Cloud (reference
@@ -106,7 +77,13 @@ First public release.
 
 - A scoped command API and CLI (`python -m spool`) for agents and scripts, with
   explicit project, clip, capability and budget limits, plus the
-  `skills/spool-control` agent skill.
+  `skills/spool-control` agent skill. Commands cover notes, inputs, generation,
+  Use take, and clip trims and renames.
+- Errors carry stable codes, the command envelope is published as a JSON
+  Schema, and `--wire-json` keeps exact 64-bit integers in CLI output.
+- A studio tab left open across a Spool update cannot save over newer data: it
+  keeps its draft and asks for a reload. An outdated ComfyUI page is detected
+  the same way.
 
 ### macOS and Linux (experimental)
 
@@ -130,8 +107,8 @@ First public release.
 
 ### Requirements and security
 
-- Python 3.11+, ffmpeg and ffprobe on PATH; tested with ComfyUI 0.42.1 and
-  frontend 1.55.18. Missing requirements are reported in the studio and the
+- Python 3.11+, ffmpeg and ffprobe on PATH; tested with ComfyUI 0.43.1 and
+  frontend 1.57.4. Missing requirements are reported in the studio and the
   health route. Comfy Cloud needs the `comfy-sdk` package and a Comfy plan that
   allows API keys; free accounts can run Cloud workflows as Partner Nodes on their
   own ComfyUI.
