@@ -79,10 +79,13 @@ class LedgerTests(unittest.TestCase):
         compact = ledger.editor_project(project)
         held = compact["document"]["clips"][0]["takes"][0]
         self.assertNotIn("workflowSnapshot", held)
-        self.assertEqual(held["request"]["capture"], capture)
+        self.assertNotIn("request", held)
+        self.assertEqual(held["summary"], {"attemptId": "attempt", "bindings": []})
+        self.assertTrue(held["recipeGraph"])
         self.assertEqual(held["media"]["evidence"], ["probe", "workflow"])
         self.assertTrue(held["media"]["embeddedGraph"])
-        for media in [held["media"], *held["artifacts"]]:
+        self.assertNotIn("artifacts", held)
+        for media in [held["media"]]:
             self.assertNotIn("probe", media)
             self.assertNotIn("workflow", media)
             self.assertEqual(media["originalFile"], record["originalFile"])
@@ -91,6 +94,9 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(compact["document"]["jobs"], project["document"]["jobs"])
         self.assertEqual(compact["recipes"], project["recipes"])
         self.assertEqual(project, original)
+        api_only = copy.deepcopy(project)
+        api_only["document"]["clips"][0]["takes"][0]["request"]["capture"]["workflow"] = None
+        self.assertFalse(ledger.editor_project(api_only)["document"]["clips"][0]["takes"][0]["recipeGraph"])
 
     def test_permanently_deleted_results_remain_in_execution_history_without_reappearing_as_takes(self):
         case = CASES["cases"][0]
@@ -113,6 +119,7 @@ class LedgerTests(unittest.TestCase):
                     for row in case["attempts"]
                 ]
                 attached = ledger.attach(copy.deepcopy(case["authored"]), rows)
+                self.assertEqual(ledger.editor_project({"document": attached})["document"], case["editor"])
                 self.assertEqual(attached, case["attached"])
                 self.assertEqual(ledger.authored(attached), case["authored"])
                 self.assertEqual(ledger.detach_for_import(attached), case["detached"])
@@ -152,6 +159,8 @@ class LedgerTests(unittest.TestCase):
 class DocumentFieldTests(unittest.TestCase):
     def test_field_registry_matches_the_editor_fixture(self):
         fields = json.loads((Path(__file__).parent / "fixtures" / "document_fields.json").read_text(encoding="utf-8"))
+        self.assertEqual(list(ledger.EDITOR_TAKE_FIELDS), fields["editorTake"])
+        self.assertEqual(list(ledger.TAKE_SUMMARY_FIELDS), fields["takeSummary"])
         self.assertEqual(list(ledger.EDIT_FIELDS), fields["edit"])
         self.assertEqual(list(ledger.RECORD_FIELDS), fields["records"])
         self.assertEqual(list(ledger.VIEW_FIELDS), fields["view"])

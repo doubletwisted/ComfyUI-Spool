@@ -50,6 +50,8 @@ VIEW_KEYS = SERVER_OWNED + VIEW_FIELDS
 # capture is reviewed, and on no other path. It leaves the working document and is
 # stored once per media id, addressed by the `evidence` marker left behind.
 EVIDENCE_KEYS = ("probe", "workflow", "prompt", "workflowData", "provenance")
+EDITOR_TAKE_FIELDS = ("id", "number", "revision", "seed", "generated", "media", "summary", "recipeGraph")
+TAKE_SUMMARY_FIELDS = ("attemptId", "workflowVersion", "inputValues", "bindings")
 
 
 def media_records(document):
@@ -163,10 +165,19 @@ def editor_project(project):
     def take(value):
         if not value.get("generated"):
             return value
-        # attach() supplies the same capture in request.capture and workflowSnapshot.
-        working = {key: held for key, held in value.items() if key != "workflowSnapshot"}
+        request = value.get("request", {})
+        capture = request.get("capture", {})
+        working = {key: held for key, held in value.items() if key in EDITOR_TAKE_FIELDS}
+        working["summary"] = {
+            **{key: request[key] for key in TAKE_SUMMARY_FIELDS if key in request},
+            "bindings": [
+                {key: binding[key] for key in ("key", "label", "role") if key in binding}
+                for binding in capture.get("bindings", [])
+            ],
+        }
+        graph = capture.get("workflow")
+        working["recipeGraph"] = isinstance(graph, dict) and isinstance(graph.get("nodes"), list)
         working["media"] = media(value["media"])
-        working["artifacts"] = [media(a) for a in value.get("artifacts", [])]
         return working
 
     document = project["document"]

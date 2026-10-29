@@ -17,6 +17,10 @@ class FarmProtocolTests(unittest.TestCase):
 
     def setUp(self):
         fixtures.QueueOperationTests.setUp(self)
+        # These receipt-integrity tests exercise the periodic settled-history pass.
+        clock = patch.object(Collector, "HISTORY_INTERVAL", 0)
+        clock.start()
+        self.addCleanup(clock.stop)
         observation = patch("spool.farm.deadline_command", return_value="JobStatus=Rendering")
         observation.start()
         self.addCleanup(observation.stop)

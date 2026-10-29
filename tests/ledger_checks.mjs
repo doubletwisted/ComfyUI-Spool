@@ -6,6 +6,10 @@ const copy = v => JSON.parse(JSON.stringify(v)),
   checks = [];
 for (const c of fixture.cases) {
   assert.deepEqual(L.authored(c.attached), c.authored, c.name);
+  assert.deepEqual(L.authored(c.editor), c.authored, c.name + ' compact projection');
+  const empty = copy(c.authored);
+  L.mergeArrivals(empty, c.editor);
+  assert.deepEqual(empty.clips, c.editor.clips);
   checks.push('Shared authored round trip: ' + c.name);
 }
 for (const c of fixture.merges) {
@@ -158,6 +162,8 @@ assert.deepEqual(cleared.clearedRenderIds, ['done']);
 assert.equal(L.editSignature(cleared), L.editSignature({ ...cleared, clearedRenderIds: [] }));
 checks.push('Queue clearing survives Undo and arrival merging without changing the editorial signature');
 const fields = JSON.parse(fs.readFileSync(new URL('./fixtures/document_fields.json', import.meta.url), 'utf8'));
+assert.deepEqual([...L.EDITOR_TAKE_FIELDS], fields.editorTake);
+assert.deepEqual([...L.TAKE_SUMMARY_FIELDS], fields.takeSummary);
 assert.deepEqual([...L.EDIT_FIELDS], fields.edit);
 assert.deepEqual([...L.RECORD_FIELDS], fields.records);
 assert.deepEqual([...L.VIEW_FIELDS], fields.view);

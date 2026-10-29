@@ -136,7 +136,8 @@ class WorkflowSaveTests(unittest.IsolatedAsyncioTestCase):
             with patch("spool.projects.atomic_replace", wraps=projects.atomic_replace) as publish:
                 response = await self.save(document, {version: capture})
                 self.assertEqual(response.status, 200, await response.text())
-                self.assertEqual(publish.call_count, 1, identity)
+                publications = [call for call in publish.call_args_list if Path(call.args[1]) == self.store.snapshot]
+                self.assertEqual(len(publications), 1, identity)
             self.project = await response.json()
             self.assertEqual(self.project["revision"], index + 1)
             self.assertEqual(self.project["document"]["clips"][-1]["workflowVersion"], version)

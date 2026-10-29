@@ -53,6 +53,10 @@ class ProjectStore(Store):
         cache = (workspace.root / "cache" if workspace else Path(tempfile.gettempdir()) / "spool-maintenance") / key
         self.runtime = cache / "working.sqlite3"
         self.stamp = cache / "checkpoint.json"
+        self.read_runtime = cache / "read.sqlite3"
+        self.read_stamp = cache / "read-checkpoint.json"
+        self.local_lock = cache / "working.lock"
+        self.read_lock = cache / "read.lock"
         self.lock_file = folder / ".spool" / "project.lock"
         if migrate or writable:
             (folder / ".spool").mkdir(parents=True, exist_ok=True)
@@ -98,7 +102,7 @@ class ProjectStore(Store):
             with Store.connect(self) as db:
                 yield db
             return
-        with file_lock(self.lock_file):
+        with file_lock(self.local_lock), file_lock(self.lock_file):
             self.check_manifest()
             signature = self.signature() if self.snapshot.exists() else None
             try:
@@ -162,6 +166,40 @@ class ProjectStore(Store):
                 raise
             finally:
                 db.close()
+
+    @contextmanager
+    def reading(self):
+        """Pin a local published generation; only refreshes need the share lock.
+
+        Readers never open the replaceable working database. The local read lock
+        also protects open handles from replacement on Windows, across processes.
+        Writers use a different local file and can publish while a read is open.
+        """
+        if self.read_only:
+            with Store.connect(self) as db:
+                yield db
+            return
+        with file_lock(self.read_lock):
+            self.check_manifest()
+            signature = self.signature()
+            try:
+                saved = json.loads(self.read_stamp.read_text())
+            except (FileNotFoundError, json.JSONDecodeError):
+                saved = None
+            if saved != signature or not self.read_runtime.exists():
+                with file_lock(self.lock_file):
+                    self.check_manifest()
+                    signature = self.signature()
+                    pending = self.read_runtime.with_suffix(".partial")
+                    try:
+                        shutil.copyfile(self.snapshot, pending)
+                        atomic_replace(pending, self.read_runtime)
+                        atomic_json(self.read_stamp, signature)
+                    finally:
+                        pending.unlink(missing_ok=True)
+            with closing(sqlite3.connect(self.read_runtime.as_uri() + "?mode=ro&immutable=1", uri=True)) as db:
+                db.row_factory = sqlite3.Row
+                yield db
 
     def compact(self):
         before = self.snapshot.stat().st_size

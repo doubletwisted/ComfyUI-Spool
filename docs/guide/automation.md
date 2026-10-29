@@ -166,6 +166,7 @@ apply to public routes that reach beyond project files.
 | POST | `/spool/api/projects/{project}/import-workflow` |
 | POST | `/spool/api/projects/{project}/capture/{clip}` |
 | GET | `/spool/api/projects/{project}/take-workflow/{clip}/{take}` |
+| GET | `/spool/api/projects/{project}/takes/{take}` (full generated request/result evidence) |
 | GET | `/spool/api/projects/{project}/take-file/{clip}/{take}` |
 | POST | `/spool/api/projects/{project}/use-take/{clip}` |
 | POST | `/spool/api/prepare-workflow` |

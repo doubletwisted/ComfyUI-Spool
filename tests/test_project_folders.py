@@ -85,6 +85,81 @@ class ProjectFolderTests(unittest.TestCase):
             self.project["id"], self.project["revision"], "clip-a", self.media.prepare_workflow(self.capture, True)
         )
 
+    def test_external_identity_survives_rename_and_replacement_is_a_new_take(self):
+        folder = self.store.root / self.project["document"]["clips"][0]["outputFolder"]
+        path = folder / "outside.png"
+        Image.new("RGB", (16, 16), "blue").save(path)
+        os.utime(path, (1, 1))
+        watcher = FolderTakes()
+        watcher.scan(self.store, self.media, self.project["id"])
+        watcher.scan(self.store, self.media, self.project["id"])
+        first = self.store.clip(self.project["id"], "clip-a")["takes"][-1]
+        self.store.set_setting("external_file_index", {})  # pre-schema-7 discovery index
+        watcher = FolderTakes()
+        watcher.scan(self.store, self.media, self.project["id"])
+        watcher.scan(self.store, self.media, self.project["id"])
+        self.assertEqual(len(self.store.clip(self.project["id"], "clip-a")["takes"]), 2)
+        self.assertEqual(
+            self.store.setting("external_file_index")[first["media"]["originalFile"]]["takeId"], first["id"]
+        )
+        renamed = folder / "renamed.png"
+        path.rename(renamed)
+        # Restart the watcher to prove identity comes from persisted state.
+        watcher = FolderTakes()
+        watcher.scan(self.store, self.media, self.project["id"])
+        watcher.scan(self.store, self.media, self.project["id"])
+        takes = self.store.clip(self.project["id"], "clip-a")["takes"]
+        self.assertEqual(len(takes), 2)
+        self.assertEqual(takes[-1]["id"], first["id"])
+        self.assertTrue(takes[-1]["media"]["originalFile"].endswith("renamed.png"))
+        Image.new("RGB", (16, 16), "green").save(renamed)
+        os.utime(renamed, (2, 2))
+        watcher.scan(self.store, self.media, self.project["id"])
+        watcher.scan(self.store, self.media, self.project["id"])
+        clip = self.store.clip(self.project["id"], "clip-a")
+        self.assertEqual(clip["takeId"], "original")
+        self.assertEqual(len(clip["takes"]), 3)
+        self.assertNotEqual(clip["takes"][-1]["id"], first["id"])
+        self.assertIn("replacedFile", clip["takes"][-2]["media"])
+        self.assertFalse((self.store.root / clip["takes"][-2]["media"]["file"]).exists())
+
+    def test_external_name_containing_an_attempt_prefix_is_still_discovered(self):
+        project = requests.accept(
+            self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}]
+        )
+        attempt = self.store.attempt(project["document"]["jobs"][0]["id"])
+        folder = self.store.root / project["document"]["clips"][0]["outputFolder"]
+        path = folder / ("unrelated-" + attempt["take_id"][:8] + ".png")
+        Image.new("RGB", (16, 16), "blue").save(path)
+        os.utime(path, (1, 1))
+        watcher = FolderTakes()
+        watcher.scan(self.store, self.media, self.project["id"])
+        watcher.scan(self.store, self.media, self.project["id"])
+        self.assertEqual(len(self.store.clip(self.project["id"], "clip-a")["takes"]), 2)
+
+    def test_current_local_read_does_not_acquire_share_or_working_lock(self):
+        self.store.get(self.project["id"])
+        from spool.projects import file_lock
+
+        def checked(path):
+            self.assertNotIn(path, (self.store.lock_file, self.store.local_lock))
+            return file_lock(path)
+
+        with patch("spool.projects.file_lock", checked):
+            self.assertEqual(self.store.get(self.project["id"])["id"], self.project["id"])
+            self.assertTrue(self.store.scan_attempts() == [])
+
+    def test_open_read_generation_survives_another_workspace_publication(self):
+        with self.store.reading() as db:
+            before = db.execute("SELECT revision FROM projects").fetchone()[0]
+            other = Workspace(self.root / "other-app")
+            project = other.open_folder(self.store.root)
+            target = other.for_project(project["id"])
+            project["document"]["project"] = "Other editor"
+            target.save(project["id"], project["revision"], project["document"])
+            self.assertEqual(db.execute("SELECT revision FROM projects").fetchone()[0], before)
+        self.assertEqual(self.store.get(self.project["id"])["document"]["project"], "Other editor")
+
     def test_queue_clearing_is_durable_without_removing_takes_or_executions(self):
         self.project = requests.accept(
             self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}]
@@ -758,7 +833,14 @@ class ProjectFolderTests(unittest.TestCase):
                 portable = ledger.compose(compact["document"], all_evidence)
                 rendered = next(t for t in portable["clips"][0]["takes"] if t.get("generated"))
                 self.assertEqual(rendered["media"], metadata)
-                self.assertEqual(rendered["artifacts"], [metadata])
+                self.assertNotIn("request", rendered)
+                evidence_response = await client.get(path + "/takes/" + rendered["id"])
+                self.assertEqual(evidence_response.status, 200)
+                evidence = unwire(await evidence_response.json())
+                self.assertEqual(evidence["request"], attempt["request"])
+                self.assertEqual(evidence["result"]["artifacts"], [metadata])
+                missing = await client.get(path + "/takes/not-owned")
+                self.assertEqual(missing.status, 404)
                 response = await client.put(
                     path,
                     headers={"X-Spool-View": "editor"},

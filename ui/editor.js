@@ -1720,14 +1720,19 @@ async function startEditor(isFailed) {
   }
   // Consecutive takes generated from the same inputs form one batch; seeds may differ within it.
   function takeBatchInputs(t) {
-    const seeds = new Set((t.request?.capture?.bindings || []).filter(b => b.role === 'seed').map(b => b.key));
-    return Object.entries(t.request?.inputValues || {})
+    const seeds = new Set(
+      (t.summary?.bindings || t.request?.capture?.bindings || []).filter(b => b.role === 'seed').map(b => b.key),
+    );
+    return Object.entries(t.summary?.inputValues || t.request?.inputValues || {})
       .filter(([key]) => !seeds.has(key))
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   }
   const takeBatchKey = t =>
     t.generated
-      ? 'generated:' + (t.request?.workflowVersion ?? '') + ':' + JSON.stringify(takeBatchInputs(t))
+      ? 'generated:' +
+        (t.summary?.workflowVersion ?? t.request?.workflowVersion ?? '') +
+        ':' +
+        JSON.stringify(takeBatchInputs(t))
       : t.original
         ? 'original'
         : 'imported';
@@ -1735,20 +1740,23 @@ async function startEditor(isFailed) {
     const t = takes[0],
       count = takes.length + ' ' + (takes.length === 1 ? 'take' : 'takes');
     if (!t.generated) return [t.original ? 'Original' : 'Imported', count];
-    const job = state.jobs.find(j => j.id === t.request?.attemptId),
+    const job = state.jobs.find(j => j.id === (t.summary?.attemptId ?? t.request?.attemptId)),
       time = job?.createdAt
         ? new Date(job.createdAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : '';
     let summary = 'Generated';
     if (previous) {
-      const labels = new Map((t.request?.capture?.bindings || []).map(b => [b.key, b.label || b.key])),
+      const labels = new Map(
+          (t.summary?.bindings || t.request?.capture?.bindings || []).map(b => [b.key, b.label || b.key]),
+        ),
         now = new Map(takeBatchInputs(t)),
         before = new Map(takeBatchInputs(previous));
       const changed = [...new Set([...now.keys(), ...before.keys()])]
         .filter(key => JSON.stringify(now.get(key)) !== JSON.stringify(before.get(key)))
         .map(key => labels.get(key) || key);
       summary =
-        t.request?.workflowVersion !== previous.request?.workflowVersion
+        (t.summary?.workflowVersion ?? t.request?.workflowVersion) !==
+        (previous.summary?.workflowVersion ?? previous.request?.workflowVersion)
           ? 'Workflow changed'
           : changed.length
             ? changed.slice(0, 2).join(', ') + (changed.length > 2 ? ' +' + (changed.length - 2) : '') + ' changed'
@@ -7779,7 +7787,9 @@ async function startEditor(isFailed) {
           esc(j.target === 'deadline' ? 'Deadline worker' : 'Current node') +
           ' progress"></progress></div>'
         : '';
-      const result = state.clips.flatMap(c => c.takes).find(t => t.generated && t.request?.attemptId === j.id),
+      const result = state.clips
+          .flatMap(c => c.takes)
+          .find(t => t.generated && (t.summary?.attemptId ?? t.request?.attemptId) === j.id),
         output = result?.media?.originalFile;
       const details =
         '<div class="render-execution"><p>' +
@@ -8632,6 +8642,7 @@ async function startEditor(isFailed) {
       m = t?.media;
     const snapshot = t?.workflowSnapshot || t?.request?.capture;
     if (Array.isArray(snapshot?.workflow?.nodes)) return { capture: snapshot };
+    if (t?.recipeGraph) return { take: t };
     const inline = m?.workflowData || (m?.workflow ? { workflow: m.workflow, prompt: m.prompt } : null);
     if (Array.isArray(inline?.workflow?.nodes)) return { capture: inline };
     return m?.embeddedGraph ? { media: m } : null;
@@ -8640,6 +8651,8 @@ async function startEditor(isFailed) {
     const graph = editableGraph(c);
     if (!graph) return null;
     if (graph.capture) return graph.capture;
+    if (graph.take)
+      return (await request('projects/' + projectKey + '/takes/' + encodeURIComponent(graph.take.id))).request.capture;
     const held = await mediaEvidence(graph.media);
     return held?.workflowData || (held?.workflow ? { workflow: held.workflow, prompt: held.prompt } : null);
   }

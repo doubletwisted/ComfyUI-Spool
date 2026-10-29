@@ -116,3 +116,21 @@ bodies or workflow contents.
 
 `/spool/api/health` reports the Spool version, the connected ComfyUI and missing
 requirements.
+
+## History and external files
+
+Routine studio updates fetch compact take summaries. Opening a take's workflow
+loads its full saved evidence on demand. Generated results are recognized by
+their recorded files, so an unrelated file with a similar name can still arrive.
+
+For newly discovered external files, a rename within the same clip folder keeps
+the take identity when the filesystem reports the same file and its bytes are
+unchanged. Copies, moves to another folder and changed bytes create new takes.
+Replacing a file leaves the old take's source missing and adds a new candidate;
+it never chooses the replacement for you. Existing projects acquire tracking for previously discovered files on their
+next stable scan; earlier file replacements cannot be detected retroactively.
+
+Diagnostic events and command replay payloads are kept for 30 days. Reusing an
+expired operation ID is refused; inspect the current project before choosing a
+new ID. Render evidence remains available. Settled render receipts are checked
+at startup and every five minutes, so a late result can arrive after that delay.

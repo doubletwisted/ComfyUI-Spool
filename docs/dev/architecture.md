@@ -74,7 +74,7 @@ the published snapshot.
 A project folder has a `project.spool` SQLite snapshot and a small `project.json`
 manifest: `format: "spool-project"`, `formatVersion` (the SQLite `user_version`),
 `projectId` and `writtenBy` (the Spool version). There is one format number;
-currently it is 6. Opening reads the manifest first and refuses a newer format
+currently it is 7. Opening reads the manifest first and refuses a newer format
 before opening SQLite. Older folders without a manifest acquire it on their next
 published write. JSON exports use their separate `spoolVersion: 1` envelope;
 imports reject unknown export versions before creating a destination.
@@ -121,8 +121,39 @@ Projection passes decoded requests/results directly to the ledger, avoiding a
 JSON encode/decode round trip. Identical decoded blobs share objects within that
 response, whose captures are treated as immutable by readers; later reads are
 independent. The bounded process cache holds only JSON text, so caller mutations
-cannot corrupt later reads. The editor still omits `workflowSnapshot` and media
-evidence. No Python/JavaScript authored document fields or wire versions change.
+cannot corrupt later reads.
+
+Schema 7 persists terminal `finished_at` on attempts, backfilled from events (or
+creation time when no terminal event survives). Routine editor generated takes carry only
+`EDITOR_TAKE_FIELDS`: identity, number, revision, seed, generated flag, media,
+a batch summary and a recipe-graph marker. Their summary keeps the attempt ID,
+workflow version, input values and binding labels/seed roles; the graph and full
+request/result are fetched through the project-scoped `/takes/{take}` route.
+Current clip recipes and imported workflow records remain in the editor response.
+The ordinary automation project response and scoped commands retain full requests.
+
+Project reads pin a separate immutable local SQLite snapshot under a local file
+lock. Only a changed published signature refreshes it under the share lock;
+writers serialize working-copy refresh/replacement with a different local lock.
+A writer can publish while an existing reader finishes its older generation.
+
+Receipt scans visit pending attempts every two seconds and settled history every
+five minutes (also on collector startup). Folder scans cache projection/inventory
+at a revision/event cursor and correlate generated outputs by exact artifact
+paths, never filename prefixes. `external_file_index` stores path, take/media IDs,
+file identity, size, modification/change times and SHA-256. Same-directory renames preserve identity
+only with the same nonzero device/inode and bytes and a missing old path. Copies
+and cross-directory moves become new takes. Changed bytes at an indexed path
+create a new take; the old record points to a missing source instead of silently
+playing the replacement. Renames/replacements discard old file-owned evidence.
+
+Once daily, collection expires events and operation/result payloads older than
+30 days, retaining each project's latest event cursor and cancellation effects whose
+delivery is unconfirmed or whose attempt is still active. Operation ID/project/digest tombstones live forever: expired retries
+return an operation conflict and never execute again. Attempt ownership rows
+expire with old terminal attempts. Attempts, dispatches and execution receipts
+remain evidence for recovery and deduplication; they are not diagnostic logs.
+No Python/JavaScript authored document fields or wire versions change.
 Maintenance reports open immutable read-only snapshots: no migrations, directory
 creation, cache refresh or take-file recovery.
 

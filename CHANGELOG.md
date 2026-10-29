@@ -5,6 +5,13 @@ All notable changes to Spool are recorded here. Versions follow
 
 ## 0.1.0 (unreleased)
 
+- Fetch compact take summaries in the studio and load full take evidence on demand.
+  Current local reads bypass the shared project lock; settled receipts are checked
+  less often. Keep completion times when diagnostic history expires after 30 days,
+  and retain operation identities to prevent expired commands from running again.
+- Track newly discovered external files across same-folder renames. Replacements
+  become new takes and never silently replace the take already in the edit.
+
 - Stabilize API failures with error codes, publish command actions and a command
   envelope schema, and preserve exact integers with CLI `--wire-json`.
 - Block writes from outdated studio tabs while keeping their draft, and detect

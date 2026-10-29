@@ -54,5 +54,21 @@
   "muted",
   "loop",
   "previewQuality"
+ ],
+ "editorTake": [
+  "id",
+  "number",
+  "revision",
+  "seed",
+  "generated",
+  "media",
+  "summary",
+  "recipeGraph"
+ ],
+ "takeSummary": [
+  "attemptId",
+  "workflowVersion",
+  "inputValues",
+  "bindings"
  ]
 }

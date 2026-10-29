@@ -53,6 +53,7 @@ ROUTE_AUDIENCES = {
     ("GET", "/spool/api/projects/{project}/media/{media}/original"): "public automation",
     ("GET", "/spool/api/projects/{project}/media/{media}/evidence"): "public automation",
     ("GET", "/spool/api/projects/{project}/evidence"): "public automation",
+    ("GET", "/spool/api/projects/{project}/takes/{take}"): "public automation",
     ("POST", "/spool/api/projects/{project}/media/{media}/preview"): "public automation",
     ("GET", "/spool/api/projects/{project}/export"): "public automation",
     ("POST", "/spool/api/import-project"): "public automation",
@@ -396,6 +397,15 @@ def register(server, store, media, executor=None):
             store.media_record, request.match_info["project"], request.match_info["media"]
         )
         return file_response((await asyncio.to_thread(media.original_source, selected))["path"])
+
+    @routes.get("/spool/api/projects/{project}/takes/{take}")
+    @endpoint
+    async def take_evidence(request):
+        selected, _ = await asyncio.to_thread(services, request)
+        value = await asyncio.to_thread(
+            selected.take_evidence, request.match_info["project"], request.match_info["take"]
+        )
+        return await asyncio.to_thread(response, value)
 
     @routes.get("/spool/api/projects/{project}/media/{media}/evidence")
     @endpoint

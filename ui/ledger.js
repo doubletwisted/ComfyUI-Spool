@@ -52,6 +52,17 @@ export const VIEW_FIELDS = Object.freeze([
   'previewQuality',
   'activeVideoTrack',
 ]);
+export const EDITOR_TAKE_FIELDS = Object.freeze([
+  'id',
+  'number',
+  'revision',
+  'seed',
+  'generated',
+  'media',
+  'summary',
+  'recipeGraph',
+]);
+export const TAKE_SUMMARY_FIELDS = Object.freeze(['attemptId', 'workflowVersion', 'inputValues', 'bindings']);
 export const UNDO_SKIPS = Object.freeze([...RECORD_FIELDS, 'zoom', 'snap', 'muted', 'loop', 'previewQuality']);
 // What the editor saves, in its established order; the server owns jobs' recoverable results.
 const SAVED_ORDER = [

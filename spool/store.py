@@ -5,6 +5,7 @@ import logging
 import re
 import sqlite3
 import time
+import threading
 import uuid
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -34,7 +35,7 @@ def fingerprint(value):
 Conflict = RevisionConflict
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 EXPORT_VERSION = 1
 
 
@@ -143,6 +144,13 @@ class Edit:
     def setting(self, key, value):
         self.db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (key, encode(value)))
 
+    def forget_media_evidence(self, media_ids):
+        """A moved or replaced external file must not resolve evidence at its old path."""
+        self.db.executemany(
+            "DELETE FROM media_evidence WHERE project_id=? AND media_id=?",
+            ((self.project_id, identity) for identity in media_ids),
+        )
+
 
 class Store:
     def __init__(self, root, migrate=True, filename="spool.sqlite3"):
@@ -152,6 +160,7 @@ class Store:
         self.path = self.root / filename
         self.read_only = not migrate
         self._blobs = OrderedDict()
+        self._blob_lock = threading.Lock()
         existing = self.path.exists()
         if not migrate:
             # Maintenance inspection: report on the file as it is, without running a
@@ -184,6 +193,7 @@ class Store:
         (4, "retire revision snapshots", "_migration4"),
         (5, "separate media evidence", "_migration5"),
         (6, "store immutable evidence once", "_migration6"),
+        (7, "retain completion times and operation identities", "_migration7"),
     )
 
     def _schema(self, db):
@@ -263,6 +273,57 @@ class Store:
             db.execute("UPDATE projects SET document=? WHERE id=?", (self._dump(db, document), row["id"]))
         return 0
 
+    def _migration7(self, db):
+        db.execute("ALTER TABLE attempts ADD COLUMN finished_at REAL")
+        db.execute(
+            "CREATE TABLE operation_tombstones(id TEXT PRIMARY KEY, project_id TEXT NOT NULL, digest TEXT NOT NULL)"
+        )
+        db.execute("CREATE INDEX events_project_cursor ON events(project_id,cursor)")
+        db.execute("CREATE INDEX attempts_status ON attempts(status)")
+        db.execute("""UPDATE attempts SET finished_at=coalesce((
+            SELECT max(created) FROM events WHERE project_id=attempts.project_id AND
+            coalesce(json_extract(data,'$.attemptId'),json_extract(data,'$.result.attemptId'))=attempts.id AND
+            (kind='execution.collected' AND json_extract(data,'$.accepted')=1 OR
+             kind='attempt.status' AND json_extract(data,'$.status') IN ('complete','failed','cancelled') OR
+             kind='command.cancel' AND json_extract(data,'$.result.status')='cancelled')
+            ),created) WHERE status IN ('complete','failed','cancelled')""")
+        return 0
+
+    def retain_history(self, now=None, days=30):
+        """Expire diagnostic/replay payloads, never the identities that prevent retries.
+
+        Pending cancellation effects keep their operation payload. Execution receipts
+        remain evidence for late delivery and are not diagnostic history.
+        """
+        cutoff = (time.time() if now is None else now) - days * 86400
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute(
+                """INSERT OR IGNORE INTO operation_tombstones
+                SELECT id,project_id,digest FROM operations WHERE created<? AND
+                id NOT IN (SELECT effects.operation_id FROM effects
+                    LEFT JOIN command_results ON command_results.id=effects.operation_id
+                    LEFT JOIN attempts ON attempts.id=json_extract(command_results.result,'$.attemptId')
+                    WHERE effects.state NOT IN ('done','sent') OR attempts.status NOT IN ('complete','failed','cancelled'))""",
+                (cutoff,),
+            )
+            db.execute("DELETE FROM command_results WHERE id IN (SELECT id FROM operation_tombstones)")
+            db.execute("DELETE FROM effects WHERE operation_id IN (SELECT id FROM operation_tombstones)")
+            db.execute("DELETE FROM operations WHERE id IN (SELECT id FROM operation_tombstones)")
+            # Keep each project's latest cursor so an idle poll cannot go backwards.
+            db.execute(
+                "DELETE FROM events WHERE created<? AND cursor NOT IN (SELECT max(cursor) FROM events GROUP BY project_id)",
+                (cutoff,),
+            )
+            db.execute(
+                "DELETE FROM attempt_owners WHERE attempt_id IN (SELECT id FROM attempts WHERE finished_at<?)",
+                (cutoff,),
+            )
+
+    def _check_tombstone(self, db, identity):
+        if db.execute("SELECT 1 FROM operation_tombstones WHERE id=?", (identity,)).fetchone():
+            raise OperationConflict("Operation ID has expired; inspect current state before using a new ID")
+
     def migrate(self, db, version):
         retired = 0
         for number, name, method in self.MIGRATIONS:
@@ -275,7 +336,8 @@ class Store:
                 db.commit()
             except BaseException:
                 db.rollback()
-                self._blobs.clear()
+                with self._blob_lock:
+                    self._blobs.clear()
                 raise
         return retired
 
@@ -373,18 +435,19 @@ class Store:
             digest = value["__spool_blob__"]
             if digest in memo:
                 return memo[digest]
-            held = self._blobs.get(digest)
-            if held is None:
-                row = db.execute("SELECT data FROM blobs WHERE hash=?", (digest,)).fetchone()
-                if row is None:
-                    raise ValueError("Missing project evidence blob: " + digest)
-                held = row[0]
-                if len(held) <= 256 * 1024:
-                    self._blobs[digest] = held
-                    if len(self._blobs) > 512:
-                        self._blobs.popitem(last=False)
-            else:
-                self._blobs.move_to_end(digest)
+            with self._blob_lock:
+                held = self._blobs.get(digest)
+                if held is None:
+                    row = db.execute("SELECT data FROM blobs WHERE hash=?", (digest,)).fetchone()
+                    if row is None:
+                        raise ValueError("Missing project evidence blob: " + digest)
+                    held = row[0]
+                    if len(held) <= 256 * 1024:
+                        self._blobs[digest] = held
+                        if len(self._blobs) > 512:
+                            self._blobs.popitem(last=False)
+                else:
+                    self._blobs.move_to_end(digest)
             # Cache text across reads; share decoded values only within one response.
             decoded = json.loads(held)
             result = self._unpack(db, decoded, memo, media, files) if "__spool_" in held else decoded
@@ -434,6 +497,7 @@ class Store:
         if row is None:
             return None
         result = dict(row)
+        result.pop("finished_at", None)
         for key in ("request", "result"):
             if result[key] is not None:
                 result[key] = encode(self._load(result[key], db))
@@ -494,7 +558,7 @@ class Store:
 
     def evidence(self, project_id, media_id):
         """The probe and embedded graph for one media record, on demand."""
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute(
                 "SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (project_id, media_id)
             ).fetchone()
@@ -512,7 +576,7 @@ class Store:
 
     def all_evidence(self, project_id):
         """Every stored payload for a project, for a portable local draft."""
-        with self.connect() as db:
+        with self.reading() as db:
             rows = db.execute(
                 "SELECT media_id, evidence FROM media_evidence WHERE project_id=?", (project_id,)
             ).fetchall()
@@ -552,7 +616,7 @@ class Store:
             ("blobs", "data"),
         )
         names = set()
-        with self.connect() as db:
+        with self.reading() as db:
             for table, column in columns:
                 try:
                     rows = db.execute("SELECT %s FROM %s WHERE %s IS NOT NULL" % (column, table, column))
@@ -638,7 +702,7 @@ class Store:
 
     def storage_report(self):
         """What a reclaim would free, without changing anything."""
-        with self.connect() as db:
+        with self.reading() as db:
             page_size = db.execute("PRAGMA page_size").fetchone()[0]
             free = db.execute("PRAGMA freelist_count").fetchone()[0]
             retired = []
@@ -685,6 +749,11 @@ class Store:
             db.close()
 
     @contextmanager
+    def reading(self):
+        with self.connect() as db:
+            yield db
+
+    @contextmanager
     def editing(self, project_id, revision, conflict=CHANGED):
         """Change one project at the revision its caller saw, atomically.
 
@@ -705,7 +774,7 @@ class Store:
         if db is not None:
             yield db
         else:
-            with self.connect() as db:
+            with self.reading() as db:
                 yield db
 
     def recipe(self, project_id, version, db=None):
@@ -735,7 +804,7 @@ class Store:
             return db.execute("SELECT * FROM submissions WHERE attempt_id=?", (attempt_id,)).fetchone()
 
     def submission_job(self, submission_id):
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT external_id FROM submissions WHERE id=?", (submission_id,)).fetchone()
         return row[0] if row else None
 
@@ -748,12 +817,12 @@ class Store:
 
     def execution(self, execution_id):
         """A collected farm execution with its stored receipt, or None."""
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT * FROM executions WHERE id=?", (execution_id,)).fetchone()
         return {**dict(row), "receipt": self._load(row["receipt"])} if row else None
 
     def operation_payload(self, operation_id):
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT payload FROM operations WHERE id=?", (operation_id,)).fetchone()
         return json.loads(row[0]) if row else None
 
@@ -762,7 +831,7 @@ class Store:
 
     def recent_review(self, project_id):
         """The latest experiments and take feedback, for agent status."""
-        with self.connect() as db:
+        with self.reading() as db:
             experiments = [
                 {"id": r["id"], **json.loads(r["document"])}
                 for r in db.execute(
@@ -808,12 +877,12 @@ class Store:
             return True
 
     def deleted_take_ids(self, project_id):
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT document FROM projects WHERE id=?", (project_id,)).fetchone()
         return set(json.loads(row[0]).get("deletedTakeIds", [])) if row else set()
 
     def setting(self, key):
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT document FROM settings WHERE key=?", (key,)).fetchone()
         return json.loads(row[0]) if row else None
 
@@ -828,7 +897,7 @@ class Store:
     def lookup(self, table, identity):
         if table not in {"workflows", "handoffs", "attempts"}:
             raise ValueError("Unsupported project lookup")
-        with self.connect() as db:
+        with self.reading() as db:
             if not db.execute("SELECT 1 FROM " + table + " WHERE id=?", (identity,)).fetchone():
                 raise NotFound("Project record not found")
         return self
@@ -876,7 +945,7 @@ class Store:
 
     def list(self):
         """Project names come out of the document with SQL, not by decoding it."""
-        with self.connect() as db:
+        with self.reading() as db:
             return [
                 {"id": r["id"], "revision": r["revision"], "name": r["name"] or "Untitled Spool project"}
                 for r in db.execute(
@@ -886,11 +955,11 @@ class Store:
 
     def exists(self, project_id):
         """An existence check must not decode a document or project the ledger."""
-        with self.connect() as db:
+        with self.reading() as db:
             return db.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone() is not None
 
     def revision(self, project_id):
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT revision FROM projects WHERE id=?", (project_id,)).fetchone()
         if not row:
             raise NotFound("Project not found")
@@ -898,7 +967,7 @@ class Store:
 
     def sync_state(self, project_id):
         """Check edits and receipts without loading documents, recipes or results."""
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT revision FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
                 raise NotFound("Project not found")
@@ -923,7 +992,7 @@ class Store:
 
     def document(self, project_id):
         """The working document alone: no recipes, attempts or generated-take projection."""
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT document FROM projects WHERE id=?", (project_id,)).fetchone()
         if not row:
             raise NotFound("Project not found")
@@ -931,7 +1000,7 @@ class Store:
 
     def frame_rate(self, project_id):
         """One scalar out of the document, without decoding it."""
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT json_extract(document,'$.fps') FROM projects WHERE id=?", (project_id,)).fetchone()
         if not row:
             raise NotFound("Project not found")
@@ -944,7 +1013,7 @@ class Store:
         read that answers about clips or media must project them. Recipes and job
         annotation stay out; that is what makes this cheaper than `get`.
         """
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT document FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
                 raise NotFound("Project not found")
@@ -969,7 +1038,7 @@ class Store:
         raise ValueError("This footage is no longer in the project")
 
     def active_attempts(self, project_id):
-        with self.connect() as db:
+        with self.reading() as db:
             return db.execute(
                 "SELECT count(*) FROM attempts WHERE project_id=? AND status NOT IN ('complete','failed','cancelled')",
                 (project_id,),
@@ -984,7 +1053,7 @@ class Store:
         if pending_only:
             conditions.append("status NOT IN ('complete','failed','cancelled')")
         where = " WHERE " + " AND ".join(conditions) if conditions else ""
-        with self.connect() as db:
+        with self.reading() as db:
             rows = [
                 self._attempt_row(db, r)
                 for r in db.execute("SELECT * FROM attempts" + where + " ORDER BY created,rowid", values)
@@ -993,8 +1062,22 @@ class Store:
             row["request"] = json.loads(row["request"])
         return rows
 
+    def folder_inventory(self, project_id):
+        """Exact collected output paths and take ordinals, without frozen prompts."""
+        with self.reading() as db:
+            rows = db.execute(
+                "SELECT clip_id,json_extract(request,'$.takeNumber') AS number,result FROM attempts WHERE project_id=?",
+                (project_id,),
+            ).fetchall()
+            known, numbers, memo = set(), {}, {}
+            for row in rows:
+                numbers[row["clip_id"]] = max(numbers.get(row["clip_id"], 0), row["number"] or 0)
+                result = self._load(row["result"], db, memo=memo) or {}
+                known.update(a.get("originalFile", a.get("file")) for a in result.get("artifacts", []))
+            return known, numbers
+
     def get(self, project_id):
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
                 raise NotFound("Project not found")
@@ -1017,13 +1100,7 @@ class Store:
                     (project_id,),
                 )
             }
-            finished = {
-                r["attempt_id"]: r["finished"]
-                for r in db.execute(
-                    "SELECT coalesce(json_extract(data,'$.attemptId'),json_extract(data,'$.result.attemptId')) AS attempt_id, max(created) AS finished FROM events WHERE project_id=? AND (kind='execution.collected' AND json_extract(data,'$.accepted')=1 OR kind='attempt.status' AND json_extract(data,'$.status') IN ('complete','failed','cancelled') OR kind='command.cancel' AND json_extract(data,'$.result.status')='cancelled') GROUP BY attempt_id",
-                    (project_id,),
-                )
-            }
+            finished = {a["id"]: a["finished_at"] for a in attempts}
         ledger.attach(document, attempts)
         for job in document["jobs"]:
             if job["status"] in {"complete", "failed", "cancelled"}:
@@ -1031,6 +1108,20 @@ class Store:
             if job["id"] in submissions:
                 job["submission"] = submissions[job["id"]]
         return {"id": project_id, "revision": row["revision"], "document": document, "recipes": recipes}
+
+    def take_evidence(self, project_id, take_id):
+        """Full generated-take evidence, scoped to its owning project."""
+        with self.reading() as db:
+            row = db.execute(
+                "SELECT * FROM attempts WHERE project_id=? AND take_id=?", (project_id, take_id)
+            ).fetchone()
+            if not row:
+                raise NotFound("Generated take not found")
+            return {
+                "id": take_id,
+                "request": self._load(row["request"], db, media="resolve"),
+                "result": self._load(row["result"], db, media="resolve"),
+            }
 
     def save(self, project_id, revision, document, workflow_recipes=None):
         document = ledger.authored(document)
@@ -1130,7 +1221,7 @@ class Store:
         )
 
     def workflow(self, snapshot_id):
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT capture FROM workflows WHERE id=?", (snapshot_id,)).fetchone()
         if not row:
             raise ValueError("Save an executable workflow to this clip first")
@@ -1163,7 +1254,7 @@ class Store:
         return self.read_handoff(identity)
 
     def read_handoff(self, identity):
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT * FROM handoffs WHERE id=?", (identity,)).fetchone()
         if not row or time.time() - row["created"] > 600:
             raise ValueError("Graph handoff expired; open a new one")
@@ -1292,7 +1383,7 @@ class Store:
     def export_project(self, project_id):
         project = self.get(project_id)
         versions = {c["workflowVersion"] for c in project["document"]["clips"] if c.get("workflowVersion")}
-        with self.connect() as db:
+        with self.reading() as db:
             evidence = {
                 r["media_id"]: self._load(r["evidence"], db, media="resolve")
                 for r in db.execute("SELECT media_id,evidence FROM media_evidence WHERE project_id=?", (project_id,))
@@ -1354,7 +1445,7 @@ class Store:
         )
         request["fingerprint"] = fingerprint(request)
         db.execute(
-            "INSERT INTO attempts VALUES(?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO attempts(id,project_id,clip_id,take_id,prompt_id,status,request,result,error,created) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (
                 attempt_id,
                 project_id,
@@ -1371,7 +1462,8 @@ class Store:
         return attempt_id
 
     def operation(self, operation_id, project_id, payload):
-        with self.connect() as db:
+        with self.reading() as db:
+            self._check_tombstone(db, operation_id)
             row = db.execute("SELECT * FROM operations WHERE id=?", (operation_id,)).fetchone()
         if row is None:
             return None
@@ -1382,6 +1474,7 @@ class Store:
     def accept_queue(self, operation_id, project_id, revision, payload, requests, actor):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            self._check_tombstone(db, operation_id)
             row = db.execute("SELECT * FROM operations WHERE id=?", (operation_id,)).fetchone()
             if row:
                 if row["project_id"] != project_id or row["digest"] != fingerprint(payload):
@@ -1446,7 +1539,7 @@ class Store:
             return True
 
     def owner(self, attempt_id):
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT session_id FROM attempt_owners WHERE attempt_id=?", (attempt_id,)).fetchone()
         return row[0] if row else None
 
@@ -1465,7 +1558,7 @@ class Store:
             )
 
     def host(self, include_definitions=True):
-        with self.connect() as db:
+        with self.reading() as db:
             columns = "*" if include_definitions else "configuration,session_id,heartbeat"
             row = db.execute("SELECT " + columns + " FROM host WHERE id=1").fetchone()
         if not row:
@@ -1491,7 +1584,7 @@ class Store:
     def events(self, project_id, since=0, limit=100, latest=False):
         if type(since) is not int or since < 0 or type(limit) is not int or not 1 <= limit <= 500:
             raise ValueError("Choose a nonnegative event cursor and a limit of 1-500")
-        with self.connect() as db:
+        with self.reading() as db:
             order = "DESC" if latest else "ASC"
             rows = db.execute(
                 "SELECT * FROM events WHERE project_id=? AND cursor>? ORDER BY cursor " + order + " LIMIT ?",
@@ -1508,6 +1601,7 @@ class Store:
     def command(self, identity, project_id, revision, payload, apply):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            self._check_tombstone(db, identity)
             old = db.execute("SELECT * FROM operations WHERE id=?", (identity,)).fetchone()
             if old:
                 if old["project_id"] != project_id or old["digest"] != fingerprint(payload):
@@ -1572,7 +1666,7 @@ class Store:
         return {"viewId": rows[0]["view_id"], **json.loads(rows[0]["document"]), "updated": rows[0]["updated"]}
 
     def attempt(self, attempt_id):
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT * FROM attempts WHERE id=?", (attempt_id,)).fetchone()
         if not row:
             raise NotFound("Attempt not found")
@@ -1581,7 +1675,7 @@ class Store:
         return result
 
     def pending(self):
-        with self.connect() as db:
+        with self.reading() as db:
             return [
                 r[0]
                 for r in db.execute(
@@ -1597,7 +1691,7 @@ class Store:
             )
 
     def dispatch_record(self, attempt_id):
-        with self.connect() as db:
+        with self.reading() as db:
             row = db.execute("SELECT * FROM dispatches WHERE attempt_id=?", (attempt_id,)).fetchone()
         return {"payload": self._load(row["payload"]), "validation": json.loads(row["validation"])} if row else None
 
@@ -1611,7 +1705,7 @@ class Store:
             with self.connect() as db:
                 db.execute("BEGIN IMMEDIATE")
                 return self.transition(attempt_id, status, result, error, db, expected=expected, recovery=recovery)
-        current = db.execute("SELECT status,error FROM attempts WHERE id=?", (attempt_id,)).fetchone()
+        current = db.execute("SELECT status,error,finished_at FROM attempts WHERE id=?", (attempt_id,)).fetchone()
         if not current or (expected is not None and current["status"] != expected):
             return False
         allowed = (
@@ -1624,8 +1718,16 @@ class Store:
         if current and current["status"] == status and result is None and current["error"] == error:
             return True
         db.execute(
-            "UPDATE attempts SET status=?,result=COALESCE(?,result),error=? WHERE id=? AND status!='complete'",
-            (status, self._dump(db, result, receipt=True) if result is not None else None, error, attempt_id),
+            "UPDATE attempts SET status=?,result=COALESCE(?,result),error=?,finished_at=? WHERE id=? AND status!='complete'",
+            (
+                status,
+                self._dump(db, result, receipt=True) if result is not None else None,
+                error,
+                (current["finished_at"] if status == current["status"] else time.time())
+                if status in attempts.TERMINAL
+                else None,
+                attempt_id,
+            ),
         )
         if current and current[0] != status and current[0] != attempts.COMPLETE:
             project_id = db.execute("SELECT project_id FROM attempts WHERE id=?", (attempt_id,)).fetchone()[0]
