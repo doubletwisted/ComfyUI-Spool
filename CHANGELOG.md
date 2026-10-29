@@ -64,6 +64,9 @@ First public release.
 - Seed modes (fixed, increment, decrement, randomize) with exact 64-bit seeds.
   The generation review shows each shot's route and seeds, and warns when
   several takes would repeat the same seed.
+- **Execute on: Deadline** in the inspector renders a local workflow on the farm
+  without adding a node to it, with the pool, group, priority and workers chosen
+  per clip. Agents use the `set_execution` command.
 - Spool ships its own built-in workflows with more of their media inputs
   connected: MiniMax H3 and H3 Max Reference to Video on Comfy Cloud (reference
   images, video and audio), FLUX 3 Image to Video (up to 10 keyframes), and the

@@ -133,9 +133,13 @@ def write_result(store, media, attempt, result):
                 full[identity]["inputs"].update({k: v for k, v in node["inputs"].items() if not isinstance(v, list)})
         prompt = full
     capture["prompt"] = copy.deepcopy(prompt)
-    for identity, node in attempt["request"]["prompt"].items():
-        if node["class_type"] in ("DeadlineSubmit", "SaveAndSubmitNode"):
-            capture["prompt"][identity] = copy.deepcopy(node)
+    if attempt["request"].get("launcherAdded"):
+        # The submit node came from the clip's Deadline setting, not from this workflow.
+        capture["prompt"].pop(attempt["request"]["launcherNodeId"], None)
+    else:
+        for identity, node in attempt["request"]["prompt"].items():
+            if node["class_type"] in ("DeadlineSubmit", "SaveAndSubmitNode"):
+                capture["prompt"][identity] = copy.deepcopy(node)
     capture["provenance"] = {"source": "Generated take", "attemptId": attempt["id"], "takeId": attempt["take_id"]}
     write(
         media.resolve(result["primary"]["originalFile"]),

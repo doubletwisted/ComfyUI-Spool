@@ -15,11 +15,24 @@ plugin update can need a matching Spool update.
    path on the workers as on the Spool computer. Spool stages each submission
    inside the project folder and does not use Deadline's path mapping, so a farm
    that mixes macOS and Windows machines is not supported.
-3. Select the clip, click **Edit in Comfy**, add one **Submit to Deadline** node and
-   set its pool, group and worker restrictions. Click **Apply to clip**.
+3. Select the clip and set **Execute on** to **Deadline** in the inspector. Choose
+   the **Pool**, **Group**, **Priority** and **Workers** (a comma-separated list;
+   empty means any worker). Pools and groups are the ones ComfyUI read from the
+   farm when it started.
 4. **Generate**. The inspector names the route as **Deadline**.
 
-No changes to the Submit node, the worker plugin or the repository are needed.
+**Execute on** offers Deadline only for local workflows, and only when the plugin is
+loaded. Without Deadline's client on the computer it is shown as not available.
+Spool adds a Submit to Deadline node with these settings to each take's request
+when you generate; the clip's workflow does not change, and neither do the
+workflows saved with its takes. A clip on Deadline stays there when you give it
+another local workflow, and **Local ComfyUI** switches it back while remembering
+the settings.
+
+A workflow can instead carry its own **Submit to Deadline** node: click **Edit in
+Comfy**, add one and set it up, then **Apply to clip**. Its settings are used and
+the clip always renders on Deadline. No changes to the Submit node, the worker
+plugin or the repository are needed.
 
 ## What happens on the farm
 

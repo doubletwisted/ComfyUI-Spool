@@ -10,6 +10,8 @@ import {
   visibleRenderJobs,
   reviewSignature,
   executionRoute,
+  workflowTarget,
+  deadlineSettings,
   repeatsSameRequest,
   PENDING,
   TERMINAL,
@@ -107,6 +109,30 @@ assert.equal(executionRoute({ executionTarget: 'cloud' }, deadline), 'Deadline')
 assert.equal(executionRoute({}, { executionTarget: 'cloud' }), 'Comfy Cloud');
 assert.equal(executionRoute({ executionTarget: 'local' }, { executionTarget: 'cloud' }), 'Local ComfyUI');
 assert.equal(executionRoute({}, undefined), 'Local ComfyUI');
+assert.equal(executionRoute({ executionTarget: 'deadline' }, {}), 'Deadline');
+assert.equal(workflowTarget({ executionTarget: 'deadline' }, {}), 'deadline');
+assert.equal(workflowTarget({ executionTarget: 'deadline' }, { executionTarget: 'cloud' }), 'cloud');
+assert.equal(workflowTarget({ executionTarget: 'cloud' }, {}), 'local');
+assert.deepEqual(
+  deadlineSettings({
+    input: {
+      required: {
+        priority: ['INT', { default: 50, min: 0, max: 100 }],
+        pool: [['gpu', 'none'], { default: 'none' }],
+        group: ['COMBO', { options: ['a', 'b'], default: 'missing' }],
+        output_directory: ['STRING', { default: '' }],
+      },
+      optional: { machine_list: ['STRING', { default: '' }] },
+    },
+  }),
+  [
+    { name: 'pool', label: 'Pool', options: ['gpu', 'none'], default: 'none' },
+    { name: 'group', label: 'Group', options: ['a', 'b'], default: 'a' },
+    { name: 'priority', label: 'Priority', type: 'int', min: 0, max: 100, default: 50 },
+    { name: 'machine_list', label: 'Workers', type: 'text', default: '' },
+  ],
+);
+assert.deepEqual(deadlineSettings(undefined), []);
 assert.equal(jobElapsed({ status: 'running', createdAt: 100 }, 175), '1m 15s');
 assert.equal(jobElapsed({ status: 'complete', createdAt: 100, finishedAt: 160 }, 999), '1m 0s');
 assert.equal(jobElapsed({ status: 'complete', createdAt: 100 }, 999), '');

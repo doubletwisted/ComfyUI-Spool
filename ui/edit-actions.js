@@ -1,3 +1,4 @@
+import { workflowTarget } from './generation.js';
 import * as T from './timeline.js';
 
 // Authored actions shared by installed controls and lifecycle checks.
@@ -22,7 +23,7 @@ export function createWorkflowAssignment({
         recipe.provenance?.builtinTemplate && b.asset ? '' : copy(recipe.prompt[b.nodeId].inputs[b.input]),
       ]),
     );
-    c.executionTarget = recipe.executionTarget || 'local';
+    c.executionTarget = workflowTarget(c, recipe);
     delete c.generationBase;
     delete c.shotInputs;
     delete c.seedKey;

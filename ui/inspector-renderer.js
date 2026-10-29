@@ -1,4 +1,4 @@
-import { executionRoute } from './generation.js';
+import * as G from './generation.js';
 import { visibleInputs } from './input-groups.js';
 // Editor adapters are explicit; rendering always reads the current draft.
 export function createInspectorRenderer({
@@ -40,7 +40,67 @@ export function createInspectorRenderer({
   getEditableGraph,
   getOpenNativeWorkflow,
   getPrepareWorkflow,
+  deadlineExecution,
 }) {
+  // Deadline is a choice for local workflows when this host can submit to it, or
+  // while a clip is still set to it. A workflow with its own submit node needs none.
+  function deadlineControls(c, recipe) {
+    if (!c.workflowVersion || G.hasDeadlineLauncher(recipe))
+      return G.hasDeadlineLauncher(recipe)
+        ? '<p class="workflow-hint">Deadline settings come from the workflow’s Submit to Deadline node.</p>'
+        : '';
+    const definition = definitionsFor(c).DeadlineSubmit,
+      chosen = c.executionTarget === 'deadline',
+      ready = deadlineExecution();
+    if ((recipe?.executionTarget || 'local') !== 'local' || (!definition && !chosen)) return '';
+    const option = (value, label, selected, disabled) =>
+        '<option value="' +
+        esc(value) +
+        '"' +
+        (selected ? ' selected' : '') +
+        (disabled ? ' disabled' : '') +
+        '>' +
+        esc(label) +
+        '</option>',
+      field = setting => {
+        const value = c.deadline?.[setting.name] ?? setting.default,
+          attrs = ' data-deadline-setting="' + esc(setting.name) + '"';
+        return (
+          '<label class="field"><span>' +
+          esc(setting.label) +
+          '</span>' +
+          (setting.options
+            ? '<select' +
+              attrs +
+              '>' +
+              (setting.options.includes(value) ? '' : option(value, value + ' (not on this farm)', true)) +
+              setting.options.map(o => option(o, o, o === value)).join('') +
+              '</select>'
+            : setting.type === 'int'
+              ? '<input type="number"' +
+                attrs +
+                ' min="' +
+                setting.min +
+                '" max="' +
+                setting.max +
+                '" step="1" value="' +
+                esc(value) +
+                '">'
+              : '<input' + attrs + ' placeholder="Any worker" value="' + esc(value) + '">') +
+          '</label>'
+        );
+      };
+    return (
+      '<label class="field"><span>Execute on</span><select id="clipExecutionTarget">' +
+      option('local', 'Local ComfyUI', !chosen) +
+      option('deadline', ready ? 'Deadline' : 'Deadline · not available', chosen, !ready && !chosen) +
+      '</select></label>' +
+      (chosen && !ready ? '<p class="workflow-problem" role="status">' + esc(G.DEADLINE_UNAVAILABLE) + '</p>' : '') +
+      (chosen && definition
+        ? '<div class="deadline-settings">' + G.deadlineSettings(definition).map(field).join('') + '</div>'
+        : '')
+    );
+  }
   function renderInspector() {
     inspectorNotes.render();
     if (selectionIds().length > 1) {
@@ -62,7 +122,8 @@ export function createInspectorRenderer({
     $('audioInspectorTab').classList.remove('active');
     $('audioInspectorTab').setAttribute('aria-selected', 'false');
     getRenderTakes()();
-    const reason = getQueueReason()(c),
+    const recipe = getNativeRecipes()[c.workflowVersion],
+      reason = getQueueReason()(c),
       embedded = !c.workflow && !c.workflowVersion && !!getEditableGraph()(c),
       bindings = getNativeRecipes()[c.workflowVersion]
         ? builtinBindings(getNativeRecipes()[c.workflowVersion], definitionsFor(c), c.bindings)
@@ -112,7 +173,7 @@ export function createInspectorRenderer({
         '"><span>' +
         workflowLabel +
         '<small class="workflow-route">' +
-        executionRoute(c, getNativeRecipes()[c.workflowVersion]) +
+        G.executionRoute(c, recipe) +
         '</small></span><div class="clip-workflow-actions"><button class="outline" id="editClipWorkflow">Edit in Comfy</button><button class="outline" id="reloadTakeWorkflow" title="Restore the selected take’s saved workflow and inputs, replacing current edits">Reload workflow from take</button></div></div>' +
         (!setup.ready
           ? '<p class="' +
@@ -121,13 +182,14 @@ export function createInspectorRenderer({
             esc(setup.note) +
             '</p>'
           : '') +
-        (getNativeRecipes()[c.workflowVersion]?.executionTarget === 'cloud'
+        (recipe?.executionTarget === 'cloud'
           ? '<label class="field"><span>Execute on</span><select id="clipExecutionTarget"><option value="cloud" ' +
             ((c.executionTarget || 'cloud') === 'cloud' ? 'selected' : '') +
             '>Comfy Cloud · Developer Platform</option><option value="local" ' +
             (c.executionTarget === 'local' ? 'selected' : '') +
             '>Local ComfyUI · Partner Nodes</option></select></label>'
           : '') +
+        deadlineControls(c, recipe) +
         '<div class="native-bindings">' +
         essential
           .filter(({ b }) => b.role !== 'pose')
@@ -165,6 +227,31 @@ export function createInspectorRenderer({
           'inspector',
         );
       };
+    $('inspectorContent')
+      .querySelectorAll('[data-deadline-setting]')
+      .forEach(
+        field =>
+          (field.onchange = () => {
+            const setting = G.deadlineSettings(definitionsFor(c).DeadlineSubmit).find(
+                s => s.name === field.dataset.deadlineSetting,
+              ),
+              value = setting.type === 'int' ? Number(field.value) : field.value;
+            if (setting.type === 'int' && !(Number.isInteger(value) && value >= setting.min && value <= setting.max)) {
+              field.value = c.deadline?.[setting.name] ?? setting.default;
+              return;
+            }
+            edits.apply(
+              'Change Deadline settings',
+              () => {
+                c.deadline = { ...c.deadline, [setting.name]: value };
+                if (value === setting.default) delete c.deadline[setting.name];
+                if (!Object.keys(c.deadline).length) delete c.deadline;
+                c.revision++;
+              },
+              'inspector',
+            );
+          }),
+      );
     getBindImageInputs()(c);
     $('inspectorContent')
       .querySelectorAll('[data-clear-input]')

@@ -45,6 +45,7 @@ Replace every placeholder from fresh state. Scope is a command contract, not aut
 | --- | --- | --- |
 | `set_inputs` | `inputs` | `{clipId, values}`; merges literal values by existing binding key. An empty string empties an `optional` media binding. |
 | `set_shot_inputs` | `inputs` | `{clipId, inputs}`; replaces the entire routing list, so preserve unrelated entries. |
+| `set_execution` | `inputs` | `{clipId, target, deadline?}`; `target` is `local`, `cloud` (Comfy Cloud workflows only) or `deadline` (local workflows, when the capabilities report `deadlineExecution`). `deadline` may set `pool`, `group`, `priority` and `machine_list`; pools and groups must be from the `DeadlineSubmit` definition. A workflow with its own Submit to Deadline node is always on Deadline. Does not render. |
 | `apply_workflow` | `workflow` | `{clipId, workflowVersion}`; uses an existing project recipe as the library does: resets bindings/values to its defaults, sets the recipe's execution target, resets seed behavior to Fixed and removes old shot routing and take setup. Built-in recipes leave media sources empty. |
 | `brief` | `edit` | `{text}`; changes the project brief. |
 | `feedback` | `feedback` | `{clipId, takeId, verdict}` where verdict is `keep`, `reject`, `revise` or `unrated`; does not select a take. |

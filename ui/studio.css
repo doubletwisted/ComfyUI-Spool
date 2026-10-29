@@ -7454,3 +7454,9 @@ input[type='range'] {
 .review-warning button {
   flex-shrink: 0;
 }
+/* Deadline settings for a clip rendered on the farm: pool and group, priority and workers. */
+.deadline-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 10px;
+}

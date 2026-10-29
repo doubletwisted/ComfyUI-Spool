@@ -18,6 +18,7 @@ ACTION_CAPABILITIES = {
     "queue_experiment": "queue",
     "set_inputs": "inputs",
     "set_shot_inputs": "inputs",
+    "set_execution": "inputs",
     "apply_workflow": "workflow",
     "choose_take": "choose_take",
     "use_take": "use_take",
@@ -37,6 +38,7 @@ ARGUMENT_FIELDS = {
     "queue_experiment": {"variants": list},
     "set_inputs": {"clipId": str, "values": dict},
     "set_shot_inputs": {"clipId": str, "inputs": list},
+    "set_execution": {"clipId": str, "target": str},
     "apply_workflow": {"clipId": str, "workflowVersion": str},
     "choose_take": {"clipId": str, "takeId": str},
     "use_take": {"clipId": str, "takeId": str, "capture": (dict, type(None))},
@@ -71,7 +73,7 @@ def validate_envelope(data):
     for key, kind in ARGUMENT_FIELDS[action].items():
         require(isinstance(arguments.get(key), kind))
     argument_types = {key: kind for fields in ARGUMENT_FIELDS.values() for key, kind in fields.items()}
-    argument_types.update(summary=str, intent=str, mode=str)
+    argument_types.update(summary=str, intent=str, mode=str, deadline=dict)
     for key, kind in argument_types.items():
         if key in arguments:
             require(isinstance(arguments[key], kind))
@@ -79,6 +81,8 @@ def validate_envelope(data):
         require(arguments["edge"] in ("in", "out") and type(arguments["frame"]) is int)
     if action == "rename_clip":
         require(1 <= len(arguments["name"].strip()) <= 200)
+    if action == "set_execution":
+        require(arguments["target"] in ("local", "cloud", "deadline"))
     if "mode" in arguments:
         require(arguments["mode"] in ("repeat", "explore"))
     if "verdict" in arguments:
@@ -154,6 +158,12 @@ def status(store, project_id, clip_id=None, limit=50, offset=0):
             "name": c["name"],
             "notes": notes.entries(c),
             "workflowVersion": c.get("workflowVersion"),
+            "executionTarget": (
+                requests.execution_target(c, project["recipes"][c["workflowVersion"]])
+                if c.get("workflowVersion") in project["recipes"]
+                else None
+            ),
+            "deadline": c.get("deadline", {}),
             "inputs": c.get("inputValues", {}),
             "bindings": c.get("bindings", []),
             **inputs(c),
@@ -272,6 +282,26 @@ def prepare_experiment(store, project_id, revision, arguments):
     }
 
 
+def set_execution(clip, capture, arguments, definitions):
+    """Choose where a clip renders, as the inspector's Execute on does."""
+    target, settings = arguments["target"], arguments.get("deadline")
+    if requests.execution_target({}, capture) == "deadline":
+        raise ValueError("This workflow's Submit to Deadline node decides where it renders")
+    allowed = ("cloud", "local") if capture.get("executionTarget", "local") == "cloud" else ("local", "deadline")
+    if target not in allowed:
+        raise ValueError("This workflow renders on " + " or ".join(allowed))
+    if settings is not None and target != "deadline":
+        raise ValueError("Deadline settings apply only to Deadline")
+    if target == "deadline":
+        settings = clip.get("deadline") if settings is None else settings
+        requests.deadline_launcher(definitions, settings)
+        if settings:
+            clip["deadline"] = copy.deepcopy(settings)
+        else:
+            clip.pop("deadline", None)
+    clip["executionTarget"] = target
+
+
 def execute(store, media, project_id, data):
     validate_envelope(data)
     action, arguments = data["action"], data.get("arguments", {})
@@ -331,6 +361,7 @@ def execute(store, media, project_id, data):
         return operations.use_take(store, project_id, revision, clip_id, arguments["takeId"], capture, command=data)
     adopted = None
     cancellation = None
+    definitions = store.host()["definitions"] if action == "set_execution" else {}
     if action == "cancel":
         store.operation(identity, project_id, data)  # Validate replays before any external lookup.
         attempt = store.attempt(arguments["attemptId"])
@@ -357,7 +388,7 @@ def execute(store, media, project_id, data):
             raise ValueError("Shot is no longer available")
         if action in note_actions:
             return notes.apply(clip, action, arguments, actor), True
-        if action in ("set_inputs", "set_shot_inputs"):
+        if action in ("set_inputs", "set_shot_inputs", "set_execution"):
             capture = store.recipe(project_id, clip.get("workflowVersion"), db)
             if capture is None:
                 raise ValueError("Save an executable workflow to this clip first")
@@ -390,6 +421,8 @@ def execute(store, media, project_id, data):
                 binding = bindings.get(value["key"])
                 requests.validate_shot_input(binding, value)
             clip["shotInputs"] = copy.deepcopy(arguments["inputs"])
+        elif action == "set_execution":
+            set_execution(clip, capture, arguments, definitions)
         elif action == "apply_workflow":
             capture = store.recipe(project_id, arguments["workflowVersion"], db)
             if capture is None:

@@ -37,7 +37,8 @@ instead.
 with `optional`, and inputs of one kind that fill in order with a shared `group`.
 `inputRules` lists sets of groups that need at least one filled input, and
 `inputProblem` names what blocks generation, as the text beside **Generate** does,
-or is `null`. `set_inputs` with an empty string empties an optional input; a
+or is `null`. `executionTarget` is where the shot renders (`local`, `cloud` or
+`deadline`) and `deadline` holds its chosen Deadline settings. `set_inputs` with an empty string empties an optional input; a
 request moves a group's filled inputs into its first slots and leaves empty
 optional inputs out. `focus` reads which clip a studio tab has selected. It
 expires after 15 seconds and is context, not permission to edit.
@@ -73,7 +74,7 @@ needs:
 
 | Action | Capability |
 | --- | --- |
-| `set_inputs`, `set_shot_inputs` | `inputs` |
+| `set_inputs`, `set_shot_inputs`, `set_execution` | `inputs` |
 | `apply_workflow` | `workflow` |
 | `brief`, `rename_clip`, `trim_clip` | `edit` |
 | `feedback` | `feedback` |

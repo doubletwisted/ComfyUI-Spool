@@ -68,7 +68,10 @@ def resolve(store, project_id, clip_id, take_id):
     if not prompt or "nodes" in prompt:
         return None
     capture["prompt"] = copy.deepcopy(prompt)
-    if attempts.target_of(request) == attempts.DEADLINE:
+    if request.get("launcherAdded"):
+        # The submit node came from the clip's Deadline setting, not from this workflow.
+        capture["prompt"].pop(request["launcherNodeId"], None)
+    elif attempts.target_of(request) == attempts.DEADLINE:
         for identity, node in request.get("prompt", {}).items():
             if node["class_type"] in ("DeadlineSubmit", "SaveAndSubmitNode") and identity not in capture["prompt"]:
                 capture["prompt"][identity] = copy.deepcopy(node)

@@ -45,6 +45,11 @@ def deadline_command():
     return DEADLINE.get(sys.platform, "deadlinecommand")
 
 
+def deadline_installed():
+    """Whether this computer has Deadline's client, so Spool can submit and observe farm jobs."""
+    return Path(deadline_command()).is_file()
+
+
 def file_manager():
     """The name of this host's file manager, or None when Spool cannot open one."""
     if sys.platform in FILE_MANAGER:

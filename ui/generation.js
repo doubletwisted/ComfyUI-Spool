@@ -47,12 +47,47 @@ export function createQueueSubmission({ storage, key, submit }) {
 
 export const seedControls = clip =>
   (clip.bindings || []).filter(b => b.role === 'seed' && !b.asset && isIntegerValue(clip.inputValues?.[b.key]));
+export const hasDeadlineLauncher = recipe =>
+  Object.values(recipe?.prompt || {}).some(n => ['DeadlineSubmit', 'SaveAndSubmitNode'].includes(n.class_type));
 // Where a clip's takes compute, by the same rule as `requests.prepare`: a Deadline
 // submit node in the recipe wins, then the clip's choice, then the recipe's.
-export function executionRoute(clip, recipe) {
-  if (Object.values(recipe?.prompt || {}).some(n => ['DeadlineSubmit', 'SaveAndSubmitNode'].includes(n.class_type)))
-    return 'Deadline';
-  return (clip?.executionTarget || recipe?.executionTarget) === 'cloud' ? 'Comfy Cloud' : 'Local ComfyUI';
+export function executionTarget(clip, recipe) {
+  if (hasDeadlineLauncher(recipe)) return 'deadline';
+  return clip?.executionTarget || recipe?.executionTarget || 'local';
+}
+export const executionRoute = (clip, recipe) =>
+  ({ deadline: 'Deadline', cloud: 'Comfy Cloud' })[executionTarget(clip, recipe)] || 'Local ComfyUI';
+// Mirrors `operations.workflow_target`: a clip on Deadline stays there for another local workflow.
+export function workflowTarget(clip, recipe) {
+  const target = recipe?.executionTarget || 'local';
+  return target === 'local' && clip?.executionTarget === 'deadline' ? 'deadline' : target;
+}
+export const DEADLINE_UNAVAILABLE =
+  'Deadline is not available. Install ComfyUI-Deadline-Plugin on the ComfyUI that runs Spool and Deadline’s client on this computer, then restart ComfyUI.';
+/**
+ * @typedef {{ name: string, label: string, default: any, options?: any[], type?: string, min?: number, max?: number }} DeadlineSetting
+ */
+// The settings a clip chooses for the submit node Spool adds (`requests.DEADLINE_SETTINGS`),
+// read from the plugin's node definition so pools and groups come from the farm.
+/** @returns {DeadlineSetting[]} */
+export function deadlineSettings(definition) {
+  const inputs = { ...definition?.input?.required, ...definition?.input?.optional },
+    labels = { pool: 'Pool', group: 'Group', priority: 'Priority', machine_list: 'Workers' };
+  return Object.entries(labels).flatMap(
+    /** @returns {DeadlineSetting[]} */ ([name, label]) => {
+      const spec = inputs[name];
+      if (!spec) return [];
+      const config = spec[1] && typeof spec[1] === 'object' ? spec[1] : {},
+        options = Array.isArray(spec[0]) ? spec[0] : spec[0] === 'COMBO' ? config.options : null;
+      if (options)
+        return [{ name, label, options, default: options.includes(config.default) ? config.default : options[0] }];
+      if (spec[0] === 'INT')
+        return [
+          { name, label, type: 'int', min: config.min ?? 0, max: config.max ?? 100, default: config.default ?? 0 },
+        ];
+      return [{ name, label, type: 'text', default: config.default ?? '' }];
+    },
+  );
 }
 // Several takes with a fixed seed (or no exposed seed) repeat the same request.
 export const repeatsSameRequest = clip =>
@@ -62,6 +97,7 @@ export function reviewSignature(project, ids) {
     fields = [
       'workflowVersion',
       'executionTarget',
+      'deadline',
       'inputValues',
       'shotInputs',
       'generationBase',

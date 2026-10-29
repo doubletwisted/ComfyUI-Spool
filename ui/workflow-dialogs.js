@@ -1,4 +1,5 @@
 import * as B from './bridge.js';
+import { workflowTarget } from './generation.js';
 
 // Live getters and narrow actions keep this owner independent of editor initialization.
 export function createWorkflowDialogs({
@@ -452,7 +453,7 @@ export function createWorkflowDialogs({
           const workflow = workflows[session.workflowId] || registerWorkflowData(capture, name);
           updated.workflow = workflow.id;
           if (session.replaceWorkflow) {
-            updated.executionTarget = capture.executionTarget || 'local';
+            updated.executionTarget = workflowTarget(updated, capture);
             matchClipInputs(
               updated,
               before.clips.find(c => c.id === clipId),

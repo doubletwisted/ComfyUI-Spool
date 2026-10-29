@@ -2,12 +2,75 @@
 
 import copy
 
-from . import attempts, cloud
+from . import attempts, cloud, system
 from .media import SAVER_GROUPS, contained, sha256
 from .store import Conflict, uid, encode
 from .workflow_inputs import LOADERS, compact_groups, input_problem, leave_out
 
 SAVERS = set(SAVER_GROUPS)
+LAUNCHERS = {"DeadlineSubmit", "SaveAndSubmitNode"}
+# Settings a clip may choose for the Deadline submit node Spool adds; the plugin's
+# defaults fill the rest, and Spool sets the output folder and batch sizes itself.
+DEADLINE_SETTINGS = ("pool", "group", "priority", "machine_list")
+DEADLINE_UNAVAILABLE = (
+    "Deadline is not available. Install ComfyUI-Deadline-Plugin on the ComfyUI that runs Spool "
+    "and Deadline's client on this computer, then restart ComfyUI."
+)
+
+
+def execution_target(clip, capture):
+    """A Deadline submit node in the workflow wins, then the clip's choice, then the workflow's."""
+    if any(node["class_type"] in LAUNCHERS for node in capture["prompt"].values()):
+        return attempts.DEADLINE
+    return clip.get("executionTarget", capture.get("executionTarget", attempts.LOCAL))
+
+
+def deadline_available(definitions):
+    return "DeadlineSubmit" in definitions and system.deadline_installed()
+
+
+def deadline_launcher(definitions, settings):
+    """The submit node for a clip rendered on Deadline whose workflow has none."""
+    if not deadline_available(definitions):
+        raise ValueError(DEADLINE_UNAVAILABLE)
+    specs = {
+        name: spec
+        for group in ("required", "optional")
+        for name, spec in definitions["DeadlineSubmit"].get("input", {}).get(group, {}).items()
+    }
+
+    def options(spec):
+        if isinstance(spec[0], list):
+            return spec[0]
+        return spec[1].get("options") if spec[0] == "COMBO" and len(spec) > 1 else None
+
+    inputs = {}
+    for name, spec in specs.items():
+        config = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+        choices = options(spec)
+        if choices is not None:
+            inputs[name] = config["default"] if config.get("default") in choices else choices[0]
+        elif "default" in config:
+            inputs[name] = config["default"]
+    settings = {} if settings is None else settings
+    if not isinstance(settings, dict) or set(settings) - set(DEADLINE_SETTINGS):
+        raise ValueError("Deadline settings are pool, group, priority and machine_list")
+    for name, value in settings.items():
+        spec = specs.get(name)
+        if spec is None:
+            raise ValueError("This Deadline plugin has no " + name + " setting")
+        choices = options(spec)
+        config = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+        if choices is not None:
+            if value not in choices:
+                raise ValueError("Deadline " + name + " " + str(value) + " is not on this farm")
+        elif spec[0] == "INT":
+            if type(value) is not int or not config.get("min", value) <= value <= config.get("max", value):
+                raise ValueError("Choose a Deadline " + name + " within its range")
+        elif not isinstance(value, str):
+            raise ValueError("Deadline " + name + " must be text")
+        inputs[name] = value
+    return {"class_type": "DeadlineSubmit", "inputs": inputs}
 
 
 def validate_shot_input(binding, setting):
@@ -90,7 +153,7 @@ def audio_input_segments(document, clip, setting):
 
 
 def local_compatibility(prompt, result):
-    if any(node["class_type"] in {"DeadlineSubmit", "SaveAndSubmitNode"} for node in prompt.values()):
+    if any(node["class_type"] in LAUNCHERS for node in prompt.values()):
         raise ValueError(
             "This recipe contains a DeadlineSubmit launcher. Local Spool execution is unavailable; use a separately captured local workflow."
         )
@@ -131,25 +194,27 @@ def prepare(store, media, project, items, freeze=True):
         if clip.get("generationBase") and clip["generationBase"]["takeId"] != clip.get("takeId"):
             raise ValueError("Use the take again to update generation settings before queueing")
         capture = store.workflow(clip.get("workflowVersion"))
-        launchers = [
-            node_id
-            for node_id, node in capture["prompt"].items()
-            if node["class_type"] in {"DeadlineSubmit", "SaveAndSubmitNode"}
-        ]
+        launchers = [node_id for node_id, node in capture["prompt"].items() if node["class_type"] in LAUNCHERS]
         if len(launchers) > 1:
             raise ValueError("Choose a workflow with one explicit Deadline submit node")
-        target = (
-            attempts.DEADLINE
-            if launchers
-            else clip.get("executionTarget", capture.get("executionTarget", attempts.LOCAL))
-        )
+        target = execution_target(clip, capture)
         if target not in attempts.TARGETS:
-            raise ValueError("Choose local ComfyUI or Comfy Cloud execution")
+            raise ValueError("Choose local ComfyUI, Comfy Cloud or Deadline execution")
         if target == attempts.CLOUD and not cloud.available():
             raise ValueError(cloud.UNAVAILABLE)
         local_compatibility({k: v for k, v in capture["prompt"].items() if k not in launchers}, capture["result"])
+        # A clip set to Deadline whose workflow has no submit node gets one in each
+        # frozen request only; the saved workflow and its takes' workflows stay as made.
+        added = None
+        if target == attempts.DEADLINE and not launchers:
+            if capture.get("executionTarget", attempts.LOCAL) != attempts.LOCAL:
+                raise ValueError("Comfy Cloud workflows cannot render on Deadline")
+            added = deadline_launcher(store.host()["definitions"], clip.get("deadline"))
+            launchers = [str(1 + max((int(k) for k in capture["prompt"] if k.isdigit()), default=0))]
         for repeat_index in range(count):
             prompt = copy.deepcopy(capture["prompt"])
+            if added:
+                prompt[launchers[0]] = copy.deepcopy(added)
             assets = set()
             values = copy.deepcopy(clip.get("inputValues", {}))
             overrides = item.get("values", {})
@@ -285,6 +350,7 @@ def prepare(store, media, project, items, freeze=True):
                         "sequenceFps": project["document"].get("fps", 24),
                         "target": target,
                         "launcherNodeId": launchers[0] if launchers else None,
+                        "launcherAdded": bool(added),
                     },
                 )
             )

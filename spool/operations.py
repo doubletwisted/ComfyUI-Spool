@@ -40,6 +40,12 @@ def choose_take(document, clip, take_id, frames):
     clip["takeId"] = take_id
 
 
+def workflow_target(clip, capture):
+    """A clip set to Deadline stays on Deadline for another local workflow; otherwise the workflow decides."""
+    target = capture.get("executionTarget", "local")
+    return "deadline" if target == "local" and clip.get("executionTarget") == "deadline" else target
+
+
 def assign_workflow(clip, version, capture):
     """Give the clip another saved workflow version, as choosing it in the library does."""
     builtin = bool(capture.get("provenance", {}).get("builtinTemplate"))
@@ -50,7 +56,7 @@ def assign_workflow(clip, version, capture):
         b["key"]: "" if builtin and b.get("asset") else capture["prompt"][b["nodeId"]]["inputs"][b["input"]]
         for b in clip["bindings"]
     }
-    clip["executionTarget"] = capture.get("executionTarget", "local")
+    clip["executionTarget"] = workflow_target(clip, capture)
     library = capture.get("provenance", {}).get("importedWorkflowId")
     if library:
         clip["workflow"] = library

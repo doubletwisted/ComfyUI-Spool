@@ -972,6 +972,7 @@ async function startEditor(isFailed) {
     getEditableGraph: () => editableGraph,
     getOpenNativeWorkflow: () => openNativeWorkflow,
     getPrepareWorkflow: () => prepareWorkflow,
+    deadlineExecution: () => productCapabilities.deadlineExecution === true,
   });
   const takeRendererOwner = createTakeRenderer({
     $,

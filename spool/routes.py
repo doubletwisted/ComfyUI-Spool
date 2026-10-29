@@ -782,6 +782,10 @@ def register(server, store, media, executor=None):
         value["clipFolderReveal"] = value["fileManager"] is not None
         value.update(credentials.key_status())
         value["cloudExecution"] = cloud_module.available()
+        definitions = (
+            value["definitions"] if types != "" else await asyncio.to_thread(lambda: store.host()["definitions"])
+        )
+        value["deadlineExecution"] = await asyncio.to_thread(requests.deadline_available, definitions)
         value["requirements"] = requirements.report()
         value["version"] = __version__
         value["apiVersion"] = API_VERSION

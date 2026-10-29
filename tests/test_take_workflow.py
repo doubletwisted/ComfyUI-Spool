@@ -210,6 +210,27 @@ class TakeWorkflowTests(unittest.TestCase):
         capture = resolve(store, "project", "shot", "farm")
         self.assertEqual(capture["prompt"], {**prompt("actual.png"), "submit": launcher})
 
+    def test_farm_continuation_leaves_out_a_launcher_added_for_the_clip(self):
+        launcher = {"class_type": "DeadlineSubmit", "inputs": {"output_directory": "farm-output"}}
+        take = {
+            "id": "farm",
+            "generated": True,
+            "request": {
+                "attemptId": "attempt",
+                "target": "deadline",
+                "launcherNodeId": "99",
+                "launcherAdded": True,
+                "prompt": {**prompt("old.png"), "99": launcher},
+            },
+            "media": {"id": "farm-media"},
+        }
+        store = SimpleNamespace(
+            clip=lambda *_: {"takes": [take]},
+            attempt=lambda _: {"id": "attempt", "project_id": "project", "take_id": "farm", "result": None},
+            dispatch_record=lambda _: {"payload": {"prompt": {**prompt("old.png"), "99": launcher}}},
+        )
+        self.assertEqual(resolve(store, "project", "shot", "farm")["prompt"], prompt("old.png"))
+
 
 class TakeWorkflowRoutes(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

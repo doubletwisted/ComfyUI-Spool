@@ -33,6 +33,7 @@
         "queue_experiment",
         "set_inputs",
         "set_shot_inputs",
+        "set_execution",
         "apply_workflow",
         "choose_take",
         "feedback",
@@ -166,6 +167,31 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 200
+        },
+        "target": {
+          "enum": [
+            "local",
+            "cloud",
+            "deadline"
+          ]
+        },
+        "deadline": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "pool": {
+              "type": "string"
+            },
+            "group": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "integer"
+            },
+            "machine_list": {
+              "type": "string"
+            }
+          }
         }
       }
     }
@@ -240,6 +266,25 @@
             "required": [
               "clipId",
               "inputs"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "set_execution"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "target"
             ]
           }
         }

@@ -20,7 +20,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from PIL import Image, PngImagePlugin
 
-from spool import commands, farm_protocol, receipts, requests, sidecars, take_files, ledger
+from spool import commands, farm_protocol, operations, receipts, requests, sidecars, take_files, ledger
 from spool.wire import unwire, wire
 from spool.collection import Collector
 from spool.execution import LocalExecutor
@@ -990,6 +990,85 @@ class ProjectFolderTests(unittest.TestCase):
             signature,
             "Observed receipts and acknowledgements must not republish an unchanged project",
         )
+
+    def test_clip_set_to_deadline_adds_a_submit_node_to_its_requests_only(self):
+        definitions = {
+            "DeadlineSubmit": {
+                "input": {
+                    "required": {
+                        "output_directory": ["STRING", {"default": ""}],
+                        "batch_count": ["INT", {"default": 1, "min": 1}],
+                        "chunk_size": ["INT", {"default": 1, "min": 1}],
+                        "priority": ["INT", {"default": 50, "min": 0, "max": 100}],
+                        "pool": [["none", "gpu"], {"default": "none"}],
+                        "group": [["none", "comfy4090"], {"default": "none"}],
+                        "job_name": ["STRING", {"default": "ComfyUI via Deadline"}],
+                    },
+                    "optional": {"machine_list": ["STRING", {"default": ""}]},
+                }
+            }
+        }
+        self.workspace.publish_host(
+            {"roots": dict(zip(("input", "output", "temp"), map(str, self.roots)))}, "test", definitions
+        )
+
+        def choose(arguments, identity):
+            data = self.input_command("set_execution", arguments, identity)
+            data["revision"] = self.store.revision(self.project["id"])
+            return commands.execute(self.store, self.media, self.project["id"], data)
+
+        with patch("spool.system.deadline_installed", return_value=False):
+            with self.assertRaisesRegex(ValueError, "Deadline is not available"):
+                choose({"target": "deadline"}, "unavailable")
+        with patch("spool.system.deadline_installed", return_value=True):
+            with self.assertRaisesRegex(ValueError, "not on this farm"):
+                choose({"target": "deadline", "deadline": {"pool": "cpu"}}, "unknown-pool")
+            with self.assertRaisesRegex(ValueError, "renders on local or deadline"):
+                choose({"target": "cloud"}, "cloud")
+            choose({"target": "deadline", "deadline": {"pool": "gpu", "priority": 70}}, "deadline")
+            status = commands.status(self.store, self.project["id"])["shots"][0]
+            self.assertEqual(
+                (status["executionTarget"], status["deadline"]), ("deadline", {"pool": "gpu", "priority": 70})
+            )
+            project = requests.accept(
+                self.store,
+                self.media,
+                self.project["id"],
+                self.store.revision(self.project["id"]),
+                [{"clipId": "clip-a", "count": 2}],
+            )
+        attempts = [self.store.attempt(job["id"]) for job in project["document"]["jobs"]]
+        for attempt in attempts:
+            request = attempt["request"]
+            launcher = request["prompt"][request["launcherNodeId"]]
+            self.assertEqual((request["target"], request["launcherAdded"]), ("deadline", True))
+            self.assertNotIn(request["launcherNodeId"], request["capture"]["prompt"])
+            self.assertEqual(launcher["class_type"], "DeadlineSubmit")
+            self.assertEqual(
+                {k: launcher["inputs"][k] for k in ("pool", "group", "priority", "machine_list", "batch_count")},
+                {"pool": "gpu", "group": "none", "priority": 70, "machine_list": "", "batch_count": 1},
+            )
+            self.assertEqual(Path(launcher["inputs"]["output_directory"]), self.store.root / ".spool" / "deadline")
+        recipe = self.store.get(self.project["id"])["recipes"][
+            self.store.clip(self.project["id"], "clip-a")["workflowVersion"]
+        ]
+        self.assertFalse(any(n["class_type"] == "DeadlineSubmit" for n in recipe["prompt"].values()))
+        # Another local workflow keeps the clip on Deadline; a Cloud one decides for itself.
+        clip = {"executionTarget": "deadline"}
+        self.assertEqual(operations.workflow_target(clip, {"executionTarget": "local"}), "deadline")
+        self.assertEqual(operations.workflow_target(clip, {"executionTarget": "cloud"}), "cloud")
+        self.assertEqual(operations.workflow_target({"executionTarget": "cloud"}, {}), "local")
+        with patch("spool.system.deadline_installed", return_value=False):
+            with self.assertRaisesRegex(ValueError, "Deadline is not available"):
+                requests.accept(
+                    self.store,
+                    self.media,
+                    self.project["id"],
+                    self.store.revision(self.project["id"]),
+                    [{"clipId": "clip-a", "count": 1}],
+                )
+        choose({"target": "local"}, "local")
+        self.assertEqual(self.store.clip(self.project["id"], "clip-a")["deadline"], {"pool": "gpu", "priority": 70})
 
     def test_repeated_status_observations_do_not_publish_snapshots_but_new_errors_do(self):
         project = requests.accept(

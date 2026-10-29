@@ -184,7 +184,10 @@
     'Workflow replacement matches aspect ratio and keeps its resolution preset',
     c().inputValues[ratio.key].startsWith('1:1') && c().inputValues[resolution.key] === 0.4,
   );
-  check('Local model workflows do not display Cloud Partner Node execution controls', !$('clipExecutionTarget'));
+  check(
+    'Local model workflows do not display Cloud Partner Node execution controls',
+    ![...($('clipExecutionTarget')?.options || [])].some(o => o.value === 'cloud'),
+  );
   await apply('api_minimax_h3_max_i2v');
   check('Cloud workflows retain their Cloud/Local execution selector', $('clipExecutionTarget')?.value === 'cloud');
   await wait(() => {

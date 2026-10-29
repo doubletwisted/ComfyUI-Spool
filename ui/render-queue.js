@@ -533,6 +533,11 @@ export function createRenderQueue({
     const recipe = getNativeRecipes()[c?.workflowVersion];
     return (
       workflowStatus(c, workflows[c?.workflow], recipe, definitionsFor(c)).reason ||
+      (c?.executionTarget === 'deadline' &&
+      !G.hasDeadlineLauncher(recipe) &&
+      productCapabilities.deadlineExecution !== true
+        ? G.DEADLINE_UNAVAILABLE
+        : null) ||
       (recipe?.provenance?.builtinTemplate?.startsWith('api_') && !productCapabilities.hasApiKey
         ? 'Set your Comfy Cloud API key in Comfy settings.'
         : null)

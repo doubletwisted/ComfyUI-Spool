@@ -111,6 +111,8 @@ class ContractFixtureTests(unittest.TestCase):
                 args["edge"] = "in"
             if "verdict" in args:
                 args["verdict"] = "keep"
+            if "target" in args:
+                args["target"] = "deadline"
             envelope = {
                 "operationId": "example",
                 "revision": 1,
