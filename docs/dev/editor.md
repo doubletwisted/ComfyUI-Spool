@@ -40,3 +40,10 @@ production modules with deferred transport and decoder dependencies.
 `ui/dialogs.js` owns modal replacement/close cleanup, capture cancellation,
 Escape/Tab handling and focus return. `ui/action-menu.js` owns menu DOM,
 keyboard navigation, dismissal and focus return; callers still build actions.
+
+`ui/viewer.js` owns picture presentation, comparison panes, playback clock,
+video pool and eviction, bounded seeking, image decoding, preview preparation,
+and audio players/mixing. Current document and pixel scale come from getters;
+repaint/save/trim adapters keep the original operation order. Preview quality
+and preparation policy are unchanged. Take-review transitions and viewer
+zoom/gestures still belong to the composition runtime.
