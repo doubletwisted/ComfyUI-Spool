@@ -1,9 +1,123 @@
 [
-  {"decimal":"0","wire":0},
-  {"decimal":"-42","wire":-42},
-  {"decimal":"9007199254740991","wire":9007199254740991},
-  {"decimal":"9007199254740992","wire":{"__spool_int__":"9007199254740992"}},
-  {"decimal":"-9007199254740992","wire":{"__spool_int__":"-9007199254740992"}},
-  {"decimal":"9223372036854775807","wire":{"__spool_int__":"9223372036854775807"}},
-  {"decimal":"18446744073709551615","wire":{"__spool_int__":"18446744073709551615"}}
+  {
+    "decimal": "0",
+    "wire": 0
+  },
+  {
+    "decimal": "-42",
+    "wire": -42
+  },
+  {
+    "decimal": "9007199254740991",
+    "wire": 9007199254740991
+  },
+  {
+    "decimal": "9007199254740992",
+    "wire": {
+      "__spool_int__": "9007199254740992"
+    }
+  },
+  {
+    "decimal": "-9007199254740992",
+    "wire": {
+      "__spool_int__": "-9007199254740992"
+    }
+  },
+  {
+    "decimal": "9223372036854775807",
+    "wire": {
+      "__spool_int__": "9223372036854775807"
+    }
+  },
+  {
+    "decimal": "18446744073709551615",
+    "wire": {
+      "__spool_int__": "18446744073709551615"
+    }
+  },
+  {
+    "wire": {
+      "__spool_int__": "not-an-int"
+    },
+    "invalid": true,
+    "reject": true
+  },
+  {
+    "wire": {
+      "__spool_int__": ""
+    },
+    "invalid": true,
+    "reject": true
+  },
+  {
+    "wire": {
+      "__spool_int__": "-"
+    },
+    "invalid": true,
+    "reject": true
+  },
+  {
+    "wire": {
+      "__spool_int__": "--1"
+    },
+    "invalid": true,
+    "reject": true
+  },
+  {
+    "wire": {
+      "__spool_int__": "+1"
+    },
+    "invalid": true,
+    "reject": true
+  },
+  {
+    "wire": {
+      "__spool_int__": "1.5"
+    },
+    "invalid": true,
+    "reject": true
+  },
+  {
+    "wire": {
+      "__spool_int__": " 1"
+    },
+    "invalid": true,
+    "reject": true
+  },
+  {
+    "wire": {
+      "__spool_int__": "1\n"
+    },
+    "invalid": true,
+    "reject": true
+  },
+  {
+    "wire": {
+      "__spool_int__": "?"
+    },
+    "invalid": true,
+    "reject": true
+  },
+  {
+    "wire": {
+      "__spool_int__": 42
+    },
+    "invalid": true,
+    "reject": true
+  },
+  {
+    "wire": {
+      "__spool_int__": null
+    },
+    "invalid": true,
+    "reject": true
+  },
+  {
+    "wire": {
+      "__spool_int__": "42",
+      "extra": 1
+    },
+    "invalid": true,
+    "reject": false
+  }
 ]
