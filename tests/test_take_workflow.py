@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
-from PIL import Image
+from PIL import Image, PngImagePlugin
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from spool.media import Media
@@ -75,11 +75,21 @@ def document():
     }
 
 
+def embedded_fixture(root):
+    target = root / "assets" / "black.png"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tags = PngImagePlugin.PngInfo()
+    for key in ("workflow", "prompt"):
+        tags.add_text(key, json.dumps(document()["clips"][0]["takes"][0]["media"][key]))
+    Image.new("RGB", (16, 16)).save(target, pnginfo=tags)
+
+
 class TakeWorkflowTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.store = Store(Path(self.temp.name))
+        embedded_fixture(self.store.root)
         self.project = self.store.create(document())
         self.id = self.project["id"]
 
@@ -207,6 +217,7 @@ class TakeWorkflowRoutes(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.temp.cleanup)
         root = Path(self.temp.name)
         self.store = Store(root / "store")
+        embedded_fixture(self.store.root)
         self.project = self.store.create(document())
         self.media = Media(self.store.root, root / "input", root / "output", root / "temp")
         (root / "input").mkdir()

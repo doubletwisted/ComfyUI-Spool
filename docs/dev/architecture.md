@@ -90,21 +90,41 @@ after commit. Newer SQLite versions are refused even without a manifest.
 Schema 6 keeps immutable JSON in `blobs(hash TEXT PRIMARY KEY, data TEXT NOT NULL)`.
 The hash is SHA-256 of `store.encode`'s canonical UTF-8 JSON; a reference is
 `{"__spool_blob__": "<hash>"}`. Recipe captures share their workflow and prompt
-blobs; attempt requests refer to the same captures. Dispatch workflow metadata
-also uses those references. Attempt results and execution receipts refer to one
-receipt blob. Receipts name `primaryArtifactId` instead of duplicating the primary
-artifact. Storage markers restore the exact reader shape, including whether the
-original receipt exposed that ID. The history prompt tuple is stored separately
-with its prompt and workflow members shared, then restored on read. Its exact
-execution prompt, metadata, status, messages and outputs remain available.
+blobs; attempt requests refer to the same captures. API nodes, editor nodes and
+subgraph definitions also share blobs, so changing a seed does not copy the
+whole graph. Authored document captures and imported workflow records use the
+same packing boundary. Scalars used by SQL remain directly accessible.
+Attempt results and execution receipts refer to one receipt blob. Receipts name
+`primaryArtifactId` instead of duplicating the primary artifact. Storage markers
+restore the original receipt envelope, including whether it exposed that ID.
 
-Artifact and media-evidence probes retain streams and format fields except
-`format.tags`. Embedded workflows and prompts are extracted before tags are
-removed and stored as blob references. Store reads unpack into the existing
-public shapes; the HTTP, command and Python/JavaScript document contracts do not
-change. The bounded in-process blob cache never shares mutable objects with
-callers. Maintenance reports open immutable read-only snapshots: no migrations,
-directory creation, cache refresh or take-file recovery.
+A media file owns its embedded workflow and prompt. Artifact fields and separated
+media evidence use `{"__spool_media__": "<original path>", "key": "workflow" | "prompt",
+"graph": true | false}` instead of storing those values. Identical members of
+prepared `workflowData` use the same references; distinct sidecar/prepared values
+remain stored. During migration paths come from authored records, collected
+artifacts or the original probe filename. Probes retain their streams and format
+fields except `format.tags`, extracting the metadata before dropping those tags.
+One editor graph remains available per recipe capture.
+
+Routine project, attempt and receipt reads expose `evidence` / `embeddedGraph`
+markers for file-owned fields. The evidence routes, continuation, sidecar creation
+and portable export resolve them from the original file (PNG tags or video probe)
+on demand. Resolution is cached only within a read; a missing original reports
+`Source media is missing or unsupported`. SQLite does not substitute a stale graph.
+The history prompt tuple keeps the exact API prompt, number, prompt ID, outputs,
+status, messages and other metadata. Its editor graph uses a file reference when
+it equals an artifact's embedded graph; other graphs share stored blobs, including
+with dispatch metadata.
+
+Projection passes decoded requests/results directly to the ledger, avoiding a
+JSON encode/decode round trip. Identical decoded blobs share objects within that
+response, whose captures are treated as immutable by readers; later reads are
+independent. The bounded process cache holds only JSON text, so caller mutations
+cannot corrupt later reads. The editor still omits `workflowSnapshot` and media
+evidence. No Python/JavaScript authored document fields or wire versions change.
+Maintenance reports open immutable read-only snapshots: no migrations, directory
+creation, cache refresh or take-file recovery.
 
 `durable.py` owns unique temporary files, flush/fsync, atomic replacement with
 SMB retry, and failure cleanup for JSON receipts, take sidecars, farm JSON and

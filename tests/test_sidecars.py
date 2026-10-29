@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
@@ -105,7 +106,11 @@ class SidecarTests(unittest.TestCase):
             self.source, capture or self.capture, lock_root=self.store.root / ".spool/locks", **kwargs
         )
 
-    def test_same_stem_json_overrides_metadata_without_changing_evidence(self):
+    @patch(
+        "spool.media._probe",
+        return_value={"format": {"tags": {"prompt": json.dumps(setup("embedded.png")["prompt"])}}, "streams": []},
+    )
+    def test_same_stem_json_overrides_metadata_without_changing_evidence(self, probe):
         before = self.store.all_evidence(self.id)
         self.write()
         capture = take_workflow.resolve(self.store, self.id, "shot", "take")

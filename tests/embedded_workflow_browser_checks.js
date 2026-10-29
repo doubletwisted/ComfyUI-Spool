@@ -5,8 +5,7 @@
   const n = window.spoolNative,
     d = document,
     compact = new URLSearchParams(location.search).get('mode') === 'compact';
-  if (location.port !== '8195' || !n || n.state.project !== 'Embedded take workflow QA')
-    throw Error('Use the owned embedded-workflow QA project on 8195');
+  if (!n || n.state.project !== 'Embedded take workflow QA') throw Error('Use the owned embedded-workflow QA project');
   const B = await import('/spool/ui/bridge.js'),
     channel = B.openChannel('embedded-workflow-qa'),
     opened = [];

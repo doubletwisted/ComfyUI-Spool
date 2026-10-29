@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
-from PIL import Image
+from PIL import Image, PngImagePlugin
 
 from spool import commands, farm_protocol, receipts, requests, sidecars, take_files, ledger
 from spool.wire import unwire, wire
@@ -734,6 +734,10 @@ class ProjectFolderTests(unittest.TestCase):
             "workflow": self.capture["workflow"],
             "prompt": self.capture["prompt"],
         }
+        tags = PngImagePlugin.PngInfo()
+        for key in ("workflow", "prompt"):
+            tags.add_text(key, json.dumps(metadata[key]))
+        Image.new("RGB", (16, 16)).save(self.store.root / "assets" / "black.png", pnginfo=tags)
         receipt = {"primary": metadata, "artifacts": [metadata]}
         self.store.accept_execution(attempt["id"], "execution", None, receipt)
 
@@ -766,13 +770,21 @@ class ProjectFolderTests(unittest.TestCase):
                 self.assertNotIn(
                     "probe", next(t for t in saved["document"]["clips"][0]["takes"] if t.get("generated"))["media"]
                 )
-                # Exact/full exports and execution receipts retain everything.
+                # Routine reads advertise file-owned metadata; portable reads restore it.
                 full_after = await (await client.get(path)).json()
                 self.assertEqual(
                     next(t for t in full_after["document"]["clips"][0]["takes"] if t.get("generated"))["media"],
-                    metadata,
+                    {
+                        **{k: v for k, v in metadata.items() if k not in ("workflow", "prompt")},
+                        "evidence": ["probe", "workflow", "prompt"],
+                        "embeddedGraph": True,
+                    },
                 )
-                self.assertEqual(json.loads(self.store.attempt(attempt["id"])["result"]), receipt)
+                stored = json.loads(self.store.attempt(attempt["id"])["result"])
+                self.assertNotIn("workflow", stored["primary"])
+                self.assertEqual(
+                    self.store.evidence(project["id"], "generated-media")["workflow"], metadata["workflow"]
+                )
 
         asyncio.run(check())
 

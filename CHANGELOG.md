@@ -24,7 +24,9 @@ First public release.
   delete takes. Copy files into a clip's folder to add them as takes.
 - Projects live in self-contained folders (a project file plus media), can be
   opened from shared storage, downloaded and imported. Immutable render evidence
-  is stored once inside the project file. Older projects upgrade with a backup
+  is shared inside the project file, while embedded take workflows and prompts
+  are read from the original media when needed. Project and take reads avoid
+  rebuilding repeated evidence. Older projects upgrade with a backup
   of their previous snapshot; a manifest protects against opening newer formats.
   Storage maintenance reports leave projects untouched.
 - Export the sequence, a range or selected clips to MP4 with an audio mix, or

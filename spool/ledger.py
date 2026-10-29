@@ -2,7 +2,7 @@
 
 import copy
 import json
-from . import attempts, timing
+from . import attempts, embedded, timing
 
 # One field list decides what a project document carries; ui/ledger.js mirrors it and
 # tests/fixtures/document_fields.json pins both. Edit fields are the authored edit, records
@@ -81,7 +81,12 @@ def embedded_graph(held):
         graph = held["workflowData"].get("workflow")
     elif isinstance(held.get("workflow"), dict):
         graph = held["workflow"]
-    return graph if isinstance(graph, dict) and isinstance(graph.get("nodes"), list) else None
+    return (
+        graph
+        if isinstance(graph, dict)
+        and (isinstance(graph.get("nodes"), list) or embedded.is_reference(graph) and graph.get("graph"))
+        else None
+    )
 
 
 def mark(record, held):
@@ -151,7 +156,7 @@ def editor_project(project):
 
     def media(record):
         working = {key: value for key, value in record.items() if key not in EVIDENCE_KEYS}
-        if any(key in record for key in EVIDENCE_KEYS):
+        if not record.get("evidence") and any(key in record for key in EVIDENCE_KEYS):
             mark(working, record)
         return working
 
@@ -211,13 +216,13 @@ def attach(document, attempts):
     document.pop("recoverableResults", None)
     ordinals = {}
     for attempt in attempts:
-        request = json.loads(attempt["request"])
+        request = json.loads(attempt["request"]) if isinstance(attempt["request"], str) else attempt["request"]
         owner = attempt["clip_id"]
         ordinals[owner] = ordinals.get(owner, 0) + 1
         document["jobs"].append(job(attempt, request))
         if attempt["status"] != "complete" or attempt["take_id"] in document.get("deletedTakeIds", []):
             continue
-        result = json.loads(attempt["result"])
+        result = json.loads(attempt["result"]) if isinstance(attempt["result"], str) else attempt["result"]
         if not any(owns(c, attempt) for c in document["clips"]):
             document.setdefault("recoverableResults", []).append(
                 {

@@ -183,6 +183,29 @@ async function embeddedWorkflowFixture() {
       ],
     },
   });
+  // The file owns its embedded workflow; the document only advertises it.
+  for (const [index, node] of [5, 9].entries()) {
+    const bytes = execFileSync(
+      'python',
+      [
+        '-c',
+        'import sys,json; from PIL import Image,PngImagePlugin; tags=PngImagePlugin.PngInfo(); tags.add_text("workflow",sys.stdin.read()); Image.new("RGB",(16,16)).save(sys.stdout.buffer,format="PNG",pnginfo=tags)',
+      ],
+      { input: JSON.stringify(graph(node)) },
+    );
+    const response = await fetch(apiBase + '/spool/api/upload?projectId=' + created.id, {
+      method: 'POST',
+      headers: { 'X-Filename': 'embedded-' + node + '.png' },
+      body: bytes,
+    });
+    const uploaded = await response.json();
+    if (!response.ok) throw Error(uploaded.error || 'Embedded fixture upload failed');
+    const record = created.document.clips[0].takes[index].media;
+    record.file = uploaded.file;
+    record.originalFile = uploaded.originalFile;
+    record.workflow = graph(node);
+  }
+  await api('projects/' + created.id, { revision: created.revision, document: created.document }, 'PUT');
   return { id: created.id, bridge: 'embedded-workflow-qa' };
 }
 
@@ -1475,15 +1498,25 @@ async function takeSetupFixture(editable = false) {
     },
   });
   for (const [i, id] of ['s04', 's15'].entries()) {
+    const metadata = { prompt: prompt(id), ...(id === 's04' ? { workflow } : {}) };
+    const bytes = execFileSync(
+      'python',
+      [
+        '-c',
+        'import sys,json; from PIL import Image,PngImagePlugin; tags=PngImagePlugin.PngInfo(); [tags.add_text(k,json.dumps(v)) for k,v in json.loads(sys.stdin.read()).items()]; Image.new("RGB",(96,64),sys.argv[1]).save(sys.stdout.buffer,format="PNG",pnginfo=tags)',
+        id === 's04' ? 'red' : 'blue',
+      ],
+      { input: JSON.stringify(metadata), windowsHide: true },
+    );
     const response = await fetch(base + '/spool/api/upload?projectId=' + project.id + '&fps=24', {
       method: 'POST',
       headers: { 'X-Filename': id + '.png' },
-      body: fs.readFileSync(path.resolve(evidence, id + '.png')),
+      body: bytes,
     });
     if (!response.ok) throw Error('Fixture take upload failed');
     const actual = await response.json(),
       held = project.document.clips[0].takes[i].media;
-    project.document.clips[0].takes[i].media = { ...held, ...actual, id, frames: 120 };
+    project.document.clips[0].takes[i].media = { ...held, ...actual, ...metadata, id, frames: 120 };
   }
   project = await api('projects/' + project.id, { revision: project.revision, document: project.document }, 'PUT');
   const capture = {

@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .errors import NotFound, RevisionConflict, OperationConflict
-from . import attempts, ledger, operations
+from . import attempts, embedded, ledger, operations
 
 
 def uid():
@@ -133,7 +133,7 @@ class Edit:
         )
         self.db.execute(
             "UPDATE projects SET revision=?,document=? WHERE id=?",
-            (self.revision + 1, encode(working), self.project_id),
+            (self.revision + 1, self.store._dump(self.db, working), self.project_id),
         )
         return working
 
@@ -231,6 +231,13 @@ class Store:
 
     def _migration6(self, db):
         db.execute("CREATE TABLE blobs(hash TEXT PRIMARY KEY, data TEXT NOT NULL)")
+        media_paths = {}
+        for row in db.execute("SELECT id,document FROM projects"):
+            for record in ledger.media_records(json.loads(row["document"])):
+                media_paths[(row["id"], record["id"])] = record.get("originalFile") or record.get("file")
+        for row in db.execute("SELECT project_id,result FROM attempts WHERE result IS NOT NULL"):
+            for record in json.loads(row["result"]).get("artifacts", []):
+                media_paths[(row["project_id"], record["id"])] = record.get("originalFile") or record.get("file")
         for table, column, receipt in (
             ("workflows", "capture", False),
             ("attempts", "request", False),
@@ -239,8 +246,10 @@ class Store:
             ("media_evidence", "evidence", False),
             ("dispatches", "payload", False),
         ):
-            for row in db.execute(f"SELECT rowid,{column} FROM {table} WHERE {column} IS NOT NULL").fetchall():
-                value = json.loads(row[1])
+            for row in db.execute(f"SELECT rowid,* FROM {table} WHERE {column} IS NOT NULL").fetchall():
+                value = json.loads(row[column])
+                if table == "media_evidence":
+                    value = embedded.pack(value, media_paths.get((row["project_id"], row["media_id"])))
                 packed = self._dump(db, value, receipt=receipt, capture=table == "workflows")
                 db.execute(f"UPDATE {table} SET {column}=? WHERE rowid=?", (packed, row[0]))
         for row in db.execute("SELECT id,document FROM projects").fetchall():
@@ -250,8 +259,8 @@ class Store:
                     "SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (row["id"], record["id"])
                 ).fetchone()
                 if evidence:
-                    ledger.mark(record, self._load(evidence[0], db))
-            db.execute("UPDATE projects SET document=? WHERE id=?", (encode(document), row["id"]))
+                    ledger.mark(record, self._load(evidence[0], db, media="references"))
+            db.execute("UPDATE projects SET document=? WHERE id=?", (self._dump(db, document), row["id"]))
         return 0
 
     def migrate(self, db, version):
@@ -276,6 +285,23 @@ class Store:
         db.execute("INSERT OR IGNORE INTO blobs VALUES(?,?)", (digest, data))
         return {"__spool_blob__": digest}
 
+    def _prompt_blob(self, db, value):
+        # Seeds and filenames change a few API nodes per take, not the whole prompt.
+        if (
+            isinstance(value, dict)
+            and value
+            and all(isinstance(v, dict) and "class_type" in v and "inputs" in v for v in value.values())
+        ):
+            value = {k: self._blob(db, v) for k, v in value.items()}
+        elif isinstance(value, dict) and isinstance(value.get("nodes"), list):
+            value = {**value, "nodes": [self._blob(db, node) for node in value["nodes"]]}
+            if isinstance(value.get("definitions"), dict):
+                definitions = dict(value["definitions"])
+                if isinstance(definitions.get("subgraphs"), list):
+                    definitions["subgraphs"] = [self._prompt_blob(db, graph) for graph in definitions["subgraphs"]]
+                value["definitions"] = self._blob(db, definitions)
+        return self._blob(db, value)
+
     def _pack(self, db, value):
         if isinstance(value, list):
             return [self._pack(db, v) for v in value]
@@ -291,10 +317,14 @@ class Store:
             if isinstance(probe.get("format"), dict):
                 probe["format"].pop("tags", None)
             value["probe"] = probe
+        if value.get("kind") in ("image", "video", "audio"):
+            value = embedded.pack(value)
+        if embedded.is_reference(value):
+            return value
         return {
             k: self._blob(db, self._pack(db, v))
             if k == "capture"
-            else self._blob(db, v)
+            else self._prompt_blob(db, v)
             if k in {"workflow", "prompt", "observedPrompt", "stagedPrompt"} and isinstance(v, (dict, list))
             else self._pack(db, v)
             for k, v in value.items()
@@ -311,40 +341,56 @@ class Store:
                     raise ValueError("Receipt primary differs from its canonical artifact")
                 value["__spool_primary__"] = "primaryArtifactId" in value
                 value["primaryArtifactId"] = identity
+            # History often repeats the graph embedded in a collected artifact.
+            history = value.get("history", {}).get("prompt")
+            if isinstance(history, list) and len(history) > 3 and isinstance(history[3], dict):
+                extra = history[3].get("extra_pnginfo", {})
+                for artifact in value.get("artifacts", []):
+                    if extra.get("workflow") and extra["workflow"] == artifact.get("workflow"):
+                        path = artifact.get("originalFile") or artifact.get("file")
+                        if path:
+                            extra["workflow"] = embedded.reference(path, "workflow", extra["workflow"])
+                            break
             if isinstance(value.get("history"), dict) and "prompt" in value["history"]:
                 # Preserve the entire execution tuple, with its large members shared.
                 prompt = value["history"].pop("prompt")
                 value["__spool_history_prompt__"] = (
-                    [self._blob(db, v) if i == 2 else self._pack(db, v) for i, v in enumerate(prompt)]
+                    [self._prompt_blob(db, v) if i == 2 else self._pack(db, v) for i, v in enumerate(prompt)]
                     if isinstance(prompt, list)
                     else self._blob(db, prompt)
                 )
         packed = self._pack(db, value)
         return encode(self._blob(db, packed) if receipt or capture else packed)
 
-    def _unpack(self, db, value):
+    def _unpack(self, db, value, memo, media, files):
         if isinstance(value, list):
-            return [self._unpack(db, v) for v in value]
+            return [self._unpack(db, v, memo, media, files) for v in value]
         if not isinstance(value, dict):
             return value
+        if embedded.is_reference(value):
+            return embedded.read(self.root, value, files) if media == "resolve" else dict(value)
         if set(value) == {"__spool_blob__"}:
             digest = value["__spool_blob__"]
+            if digest in memo:
+                return memo[digest]
             held = self._blobs.get(digest)
             if held is None:
                 row = db.execute("SELECT data FROM blobs WHERE hash=?", (digest,)).fetchone()
                 if row is None:
                     raise ValueError("Missing project evidence blob: " + digest)
-                held = (json.loads(row[0]), row[0])
-                if len(row[0]) <= 256 * 1024:
+                held = row[0]
+                if len(held) <= 256 * 1024:
                     self._blobs[digest] = held
-                    if len(self._blobs) > 64:
+                    if len(self._blobs) > 512:
                         self._blobs.popitem(last=False)
             else:
                 self._blobs.move_to_end(digest)
-            # Graph/prompt leaves need no Python traversal. Decode their cached
-            # text for an independent copy; compact containers resolve references.
-            return self._unpack(db, held[0]) if "__spool_" in held[1] else json.loads(held[1])
-        result = {k: self._unpack(db, v) for k, v in value.items()}
+            # Cache text across reads; share decoded values only within one response.
+            decoded = json.loads(held)
+            result = self._unpack(db, decoded, memo, media, files) if "__spool_" in held else decoded
+            memo[digest] = result
+            return result
+        result = {k: self._unpack(db, v, memo, media, files) for k, v in value.items()}
         if "__spool_primary__" in result:
             keep_id = result.pop("__spool_primary__")
             identity = result["primaryArtifactId"]
@@ -353,13 +399,36 @@ class Store:
                 result.pop("primaryArtifactId")
         if "__spool_history_prompt__" in result:
             result["history"]["prompt"] = result.pop("__spool_history_prompt__")
+        if media == "markers":
+            refs = [k for k, v in result.items() if embedded.is_reference(v)]
+            prepared = result.get("workflowData")
+            prepared_refs = isinstance(prepared, dict) and bool(prepared.get("evidence"))
+            if refs or prepared_refs:
+                result["evidence"] = [k for k in ledger.EVIDENCE_KEYS if k in result]
+                if any(result[k].get("graph") for k in refs) or prepared_refs and prepared.get("embeddedGraph"):
+                    result["embeddedGraph"] = True
+                for key in refs:
+                    result.pop(key)
         return result
 
-    def _load(self, value, db=None):
+    def _load(self, value, db=None, *, memo=None, media="markers", files=None):
         if value is None:
             return None
         with self._using(db) as db:
-            return self._unpack(db, json.loads(value))
+            return self._unpack(
+                db, json.loads(value), memo if memo is not None else {}, media, files if files is not None else {}
+            )
+
+    def _projection_attempts(self, db, project_id):
+        memo = {}
+        return [
+            {
+                **dict(row),
+                "request": self._load(row["request"], db, memo=memo),
+                "result": self._load(row["result"], db, memo=memo),
+            }
+            for row in db.execute("SELECT * FROM attempts WHERE project_id=? ORDER BY created,rowid", (project_id,))
+        ]
 
     def _attempt_row(self, db, row):
         if row is None:
@@ -430,14 +499,15 @@ class Store:
                 "SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (project_id, media_id)
             ).fetchone()
             if row:
-                return {"mediaId": media_id, **self._load(row[0], db)}
+                return {"mediaId": media_id, **self._load(row[0], db, media="resolve")}
             for row in db.execute(
                 "SELECT result FROM attempts WHERE project_id=? AND status='complete'", (project_id,)
             ):
-                result = self._load(row[0], db)
+                result = self._load(row[0], db, media="references")
                 for record in [result["primary"], *result.get("artifacts", [])]:
                     if record["id"] == media_id:
-                        return {"mediaId": media_id, **{k: v for k, v in record.items() if k in ledger.EVIDENCE_KEYS}}
+                        held = {k: v for k, v in record.items() if k in ledger.EVIDENCE_KEYS}
+                        return {"mediaId": media_id, **self._unpack(db, held, {}, "resolve", {})}
         raise NotFound("This media has no stored evidence")
 
     def all_evidence(self, project_id):
@@ -449,9 +519,9 @@ class Store:
             results = db.execute(
                 "SELECT result FROM attempts WHERE project_id=? AND status='complete'", (project_id,)
             ).fetchall()
-        evidence = {row["media_id"]: self._load(row["evidence"]) for row in rows}
+        evidence = {row["media_id"]: self._load(row["evidence"], media="resolve") for row in rows}
         for row in results:
-            result = self._load(row[0])
+            result = self._load(row[0], media="resolve")
             for record in [result["primary"], *result.get("artifacts", [])]:
                 evidence[record["id"]] = {
                     **{key: value for key, value in record.items() if key in ledger.EVIDENCE_KEYS},
@@ -628,7 +698,7 @@ class Store:
                 raise NotFound("Project not found")
             if row["revision"] != revision:
                 raise Conflict(conflict)
-            yield Edit(self, db, project_id, revision, json.loads(row["document"]))
+            yield Edit(self, db, project_id, revision, self._load(row["document"], db))
 
     @contextmanager
     def _using(self, db=None):
@@ -780,14 +850,16 @@ class Store:
         if not evidence:
             return working
         merged = {}
+        paths = {r["id"]: r.get("originalFile") or r.get("file") for r in ledger.media_records(working)}
         for media_id, held in evidence.items():
             row = db.execute(
                 "SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (project_id, media_id)
             ).fetchone()
-            stored = {**self._load(row[0], db), **held} if row else held
+            stored = {**self._load(row[0], db, media="references"), **held} if row else held
+            stored = embedded.pack(stored, paths.get(media_id))
             packed = self._dump(db, stored)
             db.execute("INSERT OR REPLACE INTO media_evidence VALUES(?,?,?)", (project_id, media_id, packed))
-            merged[media_id] = self._load(packed, db)
+            merged[media_id] = self._load(packed, db, media="references")
         for record in ledger.media_records(working):
             held = merged.get(record.get("id"))
             if held is not None:
@@ -799,7 +871,7 @@ class Store:
         document = ledger.authored(document or empty_project())
         with self.connect() as db:
             document = self._write_document(db, project_id, document)
-            db.execute("INSERT INTO projects VALUES(?,?,?)", (project_id, 0, encode(document)))
+            db.execute("INSERT INTO projects VALUES(?,?,?)", (project_id, 0, self._dump(db, document)))
         return self.get(project_id)
 
     def list(self):
@@ -855,7 +927,7 @@ class Store:
             row = db.execute("SELECT document FROM projects WHERE id=?", (project_id,)).fetchone()
         if not row:
             raise NotFound("Project not found")
-        return json.loads(row[0])
+        return self._load(row[0])
 
     def frame_rate(self, project_id):
         """One scalar out of the document, without decoding it."""
@@ -876,11 +948,8 @@ class Store:
             row = db.execute("SELECT document FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
                 raise NotFound("Project not found")
-            document = json.loads(row["document"])
-            attempts = [
-                self._attempt_row(db, r)
-                for r in db.execute("SELECT * FROM attempts WHERE project_id=? ORDER BY created,rowid", (project_id,))
-            ]
+            document = self._load(row["document"], db)
+            attempts = self._projection_attempts(db, project_id)
         return ledger.attach(document, attempts)
 
     def clip(self, project_id, clip_id):
@@ -929,11 +998,8 @@ class Store:
             row = db.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
                 raise NotFound("Project not found")
-            document = json.loads(row["document"])
-            attempts = [
-                self._attempt_row(db, r)
-                for r in db.execute("SELECT * FROM attempts WHERE project_id=? ORDER BY created,rowid", (project_id,))
-            ]
+            document = self._load(row["document"], db)
+            attempts = self._projection_attempts(db, project_id)
             versions = {c["workflowVersion"] for c in document["clips"] if c.get("workflowVersion")}
             recipe_rows = (
                 db.execute(
@@ -1228,11 +1294,16 @@ class Store:
         versions = {c["workflowVersion"] for c in project["document"]["clips"] if c.get("workflowVersion")}
         with self.connect() as db:
             evidence = {
-                r["media_id"]: self._load(r["evidence"], db)
+                r["media_id"]: self._load(r["evidence"], db, media="resolve")
                 for r in db.execute("SELECT media_id,evidence FROM media_evidence WHERE project_id=?", (project_id,))
             }
         # A downloaded project carries its evidence so it stays portable; the
         # working document is what every other reader sees.
+        for record in ledger.media_records(project["document"]):
+            if record.get("evidence") and record["id"] not in evidence:
+                evidence[record["id"]] = {
+                    k: v for k, v in self.evidence(project_id, record["id"]).items() if k != "mediaId"
+                }
         document = ledger.compose(project["document"], evidence, in_place=True)
         return {
             "spoolVersion": EXPORT_VERSION,
@@ -1254,7 +1325,7 @@ class Store:
                     self._capture_clip(db, project_id, clip, recipes[version], clip.get("inputValues", {}))
                     revision += 1
             document = self._write_document(db, project_id, document)
-            db.execute("INSERT INTO projects VALUES(?,?,?)", (project_id, revision, encode(document)))
+            db.execute("INSERT INTO projects VALUES(?,?,?)", (project_id, revision, self._dump(db, document)))
         return self.get(project_id)
 
     def intent(self, project_id, clip, request):
@@ -1447,7 +1518,7 @@ class Store:
             row = db.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row or row["revision"] != revision:
                 raise Conflict("Project changed; inspect the current revision before applying this command")
-            document = json.loads(row["document"])
+            document = self._load(row["document"], db)
             result, edited = apply(db, document)
             if edited:
                 Edit(self, db, project_id, revision, document).save()

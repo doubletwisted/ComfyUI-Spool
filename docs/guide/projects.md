@@ -34,6 +34,10 @@ When opening an older project, Spool keeps its previous project file in
 Keep that copy until you have checked the upgraded project. A newer project
 format requires a newer Spool; it cannot be opened by an older installation.
 Render evidence is shared inside the SQLite file to keep repeated saves smaller.
+Embedded workflows and prompts stay in their original media files and are read
+when you open a take's workflow, continue from it or download a portable project.
+Keep the original files with the project: a missing source is reported instead of
+opening an old cached graph. Captured recipes remain saved in the project file.
 
 ## Saving
 

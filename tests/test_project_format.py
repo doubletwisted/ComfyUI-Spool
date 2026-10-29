@@ -5,13 +5,16 @@ import hashlib
 import json
 import shutil
 import sqlite3
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from contextlib import closing
 from unittest.mock import patch
 
-from spool import durable, maintenance, receipts
+from PIL import Image, PngImagePlugin
+
+from spool import durable, ledger, maintenance, receipts, sidecars, take_workflow
 from spool.projects import ProjectStore, Workspace
 from spool.store import Conflict, SCHEMA_VERSION, Store, encode
 
@@ -29,6 +32,22 @@ def without_probe_tags(value):
     return result
 
 
+def without_embedded_copies(value):
+    """Compare the fields retained in routine reads against the schema-5 oracle."""
+    if isinstance(value, list):
+        return [without_embedded_copies(v) for v in value]
+    if not isinstance(value, dict):
+        return value
+    result = {k: without_embedded_copies(v) for k, v in value.items() if k not in ("evidence", "embeddedGraph")}
+    if result.get("kind") in ("image", "video", "audio"):
+        result.pop("workflow", None)
+        result.pop("prompt", None)
+    history = result.get("history", {}).get("prompt")
+    if isinstance(history, list) and len(history) > 3:
+        history[3].get("extra_pnginfo", {}).pop("workflow", None)
+    return result
+
+
 class ProjectFormatTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -42,10 +61,18 @@ class ProjectFormatTests(unittest.TestCase):
         self.project_id = self.expected["get"]["id"]
         self.attempt_id = self.expected["attempt"]["id"]
 
+    def media_file(self):
+        artifact = self.expected["execution"]["receipt"]["primary"]
+        tags = PngImagePlugin.PngInfo()
+        for key in ("workflow", "prompt"):
+            tags.add_text(key, json.dumps(artifact[key]))
+        Image.new("RGB", (2, 2)).save(self.folder / "fixture.png", pnginfo=tags)
+
     def store(self):
         return Store(self.folder, filename="project.spool")
 
     def test_fixture_migration_preserves_every_read_contract(self):
+        self.media_file()
         store = self.store()
         actual = {
             "get": store.get(self.project_id),
@@ -61,7 +88,9 @@ class ProjectFormatTests(unittest.TestCase):
         for values in (actual, self.expected):
             for row in [values["attempt"], *values["scan_attempts"]]:
                 row["result"] = json.loads(row["result"])
-        self.assertEqual(actual, without_probe_tags(self.expected))
+        self.assertEqual(without_embedded_copies(actual), without_embedded_copies(without_probe_tags(self.expected)))
+        self.assertEqual(actual["export"], without_probe_tags(self.expected["export"]))
+        self.assertEqual(actual["evidence"], without_probe_tags(self.expected["evidence"]))
         self.assertEqual(
             store.evidence(self.project_id, "media")["workflow"],
             self.expected["execution"]["receipt"]["primary"]["workflow"],
@@ -87,7 +116,7 @@ class ProjectFormatTests(unittest.TestCase):
         original = copy.deepcopy(first)
         first["request"]["capture"]["workflow"]["nodes"].clear()
         self.assertEqual(store.attempt(self.attempt_id), original)
-        receipt = store.execution("execution")["receipt"]
+        receipt = self.expected["execution"]["receipt"]
         self.assertTrue(store.accept_execution(self.attempt_id, "execution", None, receipt))
         changed = copy.deepcopy(receipt)
         changed["history"]["messages"].append(["different evidence"])
@@ -95,6 +124,7 @@ class ProjectFormatTests(unittest.TestCase):
             store.accept_execution(self.attempt_id, "execution", None, changed)
 
     def test_history_tuple_keeps_exact_prompt_metadata_and_messages(self):
+        self.media_file()
         store = self.store()
         value = self.expected["execution"]["receipt"]
         value["history"]["prompt"] = [
@@ -106,7 +136,7 @@ class ProjectFormatTests(unittest.TestCase):
         ]
         with store.connect() as db:
             packed = store._dump(db, value, receipt=True)
-            self.assertEqual(store._load(packed, db), without_probe_tags(value))
+            self.assertEqual(store._load(packed, db, media="resolve"), without_probe_tags(value))
             compact = json.loads(
                 db.execute("SELECT data FROM blobs WHERE hash=?", (json.loads(packed)["__spool_blob__"],)).fetchone()[0]
             )
@@ -131,6 +161,103 @@ class ProjectFormatTests(unittest.TestCase):
         record = project["document"]["media"][0]
         self.assertEqual(record["evidence"], ["probe", "workflow", "prompt"])
         self.assertTrue(record["embeddedGraph"])
+
+    def test_embedded_metadata_is_file_owned_for_every_reader(self):
+        self.media_file()
+        store = self.store()
+        artifact = self.expected["execution"]["receipt"]["primary"]
+        record = copy.deepcopy(artifact)
+        record["workflowData"] = {key: record[key] for key in ("workflow", "prompt")}
+        project = store.create({"clips": [{"id": "imported", "takes": [{"id": "take", "media": record}]}]})
+        project_id = project["id"]
+        with store.connect() as db:
+            packed = db.execute("SELECT evidence FROM media_evidence WHERE project_id=?", (project_id,)).fetchone()[0]
+            held = store._load(packed, db, media="references")
+            self.assertIn("__spool_media__", held["workflow"])
+            self.assertIn("__spool_media__", held["workflowData"]["workflow"])
+            receipt = store._load(db.execute("SELECT result FROM attempts").fetchone()[0], db, media="references")
+            self.assertIn("__spool_media__", receipt["artifacts"][0]["workflow"])
+        # Replacing the embedded metadata proves these readers consult the file,
+        # rather than returning an old graph from SQLite or a process cache.
+        graph = {"nodes": [{"id": 1, "type": "SaveImage", "pos": [100, 200]}], "links": []}
+        tags = PngImagePlugin.PngInfo()
+        tags.add_text("workflow", json.dumps(graph))
+        tags.add_text("prompt", json.dumps(artifact["prompt"]))
+        Image.new("RGB", (2, 2)).save(self.folder / "fixture.png", pnginfo=tags)
+        self.assertEqual(store.evidence(project_id, "media")["workflow"], graph)
+        self.assertEqual(store.all_evidence(project_id)["media"]["workflowData"]["workflow"], graph)
+        exported = store.export_project(project_id)["document"]["clips"][0]["takes"][0]["media"]
+        self.assertEqual(exported["workflow"], graph)
+        capture = take_workflow.resolve(store, project_id, "imported", "take")
+        self.assertEqual(capture["workflow"], graph)
+        sidecars.write(self.folder / "fixture.png", capture, lock_root=self.root / "locks")
+        self.assertEqual(sidecars.read(self.folder / "fixture.png")["workflow"], graph)
+        (self.folder / "fixture.json").unlink()
+        (self.folder / "fixture.png").unlink()
+        self.assertEqual(store.get(project_id)["id"], project_id)
+        for reader in (
+            lambda: store.evidence(project_id, "media"),
+            lambda: store.all_evidence(project_id),
+            lambda: store.export_project(project_id),
+            lambda: take_workflow.resolve(store, project_id, "imported", "take"),
+        ):
+            with self.assertRaisesRegex(ValueError, "Source media is missing"):
+                reader()
+
+    def test_video_evidence_reads_container_metadata(self):
+        from spool.system import find_tool
+
+        store = self.store()
+        artifact = copy.deepcopy(self.expected["execution"]["receipt"]["primary"])
+        artifact["file"] = artifact["originalFile"] = "fixture.mp4"
+        artifact["kind"] = "video"
+        metadata = {key: artifact[key] for key in ("workflow", "prompt")}
+        subprocess.run(
+            [
+                find_tool("ffmpeg"),
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=s=16x16:r=24",
+                "-t",
+                "0.125",
+                "-metadata",
+                "comment=" + json.dumps(metadata),
+                "-movflags",
+                "use_metadata_tags",
+                str(self.folder / "fixture.mp4"),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        project = store.create({"clips": [], "media": [artifact]})
+        for key, value in metadata.items():
+            self.assertEqual(store.evidence(project["id"], "media")[key], value)
+        self.assertEqual(store.all_evidence(project["id"])["media"]["workflow"], metadata["workflow"])
+
+    def test_independent_sidecar_values_stay_stored(self):
+        self.media_file()
+        store = self.store()
+        artifact = copy.deepcopy(self.expected["execution"]["receipt"]["primary"])
+        prepared = {key: artifact.pop(key) for key in ("workflow", "prompt")}
+        artifact["workflowData"] = {**prepared, "sidecar": {"name": "fixture.json"}}
+        project = store.create({"clips": [], "media": [artifact]})
+        (self.folder / "fixture.png").unlink()
+        self.assertEqual(store.evidence(project["id"], "media")["workflowData"], artifact["workflowData"])
+
+    def test_projection_shares_blobs_only_within_one_response(self):
+        store = self.store()
+        first = store.get(self.project_id)
+        compact = ledger.editor_project(first)["document"]["clips"][0]["takes"][0]
+        self.assertTrue(compact["media"]["embeddedGraph"])
+        self.assertIn("workflow", compact["media"]["evidence"])
+        first["document"]["clips"][0]["takes"][0]["request"]["capture"]["workflow"]["nodes"].clear()
+        self.assertEqual(store.get(self.project_id)["recipes"], self.expected["get"]["recipes"])
+        self.assertTrue(
+            store.projected(self.project_id)["clips"][0]["takes"][0]["workflowSnapshot"]["workflow"]["nodes"]
+        )
 
     def test_interrupted_step_rolls_back_and_reopens_cleanly(self):
         original = Store._dump
