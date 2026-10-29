@@ -65,3 +65,8 @@ project-edit, generation and extracted owners with `allowJs`, `checkJs` and
 JSDoc contracts. Run `npm run typecheck`; the architecture gate runs it too.
 Strict inference is disabled for gradual checking of existing JavaScript; no
 blanket `any` annotations or `@ts-nocheck` exclusions are used.
+
+`ui/edit-actions.js` owns the authored actions that invalidate pending input
+replacements: undo/redo restoration, deletion and prepared-workflow assignment.
+Lifecycle checks now import every handler they exercise, with no source slicing
+or VM evaluation.

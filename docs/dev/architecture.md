@@ -190,6 +190,8 @@ contracts that have tests of their own:
 - `picture.js`: what the viewer shows at a frame or in Source, apart from playback.
 - `pointer.js`: cancels every pointer gesture when the window loses focus or the
   tab is hidden.
+- `edit-actions.js`: history restoration, deletion and workflow assignment with
+  input-replacement invalidation.
 - `edit-session.js`: applies an authored edit (undo step, change, repaint scope,
   save); pointer gestures record their own step on release.
 - `input-groups.js`: optional and grouped media inputs, mirroring

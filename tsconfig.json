@@ -27,6 +27,7 @@
     "ui/timeline-pointer.js",
     "ui/inspector-renderer.js",
     "ui/library-renderer.js",
-    "ui/workflow-coordinator.js"
+    "ui/workflow-coordinator.js",
+    "ui/edit-actions.js"
   ]
 }

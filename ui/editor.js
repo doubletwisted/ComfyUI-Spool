@@ -1,3 +1,4 @@
+import { createWorkflowAssignment, createHistoryActions, createRemovalActions } from './edit-actions.js';
 import { createWorkflowCoordinator } from './workflow-coordinator.js';
 import { createLibraryRenderer } from './library-renderer.js';
 import { createInspectorRenderer } from './inspector-renderer.js';
@@ -362,27 +363,14 @@ async function startEditor(isFailed) {
     });
     setStatus(m ? 'Video and workflow added to the edit' : 'Workflow added · no generated take yet');
   }
-  function applyPreparedWorkflow(c, workflow, version) {
-    inputReplacements.invalidate(c.id);
-    const source = copy(c),
-      recipe = nativeRecipes[version];
-    c.workflow = workflow;
-    c.workflowVersion = version;
-    c.bindings = copy(recipe.bindings);
-    c.inputValues = Object.fromEntries(
-      recipe.bindings.map(b => [
-        b.key,
-        recipe.provenance?.builtinTemplate && b.asset ? '' : copy(recipe.prompt[b.nodeId].inputs[b.input]),
-      ]),
-    );
-    c.executionTarget = recipe.executionTarget || 'local';
-    delete c.generationBase;
-    delete c.shotInputs;
-    delete c.seedKey;
-    c.seedMode = 'same';
-    c.revision++;
-    matchClipInputs(c, source, recipe, definitionsFor(c), fps);
-  }
+  const { applyPreparedWorkflow } = createWorkflowAssignment({
+    inputReplacements,
+    copy,
+    getRecipes: () => nativeRecipes,
+    definitionsFor,
+    getFps: () => fps,
+    matchClipInputs,
+  });
   const INITIAL = { ...BOOT.document, selected: null, frame: 0, zoom: 100, snap: true, muted: true, loop: false };
   const defaultAudioTracks = { sourceMuted: false, sourceSolo: false, musicMuted: false, musicSolo: false };
   const drawn = {};
@@ -755,32 +743,33 @@ async function startEditor(isFailed) {
   }
 
   const preserveTakes = restored => L.preserveArrivals(restored, state);
-  function restoreHistory(from, to, verb) {
-    selectedCut = null;
-    if (drag) {
-      cancelClipDrag();
-      return;
-    }
-    if (!from.length) return;
-    pause();
-    editView();
-    const view = viewState(),
-      step = history.step(from, to, state);
-    if (!step) {
-      buttons();
-      setStatus('That edit is no longer available');
-      return;
-    }
-    inputReplacements.invalidate();
-    state = preserveTakes(step.restored);
-    review.reconcile();
-    selectionAnchor = state.selectedAudio || state.selected;
-    for (const key of ['zoom', 'snap', 'muted', 'loop', 'previewQuality']) state[key] = view[key];
-    render();
-    save();
-    setStatus(verb + ' ' + (step.label || 'edit'));
-    if (!document.activeElement || document.activeElement === document.body) $('editor').focus({ preventScroll: true });
-  }
+  const { restoreHistory } = createHistoryActions({
+    clearCut: () => {
+      selectedCut = null;
+    },
+    getDrag: () => drag,
+    cancelClipDrag: () => cancelClipDrag(),
+    pause: () => pause(),
+    editView,
+    viewState,
+    history,
+    getState: () => state,
+    setState: value => {
+      state = value;
+    },
+    inputReplacements,
+    preserveTakes,
+    review,
+    setSelectionAnchor: value => {
+      selectionAnchor = value;
+    },
+    buttons,
+    setStatus,
+    render,
+    save,
+    $,
+    document,
+  });
   function undo() {
     nudgeGroup = null;
     restoreHistory(undoStack, redoStack, 'Undid');
@@ -2010,35 +1999,18 @@ async function startEditor(isFailed) {
     });
     toast(ids.length === 1 ? 'Clip duplicated' : ids.length + ' clips duplicated');
   }
-  function remove(ripple = false) {
-    const ids = selectionIds().slice();
-    if (!ids.length) return;
-    const index = Math.max(
-        0,
-        state.clips.findIndex(c => c.id === state.selected),
-      ),
-      videos = state.clips.filter(c => ids.includes(c.id)).reverse();
-    edits.apply(
-      (ripple ? 'Ripple delete ' : 'Delete ') + ids.length + ' ' + (ids.length === 1 ? 'clip' : 'clips'),
-      () => {
-        pause();
-        editView();
-        for (const c of videos) {
-          inputReplacements.invalidate(c.id);
-          T.removeClip(state, c.id, { ripple });
-        }
-        for (const id of ids) if ((state.audioClips || []).some(c => c.id === id)) T.removeAudio(state, id);
-        const next = state.clips[Math.min(index, state.clips.length - 1)]?.id || state.audioClips?.[0]?.id;
-        setTimelineSelection(next ? [next] : []);
-        state.frame = clamp(state.frame, 0, total());
-      },
-    );
-    setStatus(
-      ripple
-        ? 'Ripple delete - following video clips moved'
-        : 'Clips deleted - gaps preserved; Shift+Delete ripple deletes',
-    );
-  }
+  const { remove } = createRemovalActions({
+    getState: () => state,
+    selectionIds,
+    edits,
+    pause: () => pause(),
+    editView,
+    inputReplacements,
+    setTimelineSelection,
+    clamp,
+    total,
+    setStatus,
+  });
   function split() {
     if (selectionIds().length > 1) return;
     if (selectedAudio()) {

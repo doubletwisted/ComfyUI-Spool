@@ -1,20 +1,11 @@
+import { createWorkflowAssignment, createHistoryActions, createRemovalActions } from '../ui/edit-actions.js';
 import { createQueueActions } from '../ui/queue-submission.js';
 import { createInputActions } from '../ui/input-actions.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import * as G from '../ui/generation.js';
 import { createInputReplacements } from '../ui/input-replacement.js';
 import { createApi } from '../ui/api.js';
 
-// Exercise the production event handlers with deferred transport/decoder dependencies.
-const source = readFileSync(new URL('../ui/editor.js', import.meta.url), 'utf8');
-const section = (start, end) => {
-  const from = source.indexOf(start),
-    to = source.indexOf(end, from);
-  assert.ok(from >= 0 && to > from, 'editor.js no longer contains ' + start + ' … ' + end);
-  return source.slice(from, to);
-};
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => {
@@ -352,10 +343,16 @@ for (const action of ['undo', 'remove', 'workflow']) {
       document: { activeElement: {} },
       buttons: noop,
     });
-    vm.runInNewContext(
-      section('function restoreHistory(', 'function undo(') + '\nrestoreHistory([{}],[],"Undid");',
-      f.context,
-    );
+    createHistoryActions({
+      ...f.context,
+      clearCut: noop,
+      getDrag: () => null,
+      getState: () => f.context.state,
+      setState: value => {
+        f.context.state = value;
+      },
+      setSelectionAnchor: noop,
+    }).restoreHistory([{}], [], 'Undid');
   } else if (action === 'remove') {
     Object.assign(f.context, {
       selectionIds: () => ['shot'],
@@ -368,7 +365,7 @@ for (const action of ['undo', 'remove', 'workflow']) {
         },
       },
     });
-    vm.runInNewContext(section('function remove(ripple =', 'function split(') + '\nremove();', f.context);
+    createRemovalActions({ ...f.context, getState: () => f.context.state }).remove();
     f.context.state.clips = [structuredClone(original)];
   } else {
     Object.assign(f.context, {
@@ -383,11 +380,11 @@ for (const action of ['undo', 'remove', 'workflow']) {
       matchClipInputs: noop,
       fps: 24,
     });
-    vm.runInNewContext(
-      section('function applyPreparedWorkflow(', 'const INITIAL =') +
-        '\napplyPreparedWorkflow(state.clips[0],"workflow","recipe");',
-      f.context,
-    );
+    createWorkflowAssignment({
+      ...f.context,
+      getRecipes: () => f.context.nativeRecipes,
+      getFps: () => f.context.fps,
+    }).applyPreparedWorkflow(f.context.state.clips[0], 'workflow', 'recipe');
     Object.assign(f.c, original);
   }
   gate.resolve(uploadResponse('late.mp4'));
