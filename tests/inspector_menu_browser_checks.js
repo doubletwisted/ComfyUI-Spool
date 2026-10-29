@@ -29,6 +29,7 @@
  context(d.querySelector('.workflow-library'));check('Workflow library space is not an image paste target',menu().hidden);
  d.querySelector('[data-bin-tab="workflows"]').click();context($('mediaPanel'));check('Empty Audio view omits irrelevant image paste',menu().hidden);d.querySelector('[data-bin-tab="media"]').click();
  const cards=[...d.querySelectorAll('#mediaPanel [data-media]')];
+ check('Media cards show their own names',cards.length&&cards.every(c=>{const name=c.querySelector('.bin-text strong').textContent;return name&&!/media-label|undefined|\[object Object\]/.test(name);}));
  context(cards.find(c=>c.dataset.media==='one'));check('Still media cards omit paste and audio-only actions',JSON.stringify(labels())===JSON.stringify(['Remove from media pool','Add to timeline']));close();
  context(cards.find(c=>c.dataset.media==='drag-media-0'));check('Media with audio retains its relevant audio action',!labels().some(s=>s.startsWith('Paste'))&&!!action('Use audio only'));close();
  n.selectClip('shot');open();action('Delete').click();await n.flush();check('Delete still removes the selected clip',!clip());n.undo();await n.flush();check('Undo restores take, recipe, inputs and trims',JSON.stringify({take:clip().takeId,version:clip().workflowVersion,inputs:clip().inputValues,in:clip().in,out:clip().out})===original);
