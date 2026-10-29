@@ -137,7 +137,11 @@ def _finish_take_command(store, result):
         try:
             _sidecars().check_current(source, capture["sidecar"]["sha256"])
         except ValueError:
-            _write_sidecar(store, source, capture, plan["expected"])
+            try:
+                _write_sidecar(store, source, capture, plan["expected"])
+            except ValueError:
+                # An identical retry may have delivered while this caller waited for the file lock.
+                _sidecars().check_current(source, capture["sidecar"]["sha256"])
     return {key: value for key, value in result.items() if key != "_sidecar"}
 
 

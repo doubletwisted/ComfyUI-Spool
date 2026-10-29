@@ -11,7 +11,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from PIL import Image
 
-from spool import sidecars, take_workflow, requests, receipts, commands
+from spool import sidecars, take_workflow, requests, receipts, commands, operations
 from spool.collection import Collector
 from spool.graph_inputs import named_bindings
 from spool.media import Media
@@ -129,7 +129,14 @@ class SidecarTests(unittest.TestCase):
         self.assertEqual(data, frozen)
         saved["document"]["clips"][0]["name"] = "Human edit"
         later = self.store.save(self.id, saved["revision"], saved["document"])
-        result = commands.execute(self.store, self.media, self.id, data)
+        write_sidecar = operations._write_sidecar
+
+        def concurrent_delivery(*args):
+            write_sidecar(*args)
+            raise ValueError("Another retry delivered before this caller acquired the lock")
+
+        with patch("spool.operations._write_sidecar", side_effect=concurrent_delivery):
+            result = commands.execute(self.store, self.media, self.id, data)
         self.assertNotIn("_sidecar", result)
         self.assertEqual(self.store.revision(self.id), later["revision"])
         self.assertEqual(self.store.clip(self.id, "shot")["name"], "Human edit")
