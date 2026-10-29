@@ -325,7 +325,7 @@ export function createViewer({
       }
     },
     changed: (m, entry) => {
-      if (entry.getState() === 'failed') {
+      if (entry.state === 'failed') {
         text('viewerResolution', 'Preview unavailable');
         setStatus('Playback preparation failed');
         toast(entry.error);
@@ -338,11 +338,11 @@ export function createViewer({
   function previewFile(m) {
     if (!m.id || !['video', 'image'].includes(m.kind)) return url(m.file);
     const entry = previews.status(m);
-    if (entry.getState() === 'failed') {
+    if (entry.state === 'failed') {
       text('viewerResolution', 'Preview unavailable');
       return m.kind === 'image' ? url(m.file) : null;
     }
-    if (entry.getState() === 'preparing') {
+    if (entry.state === 'preparing') {
       text(
         'viewerResolution',
         'Preparing ' + (previewQuality() === 'full' ? 'Full' : previewQuality() === 'half' ? '1/2' : '1/4') + '…',
@@ -656,7 +656,7 @@ export function createViewer({
       limiter.connect(audioContext.destination);
       masterGain.gain.value = getState().muted ? 0 : 1;
     }
-    if (audioContext.getState() === 'suspended') audioContext.resume().catch(() => {});
+    if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
   }
   function setAudioGain(element, gain) {
     if (audioContext) {
