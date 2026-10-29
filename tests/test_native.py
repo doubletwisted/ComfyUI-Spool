@@ -704,6 +704,24 @@ class BackendTests(unittest.TestCase):
         observed = self.store.dispatch_record(identity)["payload"]
         self.assertEqual(observed["prompt"]["194:46"]["inputs"]["changed"], "hook")
         self.assertEqual(observed["partial_execution_targets"], ["194:46"])
+        self.assertEqual(p["document"]["jobs"][0]["status"], "failed")
+        self.assertEqual(self.queue.pending, [])
+
+    def test_hook_cannot_change_frozen_seed(self):
+        self.base["prompt"]["194:45"]["inputs"]["seed"] = 42
+        self.project = self.store.capture(self.project["id"], self.project["revision"], "clip-a", self.base)
+
+        def hook(payload):
+            payload["prompt"]["194:45"]["inputs"]["seed"] = 99
+            return payload
+
+        self.server.trigger_on_prompt = hook
+        project = self.submit()
+        job = project["document"]["jobs"][0]
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("host hook changed the frozen workflow", job["error"])
+        self.assertEqual(self.store.attempt(job["id"])["request"]["prompt"]["194:45"]["inputs"]["seed"], 42)
+        self.assertEqual(self.queue.pending, [])
 
     def test_deadline_and_meta_batch_rejected_before_hooks(self):
         for node_type, inputs in [

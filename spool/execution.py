@@ -7,7 +7,7 @@ import time
 from . import attempts, receipts, deadline_job, farm_protocol
 from .media import check_frozen, contained
 from .ownership import ExecutorLock, ExecutorBusy, executor_identity
-from .requests import LOADERS, SAVERS, local_compatibility
+from .requests import local_compatibility
 from . import requests
 from .store import uid, Conflict
 from .collection import Collector
@@ -155,28 +155,15 @@ class LocalExecutor:
             if not valid[0] or expected_output not in valid[2]:
                 await transition(attempts.FAILED, error=json.dumps({"error": valid[1], "nodeErrors": valid[3]}))
                 return
+            if farm_protocol.semantic_prompt(prompt) != farm_protocol.semantic_prompt(request["prompt"]):
+                await transition(
+                    attempts.FAILED,
+                    error="A host hook changed the frozen workflow. Apply a compatible graph before generating.",
+                )
+                return
             if farm and (problem := await self._deadline_problem(attempt, prompt)):
                 await transition(attempts.FAILED, error=problem)
                 return
-            for node_id, node in prompt.items():
-                authored = request["prompt"].get(node_id, {})
-                loader_input = LOADERS.get(node["class_type"])
-                if loader_input and node["inputs"].get(loader_input) != authored.get("inputs", {}).get(loader_input):
-                    await transition(
-                        attempts.FAILED,
-                        error="A host hook changed a frozen file dependency. Capture a compatible local recipe.",
-                    )
-                    return
-                if (
-                    node["class_type"] in SAVERS
-                    and "filename_prefix" in node["inputs"]
-                    and node["inputs"]["filename_prefix"] != request["outputNamespace"]
-                ):
-                    await transition(
-                        attempts.FAILED,
-                        error="A host hook changed the isolated saver path. Capture a compatible local recipe.",
-                    )
-                    return
             await asyncio.to_thread(verify_frozen_inputs, media, request, prompt)
             await transition(
                 attempts.DISPATCHING, result={"validation": {"acceptedOutputs": valid[2], "nodeErrors": valid[3]}}
@@ -208,8 +195,6 @@ class LocalExecutor:
     async def _deadline_problem(self, attempt, prompt):
         """Why a Deadline workflow cannot leave this host, after Comfy's hooks ran, or None."""
         request = attempt["request"]
-        if farm_protocol.semantic_prompt(prompt) != farm_protocol.semantic_prompt(request["prompt"]):
-            return "A host hook changed the frozen Deadline workflow. Apply a compatible graph before generating."
         worker_prompt = {k: v for k, v in prompt.items() if k != request["launcherNodeId"]}
         worker_validation = await self.validate(
             attempt["prompt_id"], worker_prompt, [request["capture"]["result"]["nodeId"]]

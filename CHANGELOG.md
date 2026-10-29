@@ -41,6 +41,8 @@ First public release.
 
 ### Generation
 
+- Local dispatch refuses host hooks that change a frozen workflow, matching
+  Deadline's protection of the exact requested controls and files.
 - Shared-project local attempts are marked uncertain only by the workspace
   that dispatched them, including after that workspace restarts.
 - Add workflows from a curated library of built-in templates, the current Comfy

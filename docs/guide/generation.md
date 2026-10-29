@@ -161,6 +161,10 @@ before sending it. Results are copied into the clip's folder and checked against
 that record before they become takes. New takes never replace the take in the
 edit.
 
+Local and Deadline dispatch refuse host hooks that change the frozen workflow's
+controls, dependencies or saver paths. Apply a compatible graph before trying
+again.
+
 For a project opened on several machines, only the workspace that sent a local
 render can mark it uncertain when it disappears from that ComfyUI's queue and
 history. Restarting that workspace keeps this responsibility. Other workspaces
