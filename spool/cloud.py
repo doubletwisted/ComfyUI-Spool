@@ -111,6 +111,15 @@ class CloudExecutor:
         store = self.store.for_project(attempt["project_id"])
         media = self.media.for_project(store, attempt["project_id"])
         request = attempt["request"]
+        observed = attempt["status"]
+
+        def transition(status, **kwargs):
+            nonlocal observed
+            changed = store.transition(attempt["id"], status, expected=observed, **kwargs)
+            if changed:
+                observed = status
+            return changed
+
         state = store.setting("cloud:" + attempt["id"])
         if media.receipt_path(attempt).is_file():
             await storage_call(self.collector.ingest, attempt)
@@ -120,14 +129,12 @@ class CloudExecutor:
         if not state and attempt["status"] not in (attempts.INTENT, attempts.WAITING):
             if attempt["status"] == attempts.CANCEL_REQUESTED:
                 # No job ID was recorded, so there is no Cloud job Spool could stop or collect.
-                store.transition(
-                    attempt["id"],
+                transition(
                     attempts.CANCELLED,
                     error="Cancelled before Spool recorded a Comfy Cloud job ID. If Cloud ran it, Spool will not collect the result.",
                 )
             elif attempt["status"] != attempts.UNCERTAIN:
-                store.transition(
-                    attempt["id"],
+                transition(
                     attempts.UNCERTAIN,
                     error="Cloud submission was interrupted before its job ID was recorded. No automatic resubmission.",
                 )
@@ -146,6 +153,7 @@ class CloudExecutor:
                 elif attempt["status"] in (attempts.INTENT, attempts.WAITING):
                     if not store.claim(attempt["id"], self.session_id):
                         return
+                    observed = attempts.DISPATCHING
                     workflow = client.workflows.from_json(
                         execution_prompt(request["prompt"], request["capture"]["result"]["nodeId"])
                     )
@@ -168,8 +176,9 @@ class CloudExecutor:
                     job = await client.submit(workflow, api_key=key, idempotency_key=attempt["id"])
                     state = {"jobId": job.id, "endpoint": address}
                     store.set_setting("cloud:" + attempt["id"], state)
+                observed = store.attempt(attempt["id"])["status"]
                 if (
-                    store.attempt(attempt["id"])["status"] == "cancel_requested"
+                    observed == "cancel_requested"
                     and job.status not in ("succeeded", "failed", "expired", "canceled")
                     and not state.get("cancelSent")
                 ):
@@ -177,17 +186,16 @@ class CloudExecutor:
                     state["cancelSent"] = True
                     store.set_setting("cloud:" + attempt["id"], state)
                 if job.status == "succeeded":
-                    store.transition(attempt["id"], attempts.COLLECTING)
+                    transition(attempts.COLLECTING)
                     await self.collect(attempt, media, job, address)
                     await storage_call(self.collector.ingest, attempt)
                 elif job.status in ("failed", "expired", "canceled"):
-                    store.transition(
-                        attempt["id"],
+                    transition(
                         attempts.FAILED if job.status in ("failed", "expired") else attempts.CANCELLED,
                         error=str(job.error).replace(key, "[redacted]") if job.error else None,
                     )
-                elif store.attempt(attempt["id"])["status"] != "cancel_requested":
-                    store.transition(attempt["id"], attempts.RUNNING if job.status == "running" else attempts.QUEUED)
+                elif observed != "cancel_requested":
+                    transition(attempts.RUNNING if job.status == "running" else attempts.QUEUED)
         except asyncio.CancelledError:
             raise
         except Exception as error:
@@ -203,7 +211,7 @@ class CloudExecutor:
             message = str(error).replace(key, "[redacted]")
             if isinstance(error, Forbidden) and "free tier" in message.lower():
                 message += " " + FREE_TIER
-            store.transition(attempt["id"], status, error=message)
+            transition(status, error=message)
 
     async def collect(self, attempt, media, job, address):
         selection = attempt["request"]["capture"]["result"]

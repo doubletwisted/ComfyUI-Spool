@@ -41,6 +41,8 @@ First public release.
 
 ### Generation
 
+- Stale execution observations cannot undo cancellation or terminal states.
+  Verified late receipts can still recover a result without choosing it.
 - Local dispatch refuses host hooks that change a frozen workflow, matching
   Deadline's protection of the exact requested controls and files.
 - Shared-project local attempts are marked uncertain only by the workspace

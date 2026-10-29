@@ -30,16 +30,24 @@ class FarmCollector:
         return hashlib.sha256(evidence).digest(), tuple(files)
 
     def collect(self, attempt):
+        observed = attempt["status"]
+
+        def transition(status, **kwargs):
+            nonlocal observed
+            changed = self.store.transition(attempt["id"], status, expected=observed, **kwargs)
+            if changed:
+                observed = status
+            return changed
+
         row = self.store.submission_for(attempt["id"])
-        if not row or attempt["status"] == attempts.FAILED:
+        if not row:
             return
         root = Path(attempt["request"]["prompt"][attempt["request"]["launcherNodeId"]]["inputs"]["output_directory"])
         directory = contained(root, "spool-submissions/" + row["id"])
         request_file, ack_file = directory / "request.json", directory / "ack.json"
         if not request_file.is_file():
             if attempt["status"] != attempts.COMPLETE and time.time() - attempt["created"] > 30:
-                self.store.transition(
-                    attempt["id"],
+                transition(
                     attempts.SUBMISSION_UNCERTAIN,
                     error="No durable submission package or acknowledgment yet; no automatic resubmission",
                 )
@@ -78,12 +86,11 @@ class FarmCollector:
                 attempts.CANCEL_REQUESTED,
                 attempts.COLLECTION_PENDING,
             ):
-                self.store.transition(attempt["id"], attempts.FARM_QUEUED)
+                transition(attempts.FARM_QUEUED)
         elif row["external_id"]:
             ack = {"jobId": row["external_id"]}
         elif attempt["status"] != attempts.COMPLETE and time.time() - attempt["created"] > 30:
-            self.store.transition(
-                attempt["id"],
+            transition(
                 attempts.SUBMISSION_UNCERTAIN,
                 error="Submission response or acknowledgment unavailable; no automatic resubmission",
             )
@@ -102,7 +109,7 @@ class FarmCollector:
             status = fields.get("JobStatus", fields.get("Status"))
             if attempt["status"] == attempts.CANCEL_REQUESTED and status != "Completed":
                 if status in ("Failed", "Suspended"):
-                    self.store.transition(attempt["id"], attempts.CANCELLED)
+                    transition(attempts.CANCELLED)
             elif status == "Active":
                 try:
                     task_state = deadline_command(["-GetJobTasks", ack["jobId"], "true"])
@@ -110,20 +117,18 @@ class FarmCollector:
                     task_state = ""
                 tasks = dict(line.split("=", 1) for line in task_state.splitlines() if "=" in line)
                 if tasks.get("TaskStatus", tasks.get("Status")) == "Rendering":
-                    self.store.transition(attempt["id"], attempts.FARM_RUNNING)
+                    transition(attempts.FARM_RUNNING)
                 elif tasks.get("TaskStatus", tasks.get("Status")) in ("Queued", "Pending"):
-                    self.store.transition(attempt["id"], attempts.FARM_QUEUED)
+                    transition(attempts.FARM_QUEUED)
             elif fields.get("JobStatus", fields.get("Status")) == "Rendering":
-                self.store.transition(attempt["id"], attempts.FARM_RUNNING)
+                transition(attempts.FARM_RUNNING)
             elif fields.get("JobStatus", fields.get("Status")) == "Completed":
-                self.store.transition(
-                    attempt["id"],
+                transition(
                     attempts.COLLECTION_PENDING,
                     error="Deadline completed; awaiting verified worker receipt",
                 )
             elif fields.get("JobStatus", fields.get("Status")) in ("Failed", "Suspended"):
-                self.store.transition(
-                    attempt["id"],
+                transition(
                     attempts.FARM_ATTENTION,
                     error="Deadline job is "
                     + fields.get("JobStatus", fields.get("Status"))

@@ -1031,9 +1031,13 @@ class Store:
                 (execution_id, attempt_id, submission_id, encode(receipt), int(winner)),
             )
             if winner:
-                db.execute(
-                    "UPDATE attempts SET status='complete',result=?,error=NULL WHERE id=?",
-                    (encode(receipt), attempt_id),
+                self.transition(
+                    attempt_id,
+                    attempts.COMPLETE,
+                    result=receipt,
+                    db=db,
+                    expected=attempt["status"],
+                    recovery=True,
                 )
             self._event(
                 db,
@@ -1332,18 +1336,28 @@ class Store:
             row = db.execute("SELECT * FROM dispatches WHERE attempt_id=?", (attempt_id,)).fetchone()
         return {"payload": json.loads(row["payload"]), "validation": json.loads(row["validation"])} if row else None
 
-    def transition(self, attempt_id, status, result=None, error=None, db=None):
-        """Move an attempt to a status; pass db to join a transaction already open on this store."""
+    def transition(self, attempt_id, status, result=None, error=None, db=None, *, expected=None, recovery=False):
+        """Apply an allowed observation only if its snapshot is still current.
+
+        Verified receipt acceptance explicitly opts into recovery. Pass db to
+        join a transaction already open on this store.
+        """
         if db is None:
             with self.connect() as db:
-                return self.transition(attempt_id, status, result, error, db)
+                db.execute("BEGIN IMMEDIATE")
+                return self.transition(attempt_id, status, result, error, db, expected=expected, recovery=recovery)
         current = db.execute("SELECT status,error FROM attempts WHERE id=?", (attempt_id,)).fetchone()
+        if not current or (expected is not None and current["status"] != expected):
+            return False
+        allowed = (
+            status == attempts.COMPLETE and current[0] in attempts.RECOVERY
+            if recovery
+            else status == current[0] or status in attempts.ALLOWED.get(current[0], ())
+        )
+        if current[0] == attempts.COMPLETE or not allowed:
+            return False
         if current and current["status"] == status and result is None and current["error"] == error:
-            return
-        if current and status not in attempts.ALLOWED.get(current[0], ()):
-            logging.warning(
-                "Spool attempt transition outside observed contract: %s -> %s (%s)", current[0], status, attempt_id
-            )
+            return True
         db.execute(
             "UPDATE attempts SET status=?,result=COALESCE(?,result),error=? WHERE id=? AND status!='complete'",
             (status, encode(result) if result is not None else None, error, attempt_id),
@@ -1351,3 +1365,4 @@ class Store:
         if current and current[0] != status and current[0] != attempts.COMPLETE:
             project_id = db.execute("SELECT project_id FROM attempts WHERE id=?", (attempt_id,)).fetchone()[0]
             self._event(db, project_id, "attempt.status", {"attemptId": attempt_id, "status": status, "error": error})
+        return True

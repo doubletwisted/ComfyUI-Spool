@@ -11,12 +11,14 @@ import {
   reviewSignature,
   PENDING,
   TERMINAL,
+  RECOVERY,
   ACTIVE,
   cancelAction,
 } from '../ui/generation.js';
 const statuses = JSON.parse(fs.readFileSync(new URL('./fixtures/attempt_statuses.json', import.meta.url), 'utf8'));
 assert.deepEqual([...PENDING].sort(), statuses.pending);
 assert.deepEqual([...TERMINAL].sort(), statuses.terminal);
+assert.deepEqual([...RECOVERY].sort(), statuses.recovery);
 assert.deepEqual(
   ACTIVE,
   PENDING.filter(status => status !== 'uncertain'),

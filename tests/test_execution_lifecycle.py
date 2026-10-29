@@ -46,3 +46,20 @@ class ExecutionLifecycleTests(unittest.TestCase):
         self.store.claim(identity, "legacy-process-id")
         asyncio.run(self.executor(self.workspace, self.base_media).reconcile())
         self.assertEqual(self.store.attempt(identity)["status"], "dispatching")
+
+    def test_stale_observation_and_forbidden_transition_leave_cancellation_intact(self):
+        project = requests.accept(
+            self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}]
+        )
+        identity = project["document"]["jobs"][0]["id"]
+        self.store.transition(identity, "farm_running")
+        stale = self.store.attempt(identity)
+        self.store.transition(identity, "cancel_requested", expected=stale["status"])
+        self.assertFalse(self.store.transition(identity, "farm_running", expected=stale["status"]))
+        self.assertFalse(self.store.transition(identity, "farm_running", expected="cancel_requested"))
+        self.assertEqual(self.store.attempt(identity)["status"], "cancel_requested")
+        self.assertTrue(self.store.transition(identity, "cancelled", expected="cancel_requested"))
+        self.assertFalse(self.store.transition(identity, "complete", expected="cancelled"))
+        self.assertTrue(self.store.accept_execution(identity, "verified-late-receipt", None, {}))
+        self.assertEqual(self.store.attempt(identity)["status"], "complete")
+        self.assertFalse(self.store.transition(identity, "failed", expected="complete"))

@@ -124,20 +124,17 @@ class AttemptStatusTests(unittest.TestCase):
             self.assertIn(identity, self.store.pending())
         self.store.transition(identity, attempts.COMPLETE, result={"receipt": "chosen"})
         self.assertNotIn(identity, self.store.pending())
-        with self.assertLogs(level="WARNING"):
-            self.store.transition(identity, attempts.FAILED, result={"receipt": "late failure"})
+        self.assertFalse(self.store.transition(identity, attempts.FAILED, result={"receipt": "late failure"}))
         final = self.store.attempt(identity)
         self.assertEqual(final["status"], attempts.COMPLETE)
         self.assertEqual(json.loads(final["result"]), {"receipt": "chosen"})
 
-    def test_transition_contract_is_advisory_for_crash_reconstruction(self):
+    def test_transition_contract_refuses_forbidden_reconstruction(self):
         identity = self.attempt["id"]
         self.store.transition(identity, attempts.DISPATCHING)
         self.store.transition(identity, attempts.QUEUED)
-        with self.assertLogs(level="WARNING") as logs:
-            self.store.transition(identity, attempts.DISPATCHING)
-        self.assertIn("queued -> dispatching", logs.output[0])
-        self.assertEqual(self.store.attempt(identity)["status"], attempts.DISPATCHING)
+        self.assertFalse(self.store.transition(identity, attempts.DISPATCHING))
+        self.assertEqual(self.store.attempt(identity)["status"], attempts.QUEUED)
         self.assertIn(identity, self.store.pending())
 
 

@@ -14,6 +14,8 @@ class AttemptStatusTests(unittest.TestCase):
         self.assertEqual(attempts.PENDING, set(FIXTURE["pending"]))
         self.assertEqual(attempts.TERMINAL, set(FIXTURE["terminal"]))
         self.assertFalse(attempts.PENDING & attempts.TERMINAL)
+        self.assertEqual(sorted(attempts.RECOVERY), FIXTURE["recovery"])
+        self.assertEqual({k: sorted(v) for k, v in attempts.ALLOWED.items()}, FIXTURE["allowed"])
 
     def test_cancel_policy_matches_the_shared_fixture(self):
         for case in FIXTURE["cancel"]:

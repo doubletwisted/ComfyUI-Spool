@@ -112,8 +112,14 @@ class LocalExecutor:
         if not await asyncio.to_thread(store.claim, attempt["id"], self.session_id):
             return
 
-        async def transition(*args, **kwargs):
-            await asyncio.to_thread(store.transition, attempt["id"], *args, **kwargs)
+        observed = attempts.DISPATCHING  # claim atomically moved the intent.
+
+        async def transition(status, **kwargs):
+            nonlocal observed
+            changed = await asyncio.to_thread(store.transition, attempt["id"], status, expected=observed, **kwargs)
+            if changed:
+                observed = status
+            return changed
 
         try:
             farm = target == attempts.DEADLINE
@@ -165,9 +171,10 @@ class LocalExecutor:
                 await transition(attempts.FAILED, error=problem)
                 return
             await asyncio.to_thread(verify_frozen_inputs, media, request, prompt)
-            await transition(
+            if not await transition(
                 attempts.DISPATCHING, result={"validation": {"acceptedOutputs": valid[2], "nodeErrors": valid[3]}}
-            )
+            ):
+                return
             if farm:
                 await self._submit_deadline(store, attempt, package, transition)
             else:
@@ -204,7 +211,8 @@ class LocalExecutor:
         return None
 
     async def _submit_deadline(self, store, attempt, package, transition):
-        await transition(attempts.SUBMITTING)
+        if not await transition(attempts.SUBMITTING):
+            return
         job_id = await asyncio.to_thread(deadline_job.submit, attempt["request"], package)
         await asyncio.to_thread(store.acknowledge, package["submissionId"], job_id)
         await transition(attempts.FARM_QUEUED)
@@ -243,6 +251,15 @@ class LocalExecutor:
     def observe(self, store, media, attempt, running_ids, pending_ids):
         """Record what Comfy reports for one local attempt; True when it still needs dispatch."""
         attempt_id, prompt_id = attempt["id"], attempt["prompt_id"]
+        observed = attempt["status"]
+
+        def transition(status, **kwargs):
+            nonlocal observed
+            changed = store.transition(attempt_id, status, expected=observed, **kwargs)
+            if changed:
+                observed = status
+            return changed
+
         history = self.server.prompt_queue.get_history(prompt_id=prompt_id).get(prompt_id)
         if not history and attempt["result"]:
             history = json.loads(attempt["result"]).get("history")
@@ -251,20 +268,18 @@ class LocalExecutor:
             try:
                 history = json.loads(receipt_file.read_text(encoding="utf-8")).get("history")
             except (OSError, ValueError) as error:
-                store.transition(attempt_id, attempts.COLLECTION_PENDING, error=str(error))
+                transition(attempts.COLLECTION_PENDING, error=str(error))
                 return False
         if history:
             status = history.get("status", {})
             if not status.get("completed") or status.get("status_str") != "success":
-                store.transition(
-                    attempt_id,
+                transition(
                     attempts.FAILED,
                     result={"history": history},
                     error="Workflow failed; partial outputs are retained in history",
                 )
                 return False
-            store.transition(
-                attempt_id,
+            transition(
                 attempts.COLLECTING,
                 result={"history": history, "dispatch": store.dispatch_record(attempt_id)},
             )
@@ -274,16 +289,15 @@ class LocalExecutor:
                     receipts.write(receipt_file.parent, attempt, artifacts, primary, history)
                 self.collector.ingest(attempt)
             except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
-                store.transition(attempt_id, attempts.COLLECTION_PENDING, error=str(error))
+                transition(attempts.COLLECTION_PENDING, error=str(error))
         elif prompt_id in running_ids:
-            store.transition(attempt_id, attempts.RUNNING)
+            transition(attempts.RUNNING)
         elif prompt_id in pending_ids:
-            store.transition(attempt_id, attempts.QUEUED)
+            transition(attempts.QUEUED)
         elif attempt["status"] in {attempts.INTENT, attempts.WAITING}:
             return True
         elif (store.owner(attempt_id) or "").startswith(self.identity):
-            store.transition(
-                attempt_id,
+            transition(
                 attempts.UNCERTAIN,
                 error="Prompt absent from queue/history. Computation may have stopped or history was cleared. No automatic redispatch.",
             )

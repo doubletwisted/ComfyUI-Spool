@@ -192,6 +192,8 @@ export const PENDING = Object.freeze([
   'uncertain',
 ]);
 export const TERMINAL = Object.freeze(['complete', 'failed', 'cancelled']);
+// A verified late receipt can recover any attempt that has no accepted result.
+export const RECOVERY = Object.freeze([...PENDING, 'failed', 'cancelled']);
 // Uncertain attempts stay pending but are not counted as work in progress.
 export const ACTIVE = Object.freeze(PENDING.filter(status => status !== 'uncertain'));
 // Mirrors attempts.cancel_action: 'cancelled' at once, 'requested' from the target, or 'refused'.

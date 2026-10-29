@@ -87,6 +87,25 @@ class FarmProtocolTests(unittest.TestCase):
         events = self.store.events(self.project["id"])["events"]
         self.assertEqual(sum(e["kind"] == "receipt.rejected" for e in events), 1)
 
+    def test_cancel_during_farm_observation_cannot_be_overwritten(self):
+        attempt = self.farm_attempts[0]
+        self.package(attempt)
+        self.store.transition(attempt["id"], "farm_queued")
+        collector = Collector(self.store, self.media)
+
+        def observation(arguments):
+            self.store.transition(attempt["id"], "cancel_requested", expected="farm_queued")
+            return "JobStatus=Rendering"
+
+        with patch("spool.farm.deadline_command", side_effect=observation):
+            collector.scan()
+        self.assertEqual(self.store.attempt(attempt["id"])["status"], "cancel_requested")
+        for farm in collector.farms.values():
+            farm.observed_at.clear()
+        with patch("spool.farm.deadline_command", return_value="JobStatus=Failed"):
+            collector.scan()
+        self.assertEqual(self.store.attempt(attempt["id"])["status"], "cancelled")
+
     def test_unchanged_collected_receipts_skip_hashes_until_restart(self):
         attempt = self.farm_attempts[0]
         self.finish(attempt)

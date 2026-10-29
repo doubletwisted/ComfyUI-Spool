@@ -431,10 +431,10 @@ def execute(store, media, project_id, data):
                     )
                 raise ValueError("Claimed work needs an owned Deadline job; resolve uncertain submission first")
             if outcome == "cancelled":
-                store.transition(attempt["id"], attempts.CANCELLED, db=db)
+                store.transition(attempt["id"], attempts.CANCELLED, db=db, expected=attempt["status"])
                 return {"attemptId": attempt["id"], "status": "cancelled"}, False
             if target == attempts.CLOUD:
-                store.transition(attempt["id"], attempts.CANCEL_REQUESTED, db=db)
+                store.transition(attempt["id"], attempts.CANCEL_REQUESTED, db=db, expected=attempt["status"])
                 return {"attemptId": attempt["id"], "status": "cancel_requested", "target": "cloud"}, False
             note = "Cancellation delivery is unconfirmed; refresh job status before any further action. No automatic repeat."
             claimed = store.cancellation_claimed(db, attempt["id"])
@@ -442,10 +442,14 @@ def execute(store, media, project_id, data):
                 if cancellation != (submission["id"], submission["external_id"]):
                     raise Conflict("Deadline job changed during cancellation ownership lookup; retry Cancel request")
                 store.claim_cancellation(db, identity)
-                store.transition(attempt["id"], attempts.CANCEL_REQUESTED, error=note, db=db)
+                store.transition(
+                    attempt["id"], attempts.CANCEL_REQUESTED, error=note, db=db, expected=attempt["status"]
+                )
                 send_cancellation = True
             elif claimed and attempt["status"] != "cancel_requested":
-                store.transition(attempt["id"], attempts.CANCEL_REQUESTED, error=note, db=db)
+                store.transition(
+                    attempt["id"], attempts.CANCEL_REQUESTED, error=note, db=db, expected=attempt["status"]
+                )
             return {
                 "attemptId": attempt["id"],
                 "status": "cancel_requested",

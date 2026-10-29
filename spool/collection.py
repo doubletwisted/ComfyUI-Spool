@@ -30,7 +30,8 @@ class Collector:
     def ingest(self, attempt):
         store = self.store.for_project(attempt["project_id"])
         media = self.media.for_project(store, attempt["project_id"])
-        if store.attempt(attempt["id"])["status"] == attempts.COMPLETE:
+        observed = store.attempt(attempt["id"])["status"]
+        if observed == attempts.COMPLETE:
             return False
         path = media.receipt_path(attempt)
         try:
@@ -40,7 +41,7 @@ class Collector:
             sidecars.write_result(store, media, attempt, result)
             return store.accept_execution(attempt["id"], attempt["prompt_id"], None, result)
         except (ValueError, KeyError, OSError, RuntimeError, subprocess.SubprocessError) as error:
-            store.transition(attempt["id"], attempts.COLLECTION_PENDING, error=str(error))
+            store.transition(attempt["id"], attempts.COLLECTION_PENDING, error=str(error), expected=observed)
             return False
 
     def scan(self):
@@ -62,7 +63,9 @@ class Collector:
                 try:
                     farm.collect(attempt)
                 except (ValueError, KeyError, OSError, RuntimeError, subprocess.SubprocessError) as error:
-                    store.transition(attempt["id"], attempts.COLLECTION_PENDING, error=str(error))
+                    store.transition(
+                        attempt["id"], attempts.COLLECTION_PENDING, error=str(error), expected=attempt["status"]
+                    )
                 continue
             path = media.receipt_path(attempt)
             if not path.is_file() or attempt["status"] == attempts.COMPLETE:

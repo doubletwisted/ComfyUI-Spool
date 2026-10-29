@@ -563,12 +563,11 @@ class CommandTests(unittest.TestCase):
         with patch("spool.farm.deadline_command", side_effect=[submission["id"], RuntimeError("lost response")]):
             with self.assertRaises(RuntimeError):
                 self.execute(cancel)
-        self.store.transition(attempt_id, "farm_running")
+        self.assertFalse(self.store.transition(attempt_id, "farm_running"))
         cancel["operationId"] = "cancel-again"
         with patch("spool.farm.deadline_command", return_value=submission["id"]) as external:
             self.assertIn("unconfirmed", self.execute(cancel)["note"])
-            self.assertEqual(external.call_count, 1)
-            self.assertEqual(external.call_args.args[0][0], "-GetJobExtraInfoKeyValue")
+            external.assert_not_called()
         self.assertEqual(self.store.attempt(attempt_id)["status"], "cancel_requested")
 
     def test_completed_during_cancel_lookup_is_not_failed(self):

@@ -71,8 +71,10 @@ ALLOWED[INTENT] = OBSERVED | {DISPATCHING}
 ALLOWED[WAITING] = OBSERVED | {DISPATCHING}
 ALLOWED[DISPATCHING] = OBSERVED | {DISPATCHING}
 ALLOWED[COLLECTING] = OBSERVED | {COMPLETE}
-ALLOWED[CANCEL_REQUESTED] = OBSERVED | {CANCELLED}
+ALLOWED[CANCEL_REQUESTED] = frozenset({COLLECTING, COLLECTION_PENDING, CANCELLED, FAILED})
 ALLOWED.update({status: frozenset() for status in TERMINAL})
+# Only verified receipt acceptance uses this recovery path, including late results.
+RECOVERY = frozenset((PENDING | TERMINAL) - {COMPLETE})
 
 
 def target_of(request, submission=None):

@@ -179,6 +179,8 @@ time. Expand a row for its seed, worker, output path and execution record.
 
 - **Cancel request** stops queued work. A local render that is already running is
   cancelled from ComfyUI's queue; Spool records what ComfyUI reports.
+  Delayed status observations cannot undo a cancellation request. Verified late
+  results remain collectable and never change the chosen take.
 - **Retry submission** appears only when Spool could not confirm a submission.
   **Find existing Deadline job** looks for a farm job that was accepted before
   the connection was lost. Neither starts a second render.
