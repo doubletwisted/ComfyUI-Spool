@@ -20,6 +20,8 @@ export function createTakeRenderer({
   draw,
   takeName,
   pendingJobs,
+  failedJobs,
+  clearRenders,
   getTakeBatchKey,
   updateTakeSelection,
   viewTake,
@@ -112,35 +114,52 @@ export function createTakeRenderer({
           : null
       : null;
   }
+  // Failed takes until dismissed, then takes still rendering, as compact rows under the takes.
   function renderPendingTakes(c) {
-    const jobs = c && !selectedAudio() ? pendingJobs(c) : [];
+    const shown = c && !selectedAudio(),
+      jobs = shown ? [...failedJobs(c), ...pendingJobs(c)] : [];
     $('takes').classList.toggle('has-pending', jobs.length > 0);
-    draw(
-      'takePending',
-      jobs
-        .map(j => {
-          const percent = jobPercent(j),
-            known = Number.isFinite(percent);
-          return (
-            '<div class="take-pending-row" data-pending-job="' +
-            esc(j.id) +
-            '"><span class="take-pending-thumb">' +
-            (known ? Math.round(percent) + '%' : '…') +
-            '</span><span class="take-pending-info"><strong>' +
-            (j.takeNumber ? 'Take ' + String(j.takeNumber).padStart(2, '0') : 'New take') +
-            '</strong><small>' +
-            esc(G.jobStage(j)) +
-            ' · <span data-job-elapsed="' +
-            esc(j.id) +
-            '">' +
-            esc(G.jobElapsed(j)) +
-            '</span></small>' +
-            (known ? '<span class="take-pending-bar"><i style="width:' + percent.toFixed(1) + '%"></i></span>' : '') +
-            '</span></div>'
-          );
-        })
-        .join(''),
-    );
+    if (
+      draw(
+        'takePending',
+        jobs
+          .map(j => {
+            const percent = jobPercent(j),
+              known = Number.isFinite(percent),
+              failed = j.status === 'failed',
+              name = j.takeNumber ? 'Take ' + String(j.takeNumber).padStart(2, '0') : 'New take';
+            return (
+              '<div class="take-pending-row" data-pending-job="' +
+              esc(j.id) +
+              '" data-state="' +
+              (failed ? 'failed' : known ? 'running' : 'waiting') +
+              '"><div class="take-pending-line"><strong>' +
+              name +
+              '</strong>' +
+              (failed
+                ? '<button class="take-pending-dismiss" data-dismiss-render="' +
+                  esc(j.id) +
+                  '" title="Dismiss" aria-label="Dismiss failed ' +
+                  name +
+                  '">×</button>'
+                : '<span class="take-pending-percent">' + (known ? Math.round(percent) + '%' : '') + '</span>') +
+              '</div><small class="take-pending-stage">' +
+              esc(G.jobStage(j)) +
+              (failed ? '' : ' · <span data-job-elapsed="' + esc(j.id) + '">' + esc(G.jobElapsed(j)) + '</span>') +
+              '</small>' +
+              (failed && j.error
+                ? '<p class="take-pending-error" title="' + esc(j.error) + '">' + esc(j.error) + '</p>'
+                : '') +
+              (known ? '<span class="take-pending-bar"><i style="width:' + percent.toFixed(1) + '%"></i></span>' : '') +
+              '</div>'
+            );
+          })
+          .join(''),
+      )
+    )
+      $('takePending')
+        .querySelectorAll('[data-dismiss-render]')
+        .forEach(b => (b.onclick = () => clearRenders([b.dataset.dismissRender])));
   }
   function renderTakes() {
     getRenderPlaceholderState()();
@@ -259,12 +278,14 @@ export function createTakeRenderer({
         };
         b.onclick = () =>
           review.mode === 'source' && review.source?.takeId === b.dataset.view ? getPlay()() : viewTake(b.dataset.view);
-        b.onpointerenter = b.onpointermove = e => {
-          const r = b.getBoundingClientRect(),
+        // The whole tile scrubs, left to right across its width; the thumbnail shows the frame.
+        const card = b.closest('.take-card');
+        card.onpointerenter = card.onpointermove = e => {
+          const r = card.getBoundingClientRect(),
             end = t.media.frames;
           scrubTake(b, t, Math.min(end - 1, Math.floor(clamp((e.clientX - r.left) / r.width, 0, 1) * end)));
         };
-        b.onpointerleave = () => thumbnails.stopScrub(b);
+        card.onpointerleave = () => thumbnails.stopScrub(b);
       });
       list.querySelectorAll('[data-use]').forEach(b => (b.onclick = () => chooseTake(c.id, b.dataset.use)));
     }

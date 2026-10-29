@@ -1028,6 +1028,7 @@ const CHECKS = {
     thumbnails: true,
   },
   'take-hover': { fixture: takeHoverFixture, modes: ['full'], file: 'take_hover_browser_checks.js' },
+  'take-rail': { fixture: takeHoverFixture, modes: ['full'], file: 'take_rail_browser_checks.js' },
   'take-hover-narrow': {
     fixture: takeHoverFixture,
     modes: ['full'],

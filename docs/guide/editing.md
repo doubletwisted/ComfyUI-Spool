@@ -2,8 +2,10 @@
 
 The studio has a library sidebar on the left (**Workflows** and **Media**), the
 viewer in the middle, the inspector on the right and the timeline below. The
-status bar along the bottom shows the latest message, the save state (click it to
-save now or retry) and the Comfy connection. Small arrows in the panel headers
+status bar along the bottom shows work in progress (click it for diagnostics) or
+briefly confirms your last edit, then the save state (click it to save now or
+retry) and the Comfy connection. **Activity** in the project menu lists what
+happened to the project's takes, newest first, with the reason when one failed. Small arrows in the panel headers
 hide a panel; a matching arrow at the viewer's edge
 brings it back. A hidden sidebar leaves a thin icon rail: **Workflows** and
 **Media** open the sidebar over the viewer until you click elsewhere, and the
@@ -88,10 +90,14 @@ Takes generated from the same inputs form one batch. When a clip has more than
 one batch, each starts with a heading that names what changed from the batch
 before it (for example **Prompt changed**), with its time and take count;
 imported footage has its own heading. Seeds may differ within a batch. Renders
-still in progress appear below the list with their stage and progress.
+still in progress appear below the list as compact rows with their stage and
+progress. A take that fails shows there in red with the reason until you dismiss
+it with **×**; Spool also announces the failure when it happens, and **Renders**
+counts it in red. The list icon beside the clip folder makes the takes compact,
+with a small thumbnail and one line each, for clips with many takes.
 
-- Move across a take thumbnail to scrub the whole take in the main viewer. Moving
-  away restores what was there; nothing is chosen.
+- Move across a take to scrub the whole take in the main viewer: anywhere on its
+  tile, left to right. Moving away restores what was there; nothing is chosen.
 - **Source** reviews a take on its own, with its own playhead (**Q** switches
   between Source and the edit; **1** to **9** pick a take). **Compare** (**C**)
   shows two takes side by side.

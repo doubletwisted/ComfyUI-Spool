@@ -4768,16 +4768,20 @@ input[type='range'] {
 .project-save[data-state='saving'] {
   color: var(--accent);
 }
-.project-topbar .processing-status {
-  max-width: 220px;
+/* Work in progress leads the status bar and replaces the last edit message while it runs. */
+.footer .processing-status {
+  flex: 1;
+  justify-content: flex-start;
+  max-width: none;
   min-width: 0;
-  margin-left: auto;
+  height: 20px;
+  padding: 0 4px 0 0;
   background: transparent;
   border: 0;
-  padding: 4px;
-  font-size: 10px;
+  font-size: 11px;
 }
-.project-topbar .processing-status:not(.busy) {
+.footer .processing-status:not(.busy),
+.footer:has(.processing-status.busy) .status-message {
   display: none;
 }
 .project-topbar .workspace-menu,
@@ -4843,6 +4847,10 @@ input[type='range'] {
   background: #4b3a1d;
   color: #ffd17e;
   font: 10px var(--mono);
+}
+.render-count.failed {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  color: var(--danger);
 }
 .render-count:empty {
   display: none;
@@ -4926,9 +4934,6 @@ input[type='range'] {
   .project-topbar .bar-right {
     gap: 3px;
   }
-  .project-topbar .processing-status {
-    max-width: 110px;
-  }
   .project-topbar .project-identity {
     min-width: 70px;
   }
@@ -4950,9 +4955,6 @@ input[type='range'] {
   }
   .project-topbar.full-editor:has(.connection-warning:not([hidden])) .topbar {
     padding-block: 0;
-  }
-  .project-topbar .processing-status {
-    display: none;
   }
   .project-topbar .workspace-menu {
     font-size: 0;
@@ -6604,42 +6606,88 @@ input[type='range'] {
 .media-rail {
   display: none;
 }
-.take-pending-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--dim);
-}
-.take-pending-thumb {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  border: 1px dashed var(--line2);
-  border-radius: 4px;
-  color: var(--dim);
-  font: 10px var(--mono);
-}
-.take-pending-info {
+/* Takes still rendering, and failed ones, as compact rows: no placeholder thumbnail,
+   the stage wraps instead of being cut off, and the list scrolls past a third of the rail. */
+.takes .take-pending:not(:empty) {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 0;
+  flex-shrink: 0;
+  max-height: 34%;
+  padding: 4px;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
 }
-.take-pending-info strong {
+.take-pending-row {
+  display: grid;
+  gap: 2px;
+  padding: 5px 7px 6px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--dim);
+}
+.take-pending-row[data-state='failed'] {
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+}
+.take-pending-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 18px;
+}
+.take-pending-line strong {
   color: var(--text);
+  font-size: 12px;
   font-weight: 600;
 }
-.take-pending-info small {
+.take-pending-percent {
+  font: 600 10px var(--mono);
+  color: var(--text);
+}
+.take-pending-stage {
   font-size: 10px;
-  white-space: nowrap;
+  line-height: 1.35;
+}
+.take-pending-row[data-state='running'] .take-pending-stage {
+  color: var(--accent);
+}
+.take-pending-row[data-state='failed'] .take-pending-stage {
+  color: var(--danger);
+  font-weight: 550;
+}
+.take-pending-error {
+  display: -webkit-box;
+  margin: 1px 0 0;
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1.4;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.take-pending-dismiss {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--faint);
+  font-size: 15px;
+  line-height: 1;
+}
+.take-pending-dismiss:hover {
+  background: var(--hover);
+  color: var(--text);
 }
 .take-pending-bar {
   display: block;
-  height: 3px;
-  border-radius: 2px;
+  height: 2px;
+  margin-top: 3px;
+  border-radius: 1px;
   background: var(--line2);
   overflow: hidden;
 }
@@ -6647,15 +6695,6 @@ input[type='range'] {
   display: block;
   height: 100%;
   background: var(--accent);
-}
-.takes:not(.has-real-takes) .take-pending {
-  display: flex;
-  gap: 12px;
-  padding: 0 9px 6px;
-}
-.takes:not(.has-real-takes) .take-pending-thumb {
-  width: 44px;
-  height: 25px;
 }
 @media (min-width: 1101px) {
   .editor.full-editor {
@@ -6857,24 +6896,6 @@ input[type='range'] {
   .takes.has-real-takes .take-group span:last-child {
     flex-shrink: 0;
     font-family: var(--mono);
-  }
-  .takes.has-real-takes .take-pending {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex-shrink: 0;
-    padding: 4px;
-    border-top: 1px solid var(--line);
-  }
-  .takes.has-real-takes .take-pending-row {
-    display: grid;
-    grid-template-columns: minmax(84px, 46%) minmax(0, 1fr);
-    gap: 8px;
-    padding: 4px;
-  }
-  .takes.has-real-takes .take-pending-thumb {
-    width: 100%;
-    aspect-ratio: 16/9;
   }
   .full-editor .takes.has-real-takes .takes-keys {
     display: flex;
@@ -7151,9 +7172,6 @@ input[type='range'] {
   }
   .full-editor .takes.has-real-takes .take-seed {
     order: 2;
-  }
-  .takes.has-real-takes .take-pending:empty {
-    display: none;
   }
 }
 .notes-composer:not(:focus-within) > textarea:placeholder-shown {
@@ -7540,4 +7558,156 @@ input[type='range'] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 10px;
+}
+/* Activity: one sentence per event, newest first, problems in red, the raw event folded. */
+#modal.activity-dialog {
+  max-width: 600px;
+}
+.activity-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.activity-row {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.activity-row:first-child {
+  border-top: 0;
+}
+.activity-row time {
+  padding-top: 1px;
+  color: var(--faint);
+  font: 10px/1.6 var(--mono);
+  white-space: nowrap;
+}
+.activity-row p {
+  margin: 0;
+}
+.activity-row p:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+.activity-row strong {
+  position: relative;
+  padding-left: 12px;
+  font-weight: 550;
+  color: var(--text);
+}
+.activity-row strong::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.activity-row[data-tone='done'] strong::before {
+  background: var(--success);
+}
+.activity-row[data-tone='problem'] strong {
+  color: var(--danger);
+}
+.activity-row[data-tone='problem'] strong::before {
+  background: var(--danger);
+}
+.activity-row p:first-child span {
+  color: var(--dim);
+  font-size: 11px;
+}
+.activity-row .activity-detail {
+  margin-top: 4px;
+  padding-left: 12px;
+  color: var(--dim);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.activity-row[data-tone='problem'] .activity-detail {
+  color: color-mix(in srgb, var(--danger) 75%, var(--text));
+}
+.activity-row details {
+  margin: 3px 0 0 12px;
+}
+.activity-row summary {
+  width: max-content;
+  cursor: pointer;
+  color: var(--faint);
+  font-size: 10px;
+}
+.activity-row summary:hover {
+  color: var(--dim);
+}
+.activity-row pre {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--dim);
+  font: 10px/1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.activity-view {
+  margin: 14px 0 0;
+  color: var(--faint);
+  font: 10px var(--mono);
+}
+/* Compact takes: a small thumbnail and one line of details, toggled beside the clip folder. */
+#compactTakes {
+  display: none;
+}
+@media (min-width: 1101px) {
+  .full-editor .takes.has-real-takes #compactTakes {
+    display: inline-flex;
+    order: 2;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+    border-color: transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--dim);
+  }
+  .full-editor .takes.has-real-takes #compactTakes:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .full-editor .takes.has-real-takes #compactTakes[aria-pressed='true'] {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent);
+  }
+  #compactTakes .icon {
+    width: 13px;
+    height: 13px;
+  }
+  .full-editor .takes.has-real-takes.compact-takes .take-list {
+    gap: 2px;
+  }
+  .full-editor .takes.has-real-takes.compact-takes .take-card {
+    grid-template-columns: 64px minmax(0, 1fr);
+    row-gap: 0;
+    padding: 3px 5px;
+  }
+  .full-editor .takes.has-real-takes.compact-takes .take-heading strong {
+    font-size: 11px;
+  }
+  .full-editor .takes.has-real-takes.compact-takes .take-seed {
+    display: none;
+  }
+  .full-editor .takes.has-real-takes.compact-takes .take-details {
+    align-content: center;
+  }
 }

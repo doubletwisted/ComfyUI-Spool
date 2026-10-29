@@ -1,4 +1,5 @@
 import * as L from './ledger.js';
+import { activityEntry } from './activity.js';
 import { keyText } from './keys.js';
 
 // Live getters and narrow actions keep this owner independent of editor initialization.
@@ -227,29 +228,46 @@ export function createProjectDialogs({
   }
   async function showActivity() {
     try {
-      const value = await request('projects/' + projectKey + '/events?limit=30&latest=true');
+      const value = await request('projects/' + projectKey + '/events?limit=50&latest=true'),
+        day = new Date().toDateString(),
+        when = seconds => {
+          const date = new Date(seconds * 1000),
+            time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          return date.toDateString() === day ? time : date.toLocaleDateString() + ' ' + time;
+        },
+        rows = value.events
+          .slice()
+          .reverse()
+          .map(e => {
+            const entry = activityEntry(e, getState());
+            return (
+              '<li class="activity-row" data-tone="' +
+              entry.tone +
+              '"><time>' +
+              esc(when(e.created)) +
+              '</time><div><p><strong>' +
+              esc(entry.title) +
+              '</strong>' +
+              (entry.subject ? '<span>' + esc(entry.subject) + '</span>' : '') +
+              '</p>' +
+              (entry.detail ? '<p class="activity-detail">' + esc(entry.detail) + '</p>' : '') +
+              '<details><summary>Event</summary><pre>' +
+              esc(JSON.stringify({ kind: e.kind, ...e.data }, null, 2)) +
+              '</pre></details></div></li>'
+            );
+          });
       showModal(
         'Activity',
-        '<p>View ID: ' +
+        (rows.length
+          ? '<ol class="activity-list">' + rows.join('') + '</ol>'
+          : '<p class="setup-note">Nothing has happened in this project yet.</p>') +
+          '<p class="activity-view">View ID ' +
           esc(getFocusViewId()) +
-          '</p>' +
-          value.events
-            .slice(-30)
-            .reverse()
-            .map(
-              e =>
-                '<p>' +
-                esc(e.kind) +
-                ' / ' +
-                esc(e.data.actor || 'execution') +
-                '</p><details><summary>Details</summary><pre>' +
-                esc(JSON.stringify(e.data, null, 2)) +
-                '</pre></details>',
-            )
-            .join(''),
-        '<button class="outline" id="retryExperiment">Retry pending experiment</button>',
+          '</p>',
+        getExperimentRetry() ? '<button class="outline" id="retryExperiment">Retry pending experiment</button>' : '',
       );
-      $('retryExperiment').disabled = !getExperimentRetry();
+      $('modal').classList.add('activity-dialog');
+      if (!$('retryExperiment')) return;
       $('retryExperiment').onclick = async () => {
         try {
           await submitExperiment(getExperimentRetry());

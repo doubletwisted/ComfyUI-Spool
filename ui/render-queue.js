@@ -37,12 +37,44 @@ export function createRenderQueue({
   getJobStatus,
 }) {
   function queueLabel() {
-    const active = visibleJobs().filter(j => G.ACTIVE.includes(j.status)).length;
+    announceFailures();
+    const active = visibleJobs().filter(j => G.ACTIVE.includes(j.status)).length,
+      failed = visibleJobs().filter(j => j.status === 'failed').length;
     $('queueLabel').textContent = 'Renders';
     const badge = $('renderCount');
     if (badge) badge.textContent = active || '';
-    $('showQueue').setAttribute('aria-label', active ? 'Renders: ' + active + ' active requests' : 'Renders');
+    if ($('renderFailures')) {
+      $('renderFailures').textContent = failed || '';
+      $('renderFailures').title = failed ? failed + ' failed' : '';
+    }
+    $('showQueue').setAttribute(
+      'aria-label',
+      ['Renders', active && active + ' active requests', failed && failed + ' failed'].filter(Boolean).join(': '),
+    );
     $('showQueue').classList.toggle('busy', !!active);
+  }
+  // A take that fails while Spool is open is announced once; it then stays on its
+  // clip's take rail and in Renders until dismissed.
+  let announced = null;
+  function announceFailures() {
+    const failed = getState().jobs.filter(j => j.status === 'failed'),
+      recent = Date.now() / 1000 - 120,
+      fresh = announced ? failed.filter(j => !announced.has(j.id) && (j.finishedAt || 0) > recent) : [];
+    announced = new Set(failed.map(j => j.id));
+    if (!fresh.length) return;
+    const j = fresh[0],
+      clip = getState().clips.find(c => c.id === j.clipId),
+      name = [clip?.name, j.takeNumber ? 'Take ' + String(j.takeNumber).padStart(2, '0') : 'A take']
+        .filter(Boolean)
+        .join(' · '),
+      reason = String(j.error || '').split('\n')[0];
+    toast(
+      name +
+        ' failed' +
+        (reason ? ': ' + (reason.length > 160 ? reason.slice(0, 157) + '…' : reason) : '') +
+        (fresh.length > 1 ? ' (and ' + (fresh.length - 1) + ' more)' : ''),
+      9000,
+    );
   }
   function closeRenders() {
     const panel = $('rendersPanel');
@@ -648,5 +680,6 @@ export function createRenderQueue({
     renderJobStatus,
     submitExperiment,
     queueReason,
+    clearRenders,
   };
 }

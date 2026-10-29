@@ -104,7 +104,10 @@ export function createTopbar(root, actions) {
   badge.id = 'renderCount';
   badge.className = 'render-count';
   badge.setAttribute('aria-live', 'polite');
-  renders.append(badge);
+  const failures = document.createElement('span');
+  failures.id = 'renderFailures';
+  failures.className = 'render-count failed';
+  renders.append(badge, failures);
   const warning = button('connectionWarning', '', actions.connection);
   warning.className = 'connection-warning';
   warning.hidden = true;
@@ -147,9 +150,10 @@ export function createTopbar(root, actions) {
     }
     return { control, opener };
   });
-  left.replaceChildren(bar.querySelector('.brand'), identity, processing);
+  left.replaceChildren(bar.querySelector('.brand'), identity);
   right.replaceChildren(view, renders, $('export'));
-  // Save state and the Comfy connection report status, so they live in the status bar.
+  // Work in progress, save state and the Comfy connection report status, so they live in the status bar.
+  $('status').before(processing);
   $('help').before(save, connection);
   bar.append(projectMenu, viewMenu, warning);
   let open = null,

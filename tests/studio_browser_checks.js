@@ -166,6 +166,12 @@
   click('[data-media-filter="audio"]');
   check('Audio filter is selected', $('[data-media-filter="audio"]').getAttribute('aria-pressed') === 'true');
   click('[data-bin-tab="workflows"]');
+  // A Partner Nodes clip that is ready apart from the key.
+  const keyed = n.state.clips.find(c => {
+    n.selectClip(c.id);
+    return /API key/.test($('#generate').title);
+  });
+  check('A Partner Nodes clip waits for the API key', !!keyed);
   click('[data-cloud-settings]');
   await wait(() => !$('#modalOverlay').hidden && !!$('#comfyApiKey'), 'Cloud settings');
   check(
@@ -176,6 +182,7 @@
   click('#comfySaveSettings');
   await wait(() => $('#modalOverlay').hidden, 'Save key');
   check('Cloud key badge confirms configuration', $('[data-cloud-settings]').textContent.includes('API Key ✓'));
+  check('Saving the key unlocks Generate without a reload', !/API key/.test($('#generate').title));
   const status = await (await fetch('/spool/api/comfy')).json();
   await n.flush();
   const exported = await (await fetch('/spool/api/projects/' + n.projectKey + '/export')).json();

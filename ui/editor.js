@@ -313,7 +313,8 @@ async function startEditor(isFailed) {
     workflowLocked = false,
     ppf = 1,
     drag = null,
-    toastTimer;
+    toastTimer,
+    statusTimer;
   const review = createTakeReview(() => state.clips);
   const { createTakeSeen } = await import('/spool/ui/take-seen.js');
   const takeSeen = createTakeSeen(projectKey, state.clips, localStorage);
@@ -554,14 +555,17 @@ async function startEditor(isFailed) {
     }
     if ($('queueList')) renderQueueList();
   }
-  function toast(message) {
+  function toast(message, duration = 3300) {
     $('toast').textContent = message;
     $('toast').hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => ($('toast').hidden = true), 3300);
+    toastTimer = setTimeout(() => ($('toast').hidden = true), duration);
   }
+  // The status bar confirms the last edit briefly; work in progress shows beside it.
   function setStatus(text) {
     $('status').textContent = text;
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => ($('status').textContent = ''), 6000);
   }
   function buttons() {
     const audio = selectedAudio(),
@@ -880,7 +884,8 @@ async function startEditor(isFailed) {
   }
   const takeName = t =>
     t.placeholder ? 'Not generated' : t.original ? 'Original clip' : 'Take ' + String(t.number).padStart(2, '0');
-  const pendingJobs = c => visibleJobs().filter(j => j.clipId === c.id && G.PENDING.includes(j.status));
+  const pendingJobs = c => visibleJobs().filter(j => j.clipId === c.id && G.PENDING.includes(j.status)),
+    failedJobs = c => visibleJobs().filter(j => j.clipId === c.id && j.status === 'failed');
   const clipBadgesOwner = createClipBadges({
     $,
     svg,
@@ -992,6 +997,8 @@ async function startEditor(isFailed) {
     draw,
     takeName,
     pendingJobs,
+    failedJobs,
+    clearRenders: ids => renderQueueOwner.clearRenders(ids).then(() => renderPendingTakes(selected())),
     getTakeBatchKey: () => takeBatchKey,
     updateTakeSelection,
     viewTake,
@@ -1047,6 +1054,31 @@ async function startEditor(isFailed) {
   clipFolderButton.className = 'outline';
   clipFolderButton.innerHTML = svg('folder') + '<span class="folder-label">Open clip folder</span>';
   takesHead.append(clipFolderButton);
+  // Compact takes trade thumbnail size for rows; the choice is kept in this browser.
+  const compactTakesKey = 'spool-compact-takes',
+    compactTakes = document.createElement('button');
+  compactTakes.id = 'compactTakes';
+  compactTakes.className = 'outline';
+  compactTakes.title = 'Compact takes';
+  compactTakes.setAttribute('aria-label', 'Compact takes');
+  compactTakes.innerHTML = svg('queue');
+  const showCompactTakes = compact => {
+    $('takes').classList.toggle('compact-takes', compact);
+    compactTakes.setAttribute('aria-pressed', String(compact));
+  };
+  try {
+    showCompactTakes(localStorage.getItem(compactTakesKey) === '1');
+  } catch (error) {
+    showCompactTakes(false);
+  }
+  compactTakes.onclick = () => {
+    const compact = !$('takes').classList.contains('compact-takes');
+    showCompactTakes(compact);
+    try {
+      localStorage.setItem(compactTakesKey, compact ? '1' : '0');
+    } catch (error) {}
+  };
+  clipFolderButton.before(compactTakes);
   const takePending = document.createElement('div');
   takePending.id = 'takePending';
   takePending.className = 'take-pending';

@@ -35,13 +35,15 @@
   };
   for (const take of shot.takes) {
     const thumb = d.querySelector('[data-view="' + take.id + '"]'),
+      card = thumb.closest('.take-card'),
       image = thumb.querySelector('img');
-    thumb.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    const r = thumb.getBoundingClientRect();
+    card.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // The whole tile scrubs across its width, not only the thumbnail.
+    const r = card.getBoundingClientRect();
     await wait(() => image.src.startsWith('data:image/jpeg') && image.complete && image.naturalWidth);
     const staticImage = image.src;
     const move = async (x, channel, event = 'pointermove') => {
-      thumb.dispatchEvent(
+      card.dispatchEvent(
         new PointerEvent(event, { bubbles: true, clientX: r.left + x * r.width, clientY: r.top + r.height / 2 }),
       );
       const expected = Math.min(take.media.frames - 1, Math.floor(Math.max(0, Math.min(1, x)) * take.media.frames));
@@ -73,7 +75,7 @@
     );
     await move(-0.2, 0);
     await move(1.2, 2);
-    checks.push(take.id + ': pointer positions outside the thumbnail clamp to the first and last frames');
+    checks.push(take.id + ': pointer positions outside the tile clamp to the first and last frames');
     check(
       take.id + ': hover keeps the card image static and uses a muted paused viewer overlay',
       image.src === staticImage &&
@@ -81,7 +83,7 @@
         d.querySelector('video.take-scrub-preview').paused &&
         !thumb.querySelector('video'),
     );
-    thumb.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+    card.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
     check(
       take.id + ': leaving restores Source context, time and playhead',
       !d.querySelector('.take-scrub-preview') &&

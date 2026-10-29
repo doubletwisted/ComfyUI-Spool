@@ -201,7 +201,7 @@ path and execution record.
   the connection was lost. Neither starts a second render.
 - **Retry collection** appears when a finished render could not be collected.
 - **Clear from queue** and **Clear finished** tidy the list. Takes, files and
-  records stay.
+  records stay. Dismissing a failed take on the take rail clears it here too.
 - Results whose shot was deleted are listed under **Results from removed shots**.
 
 ## Comfy Cloud

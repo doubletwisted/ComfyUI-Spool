@@ -38,7 +38,8 @@ First public release.
   `python -m spool --open` does the same elsewhere.
 - Clip notes, a keyboard shortcut sheet, a non-blocking Renders panel and a
   layout that adapts to laptop screens.
-- A status bar for the latest message, save state and the Comfy connection. The
+- A status bar for work in progress or the last edit, save state and the Comfy
+  connection. **Activity** reads the project's events as sentences. The
   inspector shows short controls as compact rows and only the workflow actions
   that apply.
 - The studio starts when opened over plain HTTP from another machine, such as a
@@ -64,6 +65,9 @@ First public release.
 - Seed modes (fixed, increment, decrement, randomize) with exact 64-bit seeds.
   The generation review shows each shot's route and seeds, and warns when
   several takes would repeat the same seed.
+- A failed take is announced, stays on its clip's take rail with the reason until
+  dismissed, and is counted on **Renders**. Takes still rendering are compact
+  rows, and compact takes fit more on the rail.
 - **Renders** shows one line per take with **Cancel** beside it, and **Cancel
   all** per shot. Local takes can be cancelled from Spool, whether queued or
   running.
