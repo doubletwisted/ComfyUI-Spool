@@ -9,6 +9,7 @@ import time
 from contextlib import contextmanager
 
 from .store import Conflict
+from .durable import atomic_replace as atomic_replace
 
 if os.name == "nt":
     import msvcrt
@@ -20,21 +21,6 @@ def executor_identity(root):
     """A host/workspace identity that survives process restarts, without shared-project state."""
     address = socket.gethostname().casefold() + "\n" + os.path.normcase(str(Path(root).resolve()))
     return "workspace:" + hashlib.sha256(address.encode()).hexdigest() + ":"
-
-
-def atomic_replace(pending, target):
-    # SMB/Windows scanners can briefly hold a just-written file without delete
-    # sharing. Keep the old complete file until the replacement succeeds.
-    for index in range(21):
-        try:
-            pending.replace(target)
-            return
-        except OSError as error:
-            if index == 20 or (
-                error.errno not in (errno.EACCES, errno.EPERM) and getattr(error, "winerror", None) not in (5, 32, 33)
-            ):
-                raise
-            time.sleep(0.1)
 
 
 class ExecutorBusy(RuntimeError):

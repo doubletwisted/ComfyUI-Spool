@@ -436,8 +436,8 @@ class BackendTests(unittest.TestCase):
             tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         finally:
             db.close()
-        self.assertEqual(version, 3, "a failed migration must not record the new version")
-        self.assertIn("revisions", tables, "a failed migration must not drop the ledger either")
+        self.assertEqual(version, 4, "only the completed numbered steps are committed")
+        self.assertNotIn("revisions", tables, "the completed retirement step stays committed")
         # Reopening retries and completes.
         reopened = Store(old)
         self.assertNotIn("probe", reopened.get("p")["document"]["media"][0])
@@ -586,15 +586,14 @@ class BackendTests(unittest.TestCase):
             self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], store_module.SCHEMA_VERSION)
         self.assertEqual(reopened.get("p")["document"]["clips"][0]["id"], "clip-a")
         report = reopened.reclaim(confirm=True)
-        self.assertGreater(report["reclaimed"], 0)
+        self.assertEqual(report["reclaimed"], 0)
         self.assertEqual(report["freePages"], 0)
 
     def test_retiring_a_large_ledger_compacts_the_file_once(self):
-        # Dropping frees pages to the freelist. A large payload is compacted during
-        # the migration; a small one is left for an explicit reclaim.
+        # Schema 6 compacts after the packing migration, even for small projects.
         small = self.build_v3_store(self.root / "small-store")
         Store(small)
-        self.assertGreater(self.free_pages(small / "spool.sqlite3"), 0)
+        self.assertEqual(self.free_pages(small / "spool.sqlite3"), 0)
         large = self.build_v3_store(self.root / "large-store")
         original = Store.COMPACT_AFTER_RETIREMENT
         try:
@@ -618,7 +617,7 @@ class BackendTests(unittest.TestCase):
         finally:
             db.close()
         store = Store.__new__(Store)
-        store.root, store.path = old, old / "spool.sqlite3"
+        store.root, store.path, store.read_only = old, old / "spool.sqlite3", False
         dry = store.reclaim()
         self.assertEqual([(r["table"], r["rows"]) for r in dry["retired"]], [("revisions", 1)])
         self.assertEqual(dry["reclaimed"], 0)

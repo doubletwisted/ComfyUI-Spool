@@ -45,13 +45,15 @@ class ReceiptTests(unittest.TestCase):
 
     def corrupt(self, mutate):
         value = json.loads(json.dumps(self.receipt))
+        value["schemaVersion"] = 1
+        value.pop("primaryArtifactId", None)
         mutate(value)
         self.path.write_text(json.dumps(value), encoding="utf-8")
         return receipts.verify(self.attempt, self.path, self.media)
 
     def test_atomic_receipt_round_trip_and_no_partial(self):
         self.assertEqual(receipts.verify(self.attempt, self.path, self.media), self.receipt)
-        self.assertEqual(self.receipt["schemaVersion"], 1)
+        self.assertEqual(self.receipt["schemaVersion"], 2)
         self.assertFalse((self.directory / "receipt.partial").exists())
         self.assertEqual(self.receipt["history"], self.history)
 

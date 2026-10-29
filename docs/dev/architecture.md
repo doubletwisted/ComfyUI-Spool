@@ -69,6 +69,51 @@ Storage and project-folder work runs off ComfyUI's event loop through
 `asyncio.to_thread`. Live SQLite stays on the local disk; project folders hold
 the published snapshot.
 
+## Project format
+
+A project folder has a `project.spool` SQLite snapshot and a small `project.json`
+manifest: `format: "spool-project"`, `formatVersion` (the SQLite `user_version`),
+`projectId` and `writtenBy` (the Spool version). There is one format number;
+currently it is 6. Opening reads the manifest first and refuses a newer format
+before opening SQLite. Older folders without a manifest acquire it on their next
+published write. JSON exports use their separate `spoolVersion: 1` envelope;
+imports reject unknown export versions before creating a destination.
+
+`store.py` owns ordered, numbered migration steps. Each commits its data and
+version together, version last; a failed step rolls back and can run again.
+Completed earlier steps remain committed. Released steps are frozen: changes
+require a new number. Before upgrading a folder, Spool copies its last published
+snapshot to `.spool/backups/project-schema<old>-<UTC timestamp>.spool`. Schema 6
+packs existing evidence, then compacts through the existing local-cache path
+after commit. Newer SQLite versions are refused even without a manifest.
+
+Schema 6 keeps immutable JSON in `blobs(hash TEXT PRIMARY KEY, data TEXT NOT NULL)`.
+The hash is SHA-256 of `store.encode`'s canonical UTF-8 JSON; a reference is
+`{"__spool_blob__": "<hash>"}`. Recipe captures share their workflow and prompt
+blobs; attempt requests refer to the same captures. Dispatch workflow metadata
+also uses those references. Attempt results and execution receipts refer to one
+receipt blob. Receipts name `primaryArtifactId` instead of duplicating the primary
+artifact. Storage markers restore the exact reader shape, including whether the
+original receipt exposed that ID. The history prompt tuple is stored separately
+with its prompt and workflow members shared, then restored on read. Its exact
+execution prompt, metadata, status, messages and outputs remain available.
+
+Artifact and media-evidence probes retain streams and format fields except
+`format.tags`. Embedded workflows and prompts are extracted before tags are
+removed and stored as blob references. Store reads unpack into the existing
+public shapes; the HTTP, command and Python/JavaScript document contracts do not
+change. The bounded in-process blob cache never shares mutable objects with
+callers. Maintenance reports open immutable read-only snapshots: no migrations,
+directory creation, cache refresh or take-file recovery.
+
+`durable.py` owns unique temporary files, flush/fsync, atomic replacement with
+SMB retry, and failure cleanup for JSON receipts, take sidecars, farm JSON and
+manifests. `ownership.atomic_replace` reexports the same replacement primitive.
+Deadline submissions copy the stdlib-only helper beside their worker protocol.
+Local `receipt.json` writes use schema 2 and `primaryArtifactId`; collection still
+verifies schema 1 from older executions. Farm protocol 2 already uses that
+representation and retains its exact-prompt verification.
+
 ## Studio (`ui/`)
 
 `editor.html` loads `bootstrap.js`, which owns the loading barrier and imports

@@ -23,7 +23,10 @@ First public release.
   side by side, choose the take used in the edit, and remove or permanently
   delete takes. Copy files into a clip's folder to add them as takes.
 - Projects live in self-contained folders (a project file plus media), can be
-  opened from shared storage, downloaded and imported.
+  opened from shared storage, downloaded and imported. Immutable render evidence
+  is stored once inside the project file. Older projects upgrade with a backup
+  of their previous snapshot; a manifest protects against opening newer formats.
+  Storage maintenance reports leave projects untouched.
 - Export the sequence, a range or selected clips to MP4 with an audio mix, or
   export a single frame.
 - Export the timeline as OpenTimelineIO (`.otio`) for Resolve, Premiere Pro and

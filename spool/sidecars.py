@@ -7,8 +7,9 @@ from pathlib import Path
 
 from .media import contained
 from .graph_inputs import with_prompt
-from .ownership import atomic_replace, file_lock
-from .store import encode, uid
+from .ownership import file_lock
+from .durable import write as durable_write
+from .store import encode
 from .workflows import workflow_document
 
 
@@ -101,7 +102,6 @@ def check_current(source, expected):
 def write(source, capture, *, lock_root, expected=None, replace=True):
     path = Path(source).with_suffix(".json")
     raw = serialize(capture)
-    pending = path.with_name(path.name + "." + uid() + ".partial")
     lock_root = Path(lock_root)
     lock_root.mkdir(parents=True, exist_ok=True)
     lock = lock_root / (hashlib.sha256(str(path.resolve()).encode()).hexdigest() + ".lock")
@@ -110,11 +110,7 @@ def write(source, capture, *, lock_root, expected=None, replace=True):
             if not replace:
                 return False
         check_current(source, expected)
-        try:
-            pending.write_bytes(raw)
-            atomic_replace(pending, path)
-        finally:
-            pending.unlink(missing_ok=True)
+        durable_write(path, raw)
     return True
 
 

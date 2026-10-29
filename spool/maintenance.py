@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-from .projects import ProjectStore, Workspace
+from .projects import ProjectStore
 
 COMFY = Path(__file__).resolve().parents[3]
 
@@ -35,7 +35,7 @@ def run_prune(argv=None):
 
     if not (args.storage / "project.spool").is_file():
         parser.error("Choose a project folder containing project.spool")
-    store = ProjectStore(args.storage, Workspace(default_root()))
+    store = ProjectStore(args.storage, migrate=False, writable=args.confirm)
     report = store.prune(confirm=args.confirm, budget=int(args.budget_gb * 1024**3), grace=args.grace_minutes * 60)
     if args.json:
         print(json.dumps({**report, "unreferencedPreviews": None}, indent=2, default=str))
@@ -67,7 +67,7 @@ def run(argv=None):
 
     if not (args.storage / "project.spool").is_file():
         parser.error("Choose a project folder containing project.spool")
-    store = ProjectStore(args.storage, Workspace(default_root()))
+    store = ProjectStore(args.storage, migrate=False, writable=args.confirm)
     report = store.reclaim(confirm=args.confirm)
     if args.json:
         print(json.dumps(report, indent=2))

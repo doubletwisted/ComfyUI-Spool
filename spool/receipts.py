@@ -4,7 +4,9 @@ import hashlib
 import json
 from pathlib import Path
 
-RECEIPT_SCHEMA = 1
+from .durable import atomic_json
+
+RECEIPT_SCHEMA = 2
 
 
 def write(directory, attempt, artifacts, primary, history):
@@ -16,19 +18,17 @@ def write(directory, attempt, artifacts, primary, history):
         "promptId": attempt["prompt_id"],
         "fingerprint": attempt["request"]["fingerprint"],
         "artifacts": artifacts,
-        "primary": primary,
+        "primaryArtifactId": primary["artifactId"],
         "history": history,
     }
-    pending = target / "receipt.partial"
-    pending.write_text(json.dumps(receipt, ensure_ascii=False), encoding="utf-8")
-    pending.replace(target / "receipt.json")
-    return receipt
+    atomic_json(target / "receipt.json", receipt)
+    return {**receipt, "primary": primary}
 
 
 def verify(attempt, receipt_path, media):
     receipt_path = Path(receipt_path)
     result = json.loads(receipt_path.read_text(encoding="utf-8"))
-    if result.get("schemaVersion") != 1:
+    if result.get("schemaVersion") not in (1, 2):
         raise ValueError("Unsupported local receipt version")
     if (
         result["fingerprint"] != attempt["request"]["fingerprint"]
@@ -42,6 +42,13 @@ def verify(attempt, receipt_path, media):
         or result.get("history", {}).get("status", {}).get("status_str") != "success"
     ):
         raise ValueError("Receipt lacks successful completion evidence")
+    if result["schemaVersion"] == 2:
+        canonical = next((a for a in result["artifacts"] if a["artifactId"] == result.get("primaryArtifactId")), None)
+        if canonical is None:
+            raise ValueError("Receipt primary does not match the explicit result selection")
+        if "primary" in result and result["primary"] != canonical:
+            raise ValueError("Receipt primary differs from its canonical artifact")
+        result["primary"] = canonical
     selection = attempt["request"]["capture"]["result"]
     if (result["primary"]["nodeId"], result["primary"]["group"], result["primary"]["index"]) != (
         selection["nodeId"],

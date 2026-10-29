@@ -1,0 +1,926 @@
+{
+  "get": {
+    "id": "36eabff4-39e7-46d8-902a-f2c5cf7db5d4",
+    "revision": 1,
+    "document": {
+      "clips": [
+        {
+          "bindings": [],
+          "id": "clip",
+          "inputValues": {},
+          "name": "Clip",
+          "revision": 1,
+          "takes": [
+            {
+              "id": "b64b809f-a461-4114-82bf-96def32ac4f2",
+              "number": 1,
+              "revision": 1,
+              "seed": "frozen",
+              "generated": true,
+              "media": {
+                "artifactId": "artifact",
+                "file": "fixture.png",
+                "frames": 1,
+                "group": "images",
+                "id": "media",
+                "index": 0,
+                "kind": "image",
+                "nodeId": "1",
+                "originalFile": "fixture.png",
+                "probe": {
+                  "format": {
+                    "tags": {
+                      "prompt": "{\"1\": {\"class_type\": \"SaveImage\", \"inputs\": {\"filename_prefix\": \"fixture\"}}}",
+                      "workflow": "{\"nodes\": [{\"id\": 1, \"type\": \"SaveImage\"}], \"links\": []}"
+                    }
+                  },
+                  "streams": []
+                },
+                "prompt": {
+                  "1": {
+                    "class_type": "SaveImage",
+                    "inputs": {
+                      "filename_prefix": "fixture"
+                    }
+                  }
+                },
+                "workflow": {
+                  "links": [],
+                  "nodes": [
+                    {
+                      "id": 1,
+                      "type": "SaveImage"
+                    }
+                  ]
+                }
+              },
+              "artifacts": [
+                {
+                  "artifactId": "artifact",
+                  "file": "fixture.png",
+                  "frames": 1,
+                  "group": "images",
+                  "id": "media",
+                  "index": 0,
+                  "kind": "image",
+                  "nodeId": "1",
+                  "originalFile": "fixture.png",
+                  "probe": {
+                    "format": {
+                      "tags": {
+                        "prompt": "{\"1\": {\"class_type\": \"SaveImage\", \"inputs\": {\"filename_prefix\": \"fixture\"}}}",
+                        "workflow": "{\"nodes\": [{\"id\": 1, \"type\": \"SaveImage\"}], \"links\": []}"
+                      }
+                    },
+                    "streams": []
+                  },
+                  "prompt": {
+                    "1": {
+                      "class_type": "SaveImage",
+                      "inputs": {
+                        "filename_prefix": "fixture"
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "links": [],
+                    "nodes": [
+                      {
+                        "id": 1,
+                        "type": "SaveImage"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "attemptId": "735006e7-805d-48cb-8424-cae4ef22ef84",
+                "capture": {
+                  "bindings": [],
+                  "prompt": {
+                    "1": {
+                      "class_type": "SaveImage",
+                      "inputs": {
+                        "filename_prefix": "fixture"
+                      }
+                    }
+                  },
+                  "result": {
+                    "group": "images",
+                    "index": 0,
+                    "nodeId": "1"
+                  },
+                  "workflow": {
+                    "links": [],
+                    "nodes": [
+                      {
+                        "id": 1,
+                        "type": "SaveImage"
+                      }
+                    ]
+                  }
+                },
+                "clipId": "clip",
+                "clipName": "Clip",
+                "clipRevision": 1,
+                "fingerprint": "e7bed91cb8781f142c0e8ec111009e21d91061780e1d5287f1f7870d3ea6c2c0",
+                "projectId": "36eabff4-39e7-46d8-902a-f2c5cf7db5d4",
+                "prompt": {
+                  "1": {
+                    "class_type": "SaveImage",
+                    "inputs": {
+                      "filename_prefix": "fixture"
+                    }
+                  }
+                },
+                "promptId": "7a79324d-d353-4f97-845b-a9e31626bfba",
+                "takeId": "b64b809f-a461-4114-82bf-96def32ac4f2",
+                "takeNumber": 1,
+                "target": "local"
+              },
+              "workflowSnapshot": {
+                "bindings": [],
+                "prompt": {
+                  "1": {
+                    "class_type": "SaveImage",
+                    "inputs": {
+                      "filename_prefix": "fixture"
+                    }
+                  }
+                },
+                "result": {
+                  "group": "images",
+                  "index": 0,
+                  "nodeId": "1"
+                },
+                "workflow": {
+                  "links": [],
+                  "nodes": [
+                    {
+                      "id": 1,
+                      "type": "SaveImage"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "workflowVersion": "d0d01ff5-b8db-43fd-aa81-07a3a28bcd93"
+        }
+      ],
+      "media": [
+        {
+          "evidence": [
+            "probe"
+          ],
+          "file": "source.mp4",
+          "id": "source",
+          "kind": "video"
+        }
+      ],
+      "project": "Schema 5 fixture",
+      "jobs": [
+        {
+          "id": "735006e7-805d-48cb-8424-cae4ef22ef84",
+          "clipId": "clip",
+          "name": "Clip",
+          "status": "complete",
+          "progress": 100,
+          "seed": "frozen",
+          "error": null,
+          "promptId": "7a79324d-d353-4f97-845b-a9e31626bfba",
+          "target": "local",
+          "takeNumber": 1,
+          "createdAt": 1793283202.1133409,
+          "seeds": [],
+          "finishedAt": 1793283202.120499
+        }
+      ]
+    },
+    "recipes": {
+      "d0d01ff5-b8db-43fd-aa81-07a3a28bcd93": {
+        "bindings": [],
+        "prompt": {
+          "1": {
+            "class_type": "SaveImage",
+            "inputs": {
+              "filename_prefix": "fixture"
+            }
+          }
+        },
+        "result": {
+          "group": "images",
+          "index": 0,
+          "nodeId": "1"
+        },
+        "workflow": {
+          "links": [],
+          "nodes": [
+            {
+              "id": 1,
+              "type": "SaveImage"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "projected": {
+    "clips": [
+      {
+        "bindings": [],
+        "id": "clip",
+        "inputValues": {},
+        "name": "Clip",
+        "revision": 1,
+        "takes": [
+          {
+            "id": "b64b809f-a461-4114-82bf-96def32ac4f2",
+            "number": 1,
+            "revision": 1,
+            "seed": "frozen",
+            "generated": true,
+            "media": {
+              "artifactId": "artifact",
+              "file": "fixture.png",
+              "frames": 1,
+              "group": "images",
+              "id": "media",
+              "index": 0,
+              "kind": "image",
+              "nodeId": "1",
+              "originalFile": "fixture.png",
+              "probe": {
+                "format": {
+                  "tags": {
+                    "prompt": "{\"1\": {\"class_type\": \"SaveImage\", \"inputs\": {\"filename_prefix\": \"fixture\"}}}",
+                    "workflow": "{\"nodes\": [{\"id\": 1, \"type\": \"SaveImage\"}], \"links\": []}"
+                  }
+                },
+                "streams": []
+              },
+              "prompt": {
+                "1": {
+                  "class_type": "SaveImage",
+                  "inputs": {
+                    "filename_prefix": "fixture"
+                  }
+                }
+              },
+              "workflow": {
+                "links": [],
+                "nodes": [
+                  {
+                    "id": 1,
+                    "type": "SaveImage"
+                  }
+                ]
+              }
+            },
+            "artifacts": [
+              {
+                "artifactId": "artifact",
+                "file": "fixture.png",
+                "frames": 1,
+                "group": "images",
+                "id": "media",
+                "index": 0,
+                "kind": "image",
+                "nodeId": "1",
+                "originalFile": "fixture.png",
+                "probe": {
+                  "format": {
+                    "tags": {
+                      "prompt": "{\"1\": {\"class_type\": \"SaveImage\", \"inputs\": {\"filename_prefix\": \"fixture\"}}}",
+                      "workflow": "{\"nodes\": [{\"id\": 1, \"type\": \"SaveImage\"}], \"links\": []}"
+                    }
+                  },
+                  "streams": []
+                },
+                "prompt": {
+                  "1": {
+                    "class_type": "SaveImage",
+                    "inputs": {
+                      "filename_prefix": "fixture"
+                    }
+                  }
+                },
+                "workflow": {
+                  "links": [],
+                  "nodes": [
+                    {
+                      "id": 1,
+                      "type": "SaveImage"
+                    }
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "attemptId": "735006e7-805d-48cb-8424-cae4ef22ef84",
+              "capture": {
+                "bindings": [],
+                "prompt": {
+                  "1": {
+                    "class_type": "SaveImage",
+                    "inputs": {
+                      "filename_prefix": "fixture"
+                    }
+                  }
+                },
+                "result": {
+                  "group": "images",
+                  "index": 0,
+                  "nodeId": "1"
+                },
+                "workflow": {
+                  "links": [],
+                  "nodes": [
+                    {
+                      "id": 1,
+                      "type": "SaveImage"
+                    }
+                  ]
+                }
+              },
+              "clipId": "clip",
+              "clipName": "Clip",
+              "clipRevision": 1,
+              "fingerprint": "e7bed91cb8781f142c0e8ec111009e21d91061780e1d5287f1f7870d3ea6c2c0",
+              "projectId": "36eabff4-39e7-46d8-902a-f2c5cf7db5d4",
+              "prompt": {
+                "1": {
+                  "class_type": "SaveImage",
+                  "inputs": {
+                    "filename_prefix": "fixture"
+                  }
+                }
+              },
+              "promptId": "7a79324d-d353-4f97-845b-a9e31626bfba",
+              "takeId": "b64b809f-a461-4114-82bf-96def32ac4f2",
+              "takeNumber": 1,
+              "target": "local"
+            },
+            "workflowSnapshot": {
+              "bindings": [],
+              "prompt": {
+                "1": {
+                  "class_type": "SaveImage",
+                  "inputs": {
+                    "filename_prefix": "fixture"
+                  }
+                }
+              },
+              "result": {
+                "group": "images",
+                "index": 0,
+                "nodeId": "1"
+              },
+              "workflow": {
+                "links": [],
+                "nodes": [
+                  {
+                    "id": 1,
+                    "type": "SaveImage"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "workflowVersion": "d0d01ff5-b8db-43fd-aa81-07a3a28bcd93"
+      }
+    ],
+    "media": [
+      {
+        "evidence": [
+          "probe"
+        ],
+        "file": "source.mp4",
+        "id": "source",
+        "kind": "video"
+      }
+    ],
+    "project": "Schema 5 fixture",
+    "jobs": [
+      {
+        "id": "735006e7-805d-48cb-8424-cae4ef22ef84",
+        "clipId": "clip",
+        "name": "Clip",
+        "status": "complete",
+        "progress": 100,
+        "seed": "frozen",
+        "error": null,
+        "promptId": "7a79324d-d353-4f97-845b-a9e31626bfba",
+        "target": "local",
+        "takeNumber": 1,
+        "createdAt": 1793283202.1133409,
+        "seeds": []
+      }
+    ]
+  },
+  "attempt": {
+    "id": "735006e7-805d-48cb-8424-cae4ef22ef84",
+    "project_id": "36eabff4-39e7-46d8-902a-f2c5cf7db5d4",
+    "clip_id": "clip",
+    "take_id": "b64b809f-a461-4114-82bf-96def32ac4f2",
+    "prompt_id": "7a79324d-d353-4f97-845b-a9e31626bfba",
+    "status": "complete",
+    "request": {
+      "attemptId": "735006e7-805d-48cb-8424-cae4ef22ef84",
+      "capture": {
+        "bindings": [],
+        "prompt": {
+          "1": {
+            "class_type": "SaveImage",
+            "inputs": {
+              "filename_prefix": "fixture"
+            }
+          }
+        },
+        "result": {
+          "group": "images",
+          "index": 0,
+          "nodeId": "1"
+        },
+        "workflow": {
+          "links": [],
+          "nodes": [
+            {
+              "id": 1,
+              "type": "SaveImage"
+            }
+          ]
+        }
+      },
+      "clipId": "clip",
+      "clipName": "Clip",
+      "clipRevision": 1,
+      "fingerprint": "e7bed91cb8781f142c0e8ec111009e21d91061780e1d5287f1f7870d3ea6c2c0",
+      "projectId": "36eabff4-39e7-46d8-902a-f2c5cf7db5d4",
+      "prompt": {
+        "1": {
+          "class_type": "SaveImage",
+          "inputs": {
+            "filename_prefix": "fixture"
+          }
+        }
+      },
+      "promptId": "7a79324d-d353-4f97-845b-a9e31626bfba",
+      "takeId": "b64b809f-a461-4114-82bf-96def32ac4f2",
+      "takeNumber": 1,
+      "target": "local"
+    },
+    "result": "{\"artifacts\":[{\"artifactId\":\"artifact\",\"file\":\"fixture.png\",\"frames\":1,\"group\":\"images\",\"id\":\"media\",\"index\":0,\"kind\":\"image\",\"nodeId\":\"1\",\"originalFile\":\"fixture.png\",\"probe\":{\"format\":{\"tags\":{\"prompt\":\"{\\\"1\\\": {\\\"class_type\\\": \\\"SaveImage\\\", \\\"inputs\\\": {\\\"filename_prefix\\\": \\\"fixture\\\"}}}\",\"workflow\":\"{\\\"nodes\\\": [{\\\"id\\\": 1, \\\"type\\\": \\\"SaveImage\\\"}], \\\"links\\\": []}\"}},\"streams\":[]},\"prompt\":{\"1\":{\"class_type\":\"SaveImage\",\"inputs\":{\"filename_prefix\":\"fixture\"}}},\"workflow\":{\"links\":[],\"nodes\":[{\"id\":1,\"type\":\"SaveImage\"}]}}],\"history\":{\"messages\":[],\"outputs\":{},\"status\":{\"completed\":true,\"status_str\":\"success\"}},\"primary\":{\"artifactId\":\"artifact\",\"file\":\"fixture.png\",\"frames\":1,\"group\":\"images\",\"id\":\"media\",\"index\":0,\"kind\":\"image\",\"nodeId\":\"1\",\"originalFile\":\"fixture.png\",\"probe\":{\"format\":{\"tags\":{\"prompt\":\"{\\\"1\\\": {\\\"class_type\\\": \\\"SaveImage\\\", \\\"inputs\\\": {\\\"filename_prefix\\\": \\\"fixture\\\"}}}\",\"workflow\":\"{\\\"nodes\\\": [{\\\"id\\\": 1, \\\"type\\\": \\\"SaveImage\\\"}], \\\"links\\\": []}\"}},\"streams\":[]},\"prompt\":{\"1\":{\"class_type\":\"SaveImage\",\"inputs\":{\"filename_prefix\":\"fixture\"}}},\"workflow\":{\"links\":[],\"nodes\":[{\"id\":1,\"type\":\"SaveImage\"}]}}}",
+    "error": null,
+    "created": 1793283202.1133409
+  },
+  "scan_attempts": [
+    {
+      "id": "735006e7-805d-48cb-8424-cae4ef22ef84",
+      "project_id": "36eabff4-39e7-46d8-902a-f2c5cf7db5d4",
+      "clip_id": "clip",
+      "take_id": "b64b809f-a461-4114-82bf-96def32ac4f2",
+      "prompt_id": "7a79324d-d353-4f97-845b-a9e31626bfba",
+      "status": "complete",
+      "request": {
+        "attemptId": "735006e7-805d-48cb-8424-cae4ef22ef84",
+        "capture": {
+          "bindings": [],
+          "prompt": {
+            "1": {
+              "class_type": "SaveImage",
+              "inputs": {
+                "filename_prefix": "fixture"
+              }
+            }
+          },
+          "result": {
+            "group": "images",
+            "index": 0,
+            "nodeId": "1"
+          },
+          "workflow": {
+            "links": [],
+            "nodes": [
+              {
+                "id": 1,
+                "type": "SaveImage"
+              }
+            ]
+          }
+        },
+        "clipId": "clip",
+        "clipName": "Clip",
+        "clipRevision": 1,
+        "fingerprint": "e7bed91cb8781f142c0e8ec111009e21d91061780e1d5287f1f7870d3ea6c2c0",
+        "projectId": "36eabff4-39e7-46d8-902a-f2c5cf7db5d4",
+        "prompt": {
+          "1": {
+            "class_type": "SaveImage",
+            "inputs": {
+              "filename_prefix": "fixture"
+            }
+          }
+        },
+        "promptId": "7a79324d-d353-4f97-845b-a9e31626bfba",
+        "takeId": "b64b809f-a461-4114-82bf-96def32ac4f2",
+        "takeNumber": 1,
+        "target": "local"
+      },
+      "result": "{\"artifacts\":[{\"artifactId\":\"artifact\",\"file\":\"fixture.png\",\"frames\":1,\"group\":\"images\",\"id\":\"media\",\"index\":0,\"kind\":\"image\",\"nodeId\":\"1\",\"originalFile\":\"fixture.png\",\"probe\":{\"format\":{\"tags\":{\"prompt\":\"{\\\"1\\\": {\\\"class_type\\\": \\\"SaveImage\\\", \\\"inputs\\\": {\\\"filename_prefix\\\": \\\"fixture\\\"}}}\",\"workflow\":\"{\\\"nodes\\\": [{\\\"id\\\": 1, \\\"type\\\": \\\"SaveImage\\\"}], \\\"links\\\": []}\"}},\"streams\":[]},\"prompt\":{\"1\":{\"class_type\":\"SaveImage\",\"inputs\":{\"filename_prefix\":\"fixture\"}}},\"workflow\":{\"links\":[],\"nodes\":[{\"id\":1,\"type\":\"SaveImage\"}]}}],\"history\":{\"messages\":[],\"outputs\":{},\"status\":{\"completed\":true,\"status_str\":\"success\"}},\"primary\":{\"artifactId\":\"artifact\",\"file\":\"fixture.png\",\"frames\":1,\"group\":\"images\",\"id\":\"media\",\"index\":0,\"kind\":\"image\",\"nodeId\":\"1\",\"originalFile\":\"fixture.png\",\"probe\":{\"format\":{\"tags\":{\"prompt\":\"{\\\"1\\\": {\\\"class_type\\\": \\\"SaveImage\\\", \\\"inputs\\\": {\\\"filename_prefix\\\": \\\"fixture\\\"}}}\",\"workflow\":\"{\\\"nodes\\\": [{\\\"id\\\": 1, \\\"type\\\": \\\"SaveImage\\\"}], \\\"links\\\": []}\"}},\"streams\":[]},\"prompt\":{\"1\":{\"class_type\":\"SaveImage\",\"inputs\":{\"filename_prefix\":\"fixture\"}}},\"workflow\":{\"links\":[],\"nodes\":[{\"id\":1,\"type\":\"SaveImage\"}]}}}",
+      "error": null,
+      "created": 1793283202.1133409
+    }
+  ],
+  "export": {
+    "spoolVersion": 1,
+    "document": {
+      "clips": [
+        {
+          "bindings": [],
+          "id": "clip",
+          "inputValues": {},
+          "name": "Clip",
+          "revision": 1,
+          "takes": [
+            {
+              "id": "b64b809f-a461-4114-82bf-96def32ac4f2",
+              "number": 1,
+              "revision": 1,
+              "seed": "frozen",
+              "generated": true,
+              "media": {
+                "artifactId": "artifact",
+                "file": "fixture.png",
+                "frames": 1,
+                "group": "images",
+                "id": "media",
+                "index": 0,
+                "kind": "image",
+                "nodeId": "1",
+                "originalFile": "fixture.png",
+                "probe": {
+                  "format": {
+                    "tags": {
+                      "prompt": "{\"1\": {\"class_type\": \"SaveImage\", \"inputs\": {\"filename_prefix\": \"fixture\"}}}",
+                      "workflow": "{\"nodes\": [{\"id\": 1, \"type\": \"SaveImage\"}], \"links\": []}"
+                    }
+                  },
+                  "streams": []
+                },
+                "prompt": {
+                  "1": {
+                    "class_type": "SaveImage",
+                    "inputs": {
+                      "filename_prefix": "fixture"
+                    }
+                  }
+                },
+                "workflow": {
+                  "links": [],
+                  "nodes": [
+                    {
+                      "id": 1,
+                      "type": "SaveImage"
+                    }
+                  ]
+                }
+              },
+              "artifacts": [
+                {
+                  "artifactId": "artifact",
+                  "file": "fixture.png",
+                  "frames": 1,
+                  "group": "images",
+                  "id": "media",
+                  "index": 0,
+                  "kind": "image",
+                  "nodeId": "1",
+                  "originalFile": "fixture.png",
+                  "probe": {
+                    "format": {
+                      "tags": {
+                        "prompt": "{\"1\": {\"class_type\": \"SaveImage\", \"inputs\": {\"filename_prefix\": \"fixture\"}}}",
+                        "workflow": "{\"nodes\": [{\"id\": 1, \"type\": \"SaveImage\"}], \"links\": []}"
+                      }
+                    },
+                    "streams": []
+                  },
+                  "prompt": {
+                    "1": {
+                      "class_type": "SaveImage",
+                      "inputs": {
+                        "filename_prefix": "fixture"
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "links": [],
+                    "nodes": [
+                      {
+                        "id": 1,
+                        "type": "SaveImage"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "attemptId": "735006e7-805d-48cb-8424-cae4ef22ef84",
+                "capture": {
+                  "bindings": [],
+                  "prompt": {
+                    "1": {
+                      "class_type": "SaveImage",
+                      "inputs": {
+                        "filename_prefix": "fixture"
+                      }
+                    }
+                  },
+                  "result": {
+                    "group": "images",
+                    "index": 0,
+                    "nodeId": "1"
+                  },
+                  "workflow": {
+                    "links": [],
+                    "nodes": [
+                      {
+                        "id": 1,
+                        "type": "SaveImage"
+                      }
+                    ]
+                  }
+                },
+                "clipId": "clip",
+                "clipName": "Clip",
+                "clipRevision": 1,
+                "fingerprint": "e7bed91cb8781f142c0e8ec111009e21d91061780e1d5287f1f7870d3ea6c2c0",
+                "projectId": "36eabff4-39e7-46d8-902a-f2c5cf7db5d4",
+                "prompt": {
+                  "1": {
+                    "class_type": "SaveImage",
+                    "inputs": {
+                      "filename_prefix": "fixture"
+                    }
+                  }
+                },
+                "promptId": "7a79324d-d353-4f97-845b-a9e31626bfba",
+                "takeId": "b64b809f-a461-4114-82bf-96def32ac4f2",
+                "takeNumber": 1,
+                "target": "local"
+              },
+              "workflowSnapshot": {
+                "bindings": [],
+                "prompt": {
+                  "1": {
+                    "class_type": "SaveImage",
+                    "inputs": {
+                      "filename_prefix": "fixture"
+                    }
+                  }
+                },
+                "result": {
+                  "group": "images",
+                  "index": 0,
+                  "nodeId": "1"
+                },
+                "workflow": {
+                  "links": [],
+                  "nodes": [
+                    {
+                      "id": 1,
+                      "type": "SaveImage"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "workflowVersion": "d0d01ff5-b8db-43fd-aa81-07a3a28bcd93"
+        }
+      ],
+      "media": [
+        {
+          "file": "source.mp4",
+          "id": "source",
+          "kind": "video",
+          "probe": {
+            "streams": [],
+            "format": {
+              "duration": "1",
+              "tags": {
+                "comment": "ordinary tag"
+              }
+            }
+          }
+        }
+      ],
+      "project": "Schema 5 fixture",
+      "jobs": [
+        {
+          "id": "735006e7-805d-48cb-8424-cae4ef22ef84",
+          "clipId": "clip",
+          "name": "Clip",
+          "status": "complete",
+          "progress": 100,
+          "seed": "frozen",
+          "error": null,
+          "promptId": "7a79324d-d353-4f97-845b-a9e31626bfba",
+          "target": "local",
+          "takeNumber": 1,
+          "createdAt": 1793283202.1133409,
+          "seeds": [],
+          "finishedAt": 1793283202.120499
+        }
+      ]
+    },
+    "recipes": {
+      "d0d01ff5-b8db-43fd-aa81-07a3a28bcd93": {
+        "bindings": [],
+        "prompt": {
+          "1": {
+            "class_type": "SaveImage",
+            "inputs": {
+              "filename_prefix": "fixture"
+            }
+          }
+        },
+        "result": {
+          "group": "images",
+          "index": 0,
+          "nodeId": "1"
+        },
+        "workflow": {
+          "links": [],
+          "nodes": [
+            {
+              "id": 1,
+              "type": "SaveImage"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "evidence": {
+    "source": {
+      "probe": {
+        "streams": [],
+        "format": {
+          "duration": "1",
+          "tags": {
+            "comment": "ordinary tag"
+          }
+        }
+      }
+    },
+    "media": {
+      "probe": {
+        "format": {
+          "tags": {
+            "prompt": "{\"1\": {\"class_type\": \"SaveImage\", \"inputs\": {\"filename_prefix\": \"fixture\"}}}",
+            "workflow": "{\"nodes\": [{\"id\": 1, \"type\": \"SaveImage\"}], \"links\": []}"
+          }
+        },
+        "streams": []
+      },
+      "prompt": {
+        "1": {
+          "class_type": "SaveImage",
+          "inputs": {
+            "filename_prefix": "fixture"
+          }
+        }
+      },
+      "workflow": {
+        "links": [],
+        "nodes": [
+          {
+            "id": 1,
+            "type": "SaveImage"
+          }
+        ]
+      }
+    }
+  },
+  "execution": {
+    "id": "execution",
+    "attempt_id": "735006e7-805d-48cb-8424-cae4ef22ef84",
+    "submission_id": null,
+    "receipt": {
+      "artifacts": [
+        {
+          "artifactId": "artifact",
+          "file": "fixture.png",
+          "frames": 1,
+          "group": "images",
+          "id": "media",
+          "index": 0,
+          "kind": "image",
+          "nodeId": "1",
+          "originalFile": "fixture.png",
+          "probe": {
+            "format": {
+              "tags": {
+                "prompt": "{\"1\": {\"class_type\": \"SaveImage\", \"inputs\": {\"filename_prefix\": \"fixture\"}}}",
+                "workflow": "{\"nodes\": [{\"id\": 1, \"type\": \"SaveImage\"}], \"links\": []}"
+              }
+            },
+            "streams": []
+          },
+          "prompt": {
+            "1": {
+              "class_type": "SaveImage",
+              "inputs": {
+                "filename_prefix": "fixture"
+              }
+            }
+          },
+          "workflow": {
+            "links": [],
+            "nodes": [
+              {
+                "id": 1,
+                "type": "SaveImage"
+              }
+            ]
+          }
+        }
+      ],
+      "history": {
+        "messages": [],
+        "outputs": {},
+        "status": {
+          "completed": true,
+          "status_str": "success"
+        }
+      },
+      "primary": {
+        "artifactId": "artifact",
+        "file": "fixture.png",
+        "frames": 1,
+        "group": "images",
+        "id": "media",
+        "index": 0,
+        "kind": "image",
+        "nodeId": "1",
+        "originalFile": "fixture.png",
+        "probe": {
+          "format": {
+            "tags": {
+              "prompt": "{\"1\": {\"class_type\": \"SaveImage\", \"inputs\": {\"filename_prefix\": \"fixture\"}}}",
+              "workflow": "{\"nodes\": [{\"id\": 1, \"type\": \"SaveImage\"}], \"links\": []}"
+            }
+          },
+          "streams": []
+        },
+        "prompt": {
+          "1": {
+            "class_type": "SaveImage",
+            "inputs": {
+              "filename_prefix": "fixture"
+            }
+          }
+        },
+        "workflow": {
+          "links": [],
+          "nodes": [
+            {
+              "id": 1,
+              "type": "SaveImage"
+            }
+          ]
+        }
+      }
+    },
+    "accepted": 1
+  },
+  "dispatch": {
+    "payload": {
+      "extra_data": {
+        "extra_pnginfo": {
+          "workflow": {
+            "links": [],
+            "nodes": [
+              {
+                "id": 1,
+                "type": "SaveImage"
+              }
+            ]
+          }
+        }
+      },
+      "prompt": {
+        "1": {
+          "class_type": "SaveImage",
+          "inputs": {
+            "filename_prefix": "fixture"
+          }
+        }
+      }
+    },
+    "validation": {}
+  }
+}

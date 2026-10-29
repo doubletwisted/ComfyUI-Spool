@@ -67,7 +67,8 @@ class DeadlineJobTests(unittest.TestCase):
             "SaveImage": {"output_node": True},
         }
         directory = self.root / "farm" / "spool-submissions" / package["submissionId"]
-        shutil.copyfile(Path(farm_protocol.__file__), directory / "farm_protocol.py")
+        for name in ("farm_protocol.py", "durable.py"):
+            shutil.copyfile(Path(farm_protocol.__file__).with_name(name), directory / name)
         with patch.object(deadline_task, "__file__", str(directory / "deadline_task.py")):
             deadline_task.__main__(worker, "Deadline task callback data")
         self.assertTrue(worker.queue_workflow(package["stagedPrompt"]))

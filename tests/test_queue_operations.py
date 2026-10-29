@@ -1,4 +1,5 @@
 import asyncio
+import json
 import copy
 import sqlite3
 import tempfile
@@ -284,6 +285,10 @@ class QueueOperationTests(unittest.TestCase):
 
     def test_legacy_database_is_backed_up_and_migrated_without_data_loss(self):
         db = sqlite3.connect(self.store.path)
+        for row in db.execute("SELECT id,capture FROM workflows").fetchall():
+            capture = self.store._load(row[1], db)
+            db.execute("UPDATE workflows SET capture=? WHERE id=?", (json.dumps(capture), row[0]))
+        db.execute("DROP TABLE blobs")
         db.execute("PRAGMA user_version=0")
         db.commit()
         db.close()

@@ -57,7 +57,7 @@ def submit(request, package):
     files = directory / "job"
     files.mkdir(exist_ok=True)
     job_info, plugin_info, auxiliary = plugin.DeadlineJobSubmitter(worker, config)._create_submission_files(str(files))
-    for name in ("deadline_task.py", "farm_protocol.py"):
+    for name in ("deadline_task.py", "farm_protocol.py", "durable.py"):
         shutil.copyfile(Path(__file__).with_name(name), directory / name)
     with Path(job_info).open("a", encoding="utf-8") as handle:
         handle.write("\nPreTaskScript=" + str(directory / "deadline_task.py") + "\n")

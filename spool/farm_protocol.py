@@ -3,10 +3,19 @@
 import copy
 import hashlib
 import json
-import os
 import shutil
 import uuid
 from pathlib import Path
+
+if __package__:
+    from .durable import atomic_json
+else:  # Copied beside the job script, without the Spool package.
+    import importlib.util
+
+    _spec = importlib.util.spec_from_file_location("spool_job_durable", Path(__file__).with_name("durable.py"))
+    _durable = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_durable)
+    atomic_json = _durable.atomic_json
 
 SCHEMA = 2
 SAVERS = {
@@ -31,20 +40,6 @@ def checksum(path):
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
-
-
-def atomic_json(path, value):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pending = path.with_name(path.name + "." + uuid.uuid4().hex + ".partial")
-    try:
-        with pending.open("w", encoding="utf-8") as handle:
-            json.dump(value, handle, ensure_ascii=False, sort_keys=True, allow_nan=False)
-            handle.flush()
-            os.fsync(handle.fileno())
-        pending.replace(path)
-    finally:
-        pending.unlink(missing_ok=True)
 
 
 def semantic_prompt(prompt):

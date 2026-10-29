@@ -6,6 +6,7 @@ import re
 import sqlite3
 import time
 import uuid
+from collections import OrderedDict
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -33,7 +34,15 @@ def fingerprint(value):
 Conflict = RevisionConflict
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
+EXPORT_VERSION = 1
+
+
+def validate_import(value):
+    if "spoolVersion" in value and (type(value["spoolVersion"]) is not int or value["spoolVersion"] != EXPORT_VERSION):
+        raise ValueError("Unsupported Spool export version; use a compatible Spool version")
+
+
 # The revision ledger wrote a second full copy of every document on every save and
 # had no reader anywhere in the extension. Version 4 drops it; the live revision
 # counter in `projects` is what conflict detection has always used.
@@ -139,9 +148,10 @@ class Store:
     def __init__(self, root, migrate=True, filename="spool.sqlite3"):
         self.focus_store = self
         self.root = Path(root).resolve()
-        self.root.mkdir(parents=True, exist_ok=True)
         self.cache = self.root
         self.path = self.root / filename
+        self.read_only = not migrate
+        self._blobs = OrderedDict()
         existing = self.path.exists()
         if not migrate:
             # Maintenance inspection: report on the file as it is, without running a
@@ -149,11 +159,12 @@ class Store:
             if not existing:
                 raise NotFound("No Spool store at " + str(self.path))
             return
+        self.root.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
             if version > SCHEMA_VERSION:
                 raise ValueError("This Spool database needs a newer extension version")
-            if existing and version < 3:
+            if existing and version < 3 and self.path.name != "project.spool":
                 backups = self.root / "backups"
                 backups.mkdir(exist_ok=True)
                 backup = sqlite3.connect(backups / ("schema-" + str(version) + "-" + uid() + ".sqlite3"))
@@ -161,8 +172,22 @@ class Store:
                     db.backup(backup)
                 finally:
                     backup.close()
-            db.executescript("""
-                PRAGMA journal_mode=WAL;
+            retired = self.migrate(db, version) if version < SCHEMA_VERSION else 0
+        if (existing and version < 6) or retired >= self.COMPACT_AFTER_RETIREMENT:
+            self.compact()
+
+    # Frozen numbered steps: add a new step rather than editing a released one.
+    MIGRATIONS = (
+        (1, "base tables", "_schema"),
+        (2, "execution tables", "_schema"),
+        (3, "project ledger", "_schema"),
+        (4, "retire revision snapshots", "_migration4"),
+        (5, "separate media evidence", "_migration5"),
+        (6, "store immutable evidence once", "_migration6"),
+    )
+
+    def _schema(self, db):
+        sql = """
                 CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, document TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS workflows(id TEXT PRIMARY KEY, project_id TEXT NOT NULL, clip_id TEXT NOT NULL, fingerprint TEXT NOT NULL, capture TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS attempts(id TEXT PRIMARY KEY, project_id TEXT NOT NULL, clip_id TEXT NOT NULL, take_id TEXT UNIQUE NOT NULL,
@@ -190,37 +215,164 @@ class Store:
                 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, document TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS media_evidence(project_id TEXT NOT NULL, media_id TEXT NOT NULL, evidence TEXT NOT NULL,
                     PRIMARY KEY(project_id,media_id));
-            """)
-            retired = self.migrate(db, version) if version < SCHEMA_VERSION else 0
-        # Compaction needs its own connection, so it runs after the migration commits.
-        if retired >= self.COMPACT_AFTER_RETIREMENT:
-            reclaimed = self.compact()
-            logging.info(
-                "Spool compacted %s after retiring a write-only table and returned %.1f MB to the filesystem",
-                self.path,
-                reclaimed / 1e6,
-            )
+        """
+        for statement in sql.split(";"):
+            if statement.strip():
+                db.execute(statement)
+        return 0
+
+    def _migration4(self, db):
+        self._schema(db)
+        return self.retire_tables(db)
+
+    def _migration5(self, db):
+        self._schema(db)
+        return self.split_media_evidence(db, 4)
+
+    def _migration6(self, db):
+        db.execute("CREATE TABLE blobs(hash TEXT PRIMARY KEY, data TEXT NOT NULL)")
+        for table, column, receipt in (
+            ("workflows", "capture", False),
+            ("attempts", "request", False),
+            ("attempts", "result", True),
+            ("executions", "receipt", True),
+            ("media_evidence", "evidence", False),
+            ("dispatches", "payload", False),
+        ):
+            for row in db.execute(f"SELECT rowid,{column} FROM {table} WHERE {column} IS NOT NULL").fetchall():
+                value = json.loads(row[1])
+                packed = self._dump(db, value, receipt=receipt, capture=table == "workflows")
+                db.execute(f"UPDATE {table} SET {column}=? WHERE rowid=?", (packed, row[0]))
+        for row in db.execute("SELECT id,document FROM projects").fetchall():
+            document = json.loads(row["document"])
+            for record in ledger.media_records(document):
+                evidence = db.execute(
+                    "SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (row["id"], record["id"])
+                ).fetchone()
+                if evidence:
+                    ledger.mark(record, self._load(evidence[0], db))
+            db.execute("UPDATE projects SET document=? WHERE id=?", (encode(document), row["id"]))
+        return 0
 
     def migrate(self, db, version):
-        """Move data for a schema upgrade in one transaction, version last.
-
-        A crash before the commit leaves the old version recorded, so the migration
-        runs again instead of being skipped with the data half moved.
-        """
-        db.execute("BEGIN IMMEDIATE")
-        try:
-            retired = self.retire_tables(db)
-            self.split_media_evidence(db, version)
-            db.execute("PRAGMA user_version=%d" % SCHEMA_VERSION)
-        except Exception:
-            db.rollback()
-            raise
-        db.commit()
+        retired = 0
+        for number, name, method in self.MIGRATIONS:
+            if number <= version:
+                continue
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                retired += getattr(self, method)(db) or 0
+                db.execute("PRAGMA user_version=%d" % number)
+                db.commit()
+            except BaseException:
+                db.rollback()
+                self._blobs.clear()
+                raise
         return retired
 
+    def _blob(self, db, value):
+        data = encode(value)
+        digest = hashlib.sha256(data.encode()).hexdigest()
+        db.execute("INSERT OR IGNORE INTO blobs VALUES(?,?)", (digest, data))
+        return {"__spool_blob__": digest}
+
+    def _pack(self, db, value):
+        if isinstance(value, list):
+            return [self._pack(db, v) for v in value]
+        if not isinstance(value, dict):
+            return value
+        value = dict(value)
+        if isinstance(value.get("probe"), dict):
+            from .workflows import workflow_metadata
+
+            probe = copy.deepcopy(value["probe"])
+            for key, held in workflow_metadata(probe).items():
+                value.setdefault(key, held)
+            if isinstance(probe.get("format"), dict):
+                probe["format"].pop("tags", None)
+            value["probe"] = probe
+        return {
+            k: self._blob(db, self._pack(db, v))
+            if k == "capture"
+            else self._blob(db, v)
+            if k in {"workflow", "prompt", "observedPrompt", "stagedPrompt"} and isinstance(v, (dict, list))
+            else self._pack(db, v)
+            for k, v in value.items()
+        }
+
+    def _dump(self, db, value, *, receipt=False, capture=False):
+        if receipt:
+            value = copy.deepcopy(value)
+            if "primary" in value and "artifacts" in value:
+                primary = value.pop("primary")
+                identity = primary.get("artifactId", primary.get("id"))
+                canonical = next((a for a in value["artifacts"] if a.get("artifactId", a.get("id")) == identity), None)
+                if canonical != primary:
+                    raise ValueError("Receipt primary differs from its canonical artifact")
+                value["__spool_primary__"] = "primaryArtifactId" in value
+                value["primaryArtifactId"] = identity
+            if isinstance(value.get("history"), dict) and "prompt" in value["history"]:
+                # Preserve the entire execution tuple, with its large members shared.
+                prompt = value["history"].pop("prompt")
+                value["__spool_history_prompt__"] = (
+                    [self._blob(db, v) if i == 2 else self._pack(db, v) for i, v in enumerate(prompt)]
+                    if isinstance(prompt, list)
+                    else self._blob(db, prompt)
+                )
+        packed = self._pack(db, value)
+        return encode(self._blob(db, packed) if receipt or capture else packed)
+
+    def _unpack(self, db, value):
+        if isinstance(value, list):
+            return [self._unpack(db, v) for v in value]
+        if not isinstance(value, dict):
+            return value
+        if set(value) == {"__spool_blob__"}:
+            digest = value["__spool_blob__"]
+            held = self._blobs.get(digest)
+            if held is None:
+                row = db.execute("SELECT data FROM blobs WHERE hash=?", (digest,)).fetchone()
+                if row is None:
+                    raise ValueError("Missing project evidence blob: " + digest)
+                held = (json.loads(row[0]), row[0])
+                if len(row[0]) <= 256 * 1024:
+                    self._blobs[digest] = held
+                    if len(self._blobs) > 64:
+                        self._blobs.popitem(last=False)
+            else:
+                self._blobs.move_to_end(digest)
+            # Graph/prompt leaves need no Python traversal. Decode their cached
+            # text for an independent copy; compact containers resolve references.
+            return self._unpack(db, held[0]) if "__spool_" in held[1] else json.loads(held[1])
+        result = {k: self._unpack(db, v) for k, v in value.items()}
+        if "__spool_primary__" in result:
+            keep_id = result.pop("__spool_primary__")
+            identity = result["primaryArtifactId"]
+            result["primary"] = next(a for a in result["artifacts"] if a.get("artifactId", a.get("id")) == identity)
+            if not keep_id:
+                result.pop("primaryArtifactId")
+        if "__spool_history_prompt__" in result:
+            result["history"]["prompt"] = result.pop("__spool_history_prompt__")
+        return result
+
+    def _load(self, value, db=None):
+        if value is None:
+            return None
+        with self._using(db) as db:
+            return self._unpack(db, json.loads(value))
+
+    def _attempt_row(self, db, row):
+        if row is None:
+            return None
+        result = dict(row)
+        for key in ("request", "result"):
+            if result[key] is not None:
+                result[key] = encode(self._load(result[key], db))
+        return result
+
     # Retiring a table returns its pages to the freelist, not to the filesystem.
-    # Compacting is bounded: only a genuinely large payload justifies a one-off
-    # rewrite at startup.
+    # The evidence migration always compacts after commit; retirement-only
+    # compaction can also be requested for a large payload.
     COMPACT_AFTER_RETIREMENT = 32 * 1024 * 1024
 
     def retire_tables(self, db):
@@ -277,24 +429,16 @@ class Store:
             row = db.execute(
                 "SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (project_id, media_id)
             ).fetchone()
-            if not row:
-                row = db.execute(
-                    "SELECT json_extract(result,'$.primary') FROM attempts WHERE project_id=? AND status='complete' AND json_extract(result,'$.primary.id')=?",
-                    (project_id, media_id),
-                ).fetchone()
-                if not row:
-                    row = db.execute(
-                        "SELECT artifact.value FROM attempts, json_each(attempts.result,'$.artifacts') AS artifact WHERE project_id=? AND status='complete' AND json_extract(artifact.value,'$.id')=?",
-                        (project_id, media_id),
-                    ).fetchone()
-                if row:
-                    return {
-                        "mediaId": media_id,
-                        **{key: value for key, value in json.loads(row[0]).items() if key in ledger.EVIDENCE_KEYS},
-                    }
-        if not row:
-            raise NotFound("This media has no stored evidence")
-        return {"mediaId": media_id, **json.loads(row["evidence"])}
+            if row:
+                return {"mediaId": media_id, **self._load(row[0], db)}
+            for row in db.execute(
+                "SELECT result FROM attempts WHERE project_id=? AND status='complete'", (project_id,)
+            ):
+                result = self._load(row[0], db)
+                for record in [result["primary"], *result.get("artifacts", [])]:
+                    if record["id"] == media_id:
+                        return {"mediaId": media_id, **{k: v for k, v in record.items() if k in ledger.EVIDENCE_KEYS}}
+        raise NotFound("This media has no stored evidence")
 
     def all_evidence(self, project_id):
         """Every stored payload for a project, for a portable local draft."""
@@ -305,9 +449,9 @@ class Store:
             results = db.execute(
                 "SELECT result FROM attempts WHERE project_id=? AND status='complete'", (project_id,)
             ).fetchall()
-        evidence = {row["media_id"]: json.loads(row["evidence"]) for row in rows}
+        evidence = {row["media_id"]: self._load(row["evidence"]) for row in rows}
         for row in results:
-            result = json.loads(row[0])
+            result = self._load(row[0])
             for record in [result["primary"], *result.get("artifacts", [])]:
                 evidence[record["id"]] = {
                     **{key: value for key, value in record.items() if key in ledger.EVIDENCE_KEYS},
@@ -335,6 +479,7 @@ class Store:
             ("dispatches", "payload"),
             ("executions", "receipt"),
             ("workflows", "capture"),
+            ("blobs", "data"),
         )
         names = set()
         with self.connect() as db:
@@ -457,7 +602,11 @@ class Store:
 
     @contextmanager
     def connect(self):
-        db = sqlite3.connect(self.path, timeout=30)
+        db = (
+            sqlite3.connect(self.path.as_uri() + "?mode=ro&immutable=1", uri=True)
+            if self.read_only
+            else sqlite3.connect(self.path, timeout=30)
+        )
         db.row_factory = sqlite3.Row
         try:
             with db:
@@ -495,15 +644,20 @@ class Store:
             row = db.execute(
                 "SELECT capture FROM workflows WHERE id=? AND project_id=?", (version, project_id)
             ).fetchone()
-        return json.loads(row[0]) if row else None
+            return self._load(row[0], db) if row else None
 
     def project_attempts(self, project_id, db=None):
         with self._using(db) as db:
-            return [dict(r) for r in db.execute("SELECT * FROM attempts WHERE project_id=?", (project_id,))]
+            return [
+                self._attempt_row(db, r) for r in db.execute("SELECT * FROM attempts WHERE project_id=?", (project_id,))
+            ]
 
     def project_attempt(self, project_id, attempt_id, db=None):
         with self._using(db) as db:
-            return db.execute("SELECT * FROM attempts WHERE id=? AND project_id=?", (attempt_id, project_id)).fetchone()
+            return self._attempt_row(
+                db,
+                db.execute("SELECT * FROM attempts WHERE id=? AND project_id=?", (attempt_id, project_id)).fetchone(),
+            )
 
     def submission_for(self, attempt_id, db=None):
         """The Deadline submission recorded for an attempt, or None."""
@@ -526,7 +680,7 @@ class Store:
         """A collected farm execution with its stored receipt, or None."""
         with self.connect() as db:
             row = db.execute("SELECT * FROM executions WHERE id=?", (execution_id,)).fetchone()
-        return {**dict(row), "receipt": json.loads(row["receipt"])} if row else None
+        return {**dict(row), "receipt": self._load(row["receipt"])} if row else None
 
     def operation_payload(self, operation_id):
         with self.connect() as db:
@@ -630,11 +784,10 @@ class Store:
             row = db.execute(
                 "SELECT evidence FROM media_evidence WHERE project_id=? AND media_id=?", (project_id, media_id)
             ).fetchone()
-            stored = {**json.loads(row[0]), **held} if row else held
-            db.execute(
-                "INSERT OR REPLACE INTO media_evidence VALUES(?,?,?)", (project_id, media_id, encode_ordered(stored))
-            )
-            merged[media_id] = stored
+            stored = {**self._load(row[0], db), **held} if row else held
+            packed = self._dump(db, stored)
+            db.execute("INSERT OR REPLACE INTO media_evidence VALUES(?,?,?)", (project_id, media_id, packed))
+            merged[media_id] = self._load(packed, db)
         for record in ledger.media_records(working):
             held = merged.get(record.get("id"))
             if held is not None:
@@ -725,7 +878,7 @@ class Store:
                 raise NotFound("Project not found")
             document = json.loads(row["document"])
             attempts = [
-                dict(r)
+                self._attempt_row(db, r)
                 for r in db.execute("SELECT * FROM attempts WHERE project_id=? ORDER BY created,rowid", (project_id,))
             ]
         return ledger.attach(document, attempts)
@@ -763,7 +916,10 @@ class Store:
             conditions.append("status NOT IN ('complete','failed','cancelled')")
         where = " WHERE " + " AND ".join(conditions) if conditions else ""
         with self.connect() as db:
-            rows = [dict(r) for r in db.execute("SELECT * FROM attempts" + where + " ORDER BY created,rowid", values)]
+            rows = [
+                self._attempt_row(db, r)
+                for r in db.execute("SELECT * FROM attempts" + where + " ORDER BY created,rowid", values)
+            ]
         for row in rows:
             row["request"] = json.loads(row["request"])
         return rows
@@ -775,7 +931,7 @@ class Store:
                 raise NotFound("Project not found")
             document = json.loads(row["document"])
             attempts = [
-                dict(r)
+                self._attempt_row(db, r)
                 for r in db.execute("SELECT * FROM attempts WHERE project_id=? ORDER BY created,rowid", (project_id,))
             ]
             versions = {c["workflowVersion"] for c in document["clips"] if c.get("workflowVersion")}
@@ -787,7 +943,7 @@ class Store:
                 if versions
                 else []
             )
-            recipes = {r["id"]: json.loads(r["capture"]) for r in recipe_rows}
+            recipes = {r["id"]: self._load(r["capture"], db) for r in recipe_rows}
             submissions = {
                 r["attempt_id"]: dict(r)
                 for r in db.execute(
@@ -827,7 +983,7 @@ class Store:
                 else:
                     db.execute(
                         "INSERT INTO workflows VALUES(?,?,?,?,?)",
-                        (version, project_id, owners[0]["id"], digest, encode(capture)),
+                        (version, project_id, owners[0]["id"], digest, self._dump(db, capture, capture=True)),
                     )
             edit.save(document)
         return self.get(project_id)
@@ -844,12 +1000,14 @@ class Store:
             document = json.loads(row[0])
             generated = (
                 db.execute(
-                    "SELECT clip_id,take_id,json_extract(result,'$.primary.frames') AS frames FROM attempts WHERE project_id=? AND take_id=? AND status='complete'",
+                    "SELECT clip_id,take_id,result FROM attempts WHERE project_id=? AND take_id=? AND status='complete'",
                     (project_id, take_id),
                 ).fetchone()
                 if take_id is not None
                 else None
             )
+        if generated:
+            generated = {**dict(generated), "frames": self._load(generated["result"])["primary"]["frames"]}
         clip = next((c for c in document["clips"] if c["id"] == clip_id), None)
         if not clip:
             raise NotFound("Clip not found")
@@ -902,7 +1060,7 @@ class Store:
         clip["revision"] = clip.get("revision", 0) + 1
         db.execute(
             "INSERT INTO workflows VALUES(?,?,?,?,?)",
-            (snapshot_id, project_id, clip["id"], fingerprint(capture), encode(capture)),
+            (snapshot_id, project_id, clip["id"], fingerprint(capture), self._dump(db, capture, capture=True)),
         )
 
     def workflow(self, snapshot_id):
@@ -910,7 +1068,7 @@ class Store:
             row = db.execute("SELECT capture FROM workflows WHERE id=?", (snapshot_id,)).fetchone()
         if not row:
             raise ValueError("Save an executable workflow to this clip first")
-        return json.loads(row[0])
+        return self._load(row[0])
 
     def handoff(self, project_id, payload):
         project = self.get(project_id)
@@ -1036,16 +1194,17 @@ class Store:
     def accept_execution(self, attempt_id, execution_id, submission_id, receipt):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            packed = self._dump(db, receipt, receipt=True)
             old = db.execute("SELECT * FROM executions WHERE id=?", (execution_id,)).fetchone()
             if old:
-                if old["attempt_id"] != attempt_id or old["receipt"] != encode(receipt):
+                if old["attempt_id"] != attempt_id or old["receipt"] != packed:
                     raise Conflict("Execution identity already contains different evidence")
                 return bool(old["accepted"])
             attempt = db.execute("SELECT * FROM attempts WHERE id=?", (attempt_id,)).fetchone()
             winner = attempt["status"] != attempts.COMPLETE
             db.execute(
                 "INSERT INTO executions VALUES(?,?,?,?,?)",
-                (execution_id, attempt_id, submission_id, encode(receipt), int(winner)),
+                (execution_id, attempt_id, submission_id, packed, int(winner)),
             )
             if winner:
                 self.transition(
@@ -1069,15 +1228,20 @@ class Store:
         versions = {c["workflowVersion"] for c in project["document"]["clips"] if c.get("workflowVersion")}
         with self.connect() as db:
             evidence = {
-                r["media_id"]: json.loads(r["evidence"])
+                r["media_id"]: self._load(r["evidence"], db)
                 for r in db.execute("SELECT media_id,evidence FROM media_evidence WHERE project_id=?", (project_id,))
             }
         # A downloaded project carries its evidence so it stays portable; the
         # working document is what every other reader sees.
         document = ledger.compose(project["document"], evidence, in_place=True)
-        return {"spoolVersion": 1, "document": document, "recipes": {v: self.workflow(v) for v in versions}}
+        return {
+            "spoolVersion": EXPORT_VERSION,
+            "document": document,
+            "recipes": {v: self.workflow(v) for v in versions},
+        }
 
     def import_project(self, value):
+        validate_import(value)
         document = ledger.authored(ledger.detach_for_import(value.get("document", value)))
         recipes = value.get("recipes", {})
         project_id, revision = uid(), 0
@@ -1120,7 +1284,18 @@ class Store:
         request["fingerprint"] = fingerprint(request)
         db.execute(
             "INSERT INTO attempts VALUES(?,?,?,?,?,?,?,?,?,?)",
-            (attempt_id, project_id, clip["id"], take_id, prompt_id, status, encode(request), None, None, time.time()),
+            (
+                attempt_id,
+                project_id,
+                clip["id"],
+                take_id,
+                prompt_id,
+                status,
+                self._dump(db, request),
+                None,
+                None,
+                time.time(),
+            ),
         )
         return attempt_id
 
@@ -1330,7 +1505,7 @@ class Store:
             row = db.execute("SELECT * FROM attempts WHERE id=?", (attempt_id,)).fetchone()
         if not row:
             raise NotFound("Attempt not found")
-        result = dict(row)
+        result = self._attempt_row(None, row)
         result["request"] = json.loads(result["request"])
         return result
 
@@ -1346,12 +1521,14 @@ class Store:
 
     def dispatched(self, attempt_id, payload, validation):
         with self.connect() as db:
-            db.execute("INSERT INTO dispatches VALUES(?,?,?)", (attempt_id, encode(payload), encode(validation)))
+            db.execute(
+                "INSERT INTO dispatches VALUES(?,?,?)", (attempt_id, self._dump(db, payload), encode(validation))
+            )
 
     def dispatch_record(self, attempt_id):
         with self.connect() as db:
             row = db.execute("SELECT * FROM dispatches WHERE attempt_id=?", (attempt_id,)).fetchone()
-        return {"payload": json.loads(row["payload"]), "validation": json.loads(row["validation"])} if row else None
+        return {"payload": self._load(row["payload"]), "validation": json.loads(row["validation"])} if row else None
 
     def transition(self, attempt_id, status, result=None, error=None, db=None, *, expected=None, recovery=False):
         """Apply an allowed observation only if its snapshot is still current.
@@ -1377,7 +1554,7 @@ class Store:
             return True
         db.execute(
             "UPDATE attempts SET status=?,result=COALESCE(?,result),error=? WHERE id=? AND status!='complete'",
-            (status, encode(result) if result is not None else None, error, attempt_id),
+            (status, self._dump(db, result, receipt=True) if result is not None else None, error, attempt_id),
         )
         if current and current[0] != status and current[0] != attempts.COMPLETE:
             project_id = db.execute("SELECT project_id FROM attempts WHERE id=?", (attempt_id,)).fetchone()[0]

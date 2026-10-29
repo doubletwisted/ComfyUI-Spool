@@ -7,6 +7,11 @@ module contracts are in [architecture.md](architecture.md).
 
 - **Project**: one saved edit, stored as a project folder with `project.spool`.
   SQLite holds its current **Revision**; retired revision snapshots are not kept.
+- **Evidence blob**: immutable JSON stored once inside `project.spool`, addressed
+  by SHA-256 of its canonical encoding. Storage references are unpacked before
+  callers read recipes, requests, receipts or media evidence.
+- **Project manifest**: `project.json`, naming the project ID, SQLite format
+  version and writing Spool version. Newer formats require a newer Spool.
 - **Authored document**: the part of a project a person edits: clips, trims,
   gaps, chosen take, soundtrack, imported library items and imported takes.
   It excludes view state (playhead, selection, zoom) and **generated takes**.

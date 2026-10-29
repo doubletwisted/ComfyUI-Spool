@@ -7,6 +7,7 @@ A project is a folder:
 ```text
 My project/
   project.spool        the edit, workflow versions, takes and render records
+  project.json         project identity and format version
   input/images/        images, audio and video you added
   input/audio/
   input/video/
@@ -27,6 +28,12 @@ rebuilt from the project folder.
 file** imports one. The file contains the edit, workflow versions and media
 records, with local paths but not the media itself. A rejected import leaves no
 partial project.
+
+When opening an older project, Spool keeps its previous project file in
+`.spool/backups/project-schema<old>-<UTC timestamp>.spool` before upgrading it.
+Keep that copy until you have checked the upgraded project. A newer project
+format requires a newer Spool; it cannot be opened by an older installation.
+Render evidence is shared inside the SQLite file to keep repeated saves smaller.
 
 ## Saving
 

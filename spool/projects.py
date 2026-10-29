@@ -9,14 +9,17 @@ import shutil
 import sqlite3
 import tempfile
 import threading
-from contextlib import contextmanager
+from datetime import datetime, timezone
+from contextlib import contextmanager, closing
 from pathlib import Path
 
 from .errors import NotFound
 from . import take_files
 from .media import Media
 from .ownership import file_lock, atomic_replace
-from .store import Store, Conflict, uid
+from .store import Store, Conflict, uid, SCHEMA_VERSION, validate_import
+from .durable import atomic_json, write as durable_write
+from . import __version__
 
 
 def folder_name(name):
@@ -34,24 +37,56 @@ def folder_name(name):
 
 
 class ProjectStore(Store):
-    def __init__(self, folder, workspace):
+    def __init__(self, folder, workspace=None, *, migrate=True, writable=False):
         self.workspace = workspace
+        self.migrate_on_open = migrate
         folder = Path(folder).resolve()
-        (folder / ".spool").mkdir(parents=True, exist_ok=True)
+        self.manifest = folder / "project.json"
+        self.check_manifest()
+        self.snapshot = folder / "project.spool"
+        # Refuse newer SQLite formats before creating even the lock/cache folders.
+        if self.snapshot.exists():
+            with closing(sqlite3.connect(self.snapshot.as_uri() + "?mode=ro&immutable=1", uri=True)) as db:
+                if db.execute("PRAGMA user_version").fetchone()[0] > SCHEMA_VERSION:
+                    raise ValueError("This Spool project needs a newer extension version")
         key = hashlib.sha256(str(folder).encode()).hexdigest()
-        cache = workspace.root / "cache" / key
-        cache.mkdir(parents=True, exist_ok=True)
+        cache = (workspace.root / "cache" if workspace else Path(tempfile.gettempdir()) / "spool-maintenance") / key
         self.runtime = cache / "working.sqlite3"
         self.stamp = cache / "checkpoint.json"
-        self.snapshot = folder / "project.spool"
         self.lock_file = folder / ".spool" / "project.lock"
-        super().__init__(folder, filename="project.spool")
-        self.focus_store = workspace
+        if migrate or writable:
+            (folder / ".spool").mkdir(parents=True, exist_ok=True)
+            cache.mkdir(parents=True, exist_ok=True)
+        super().__init__(folder, migrate=migrate, filename="project.spool")
+        self.read_only = not (migrate or writable)
+        self.focus_store = workspace or self
         self.sync_cache = None
         self.cache = self.root / ".spool"
-        for name in ("input/images", "input/audio", "input/video", "output", ".spool/previews", ".spool/receipts"):
-            (folder / name).mkdir(parents=True, exist_ok=True)
-        take_files.recover(self)
+        if migrate:
+            for name in ("input/images", "input/audio", "input/video", "output", ".spool/previews", ".spool/receipts"):
+                (folder / name).mkdir(parents=True, exist_ok=True)
+            take_files.recover(self)
+
+    def check_manifest(self):
+        if not self.manifest.exists():
+            return
+        value = json.loads(self.manifest.read_text(encoding="utf-8"))
+        version = value.get("formatVersion")
+        if value.get("format") != "spool-project" or type(version) is not int or version < 1:
+            raise ValueError("Invalid Spool project manifest")
+        if version > SCHEMA_VERSION:
+            raise ValueError("This Spool project needs a newer extension version (project format %d)" % version)
+
+    def write_manifest(self, db):
+        row = db.execute("SELECT id FROM projects LIMIT 1").fetchone()
+        if row:
+            value = {
+                "format": "spool-project",
+                "formatVersion": db.execute("PRAGMA user_version").fetchone()[0],
+                "projectId": row[0],
+                "writtenBy": __version__,
+            }
+            atomic_json(self.manifest, value)
 
     def signature(self):
         stat = self.snapshot.stat()
@@ -59,7 +94,12 @@ class ProjectStore(Store):
 
     @contextmanager
     def connect(self):
+        if self.read_only:
+            with Store.connect(self) as db:
+                yield db
+            return
         with file_lock(self.lock_file):
+            self.check_manifest()
             signature = self.signature() if self.snapshot.exists() else None
             try:
                 saved = json.loads(self.stamp.read_text()) if self.stamp.exists() else None
@@ -77,6 +117,13 @@ class ProjectStore(Store):
             version = db.execute("PRAGMA user_version").fetchone()[0]
             pages = db.execute("PRAGMA page_count").fetchone()[0]
             try:
+                if version > SCHEMA_VERSION:
+                    raise ValueError("This Spool project needs a newer extension version")
+                if self.migrate_on_open and signature is not None and version < SCHEMA_VERSION:
+                    # This is the last published snapshot, before any migration runs.
+                    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+                    backup = self.root / ".spool" / "backups" / ("project-schema%d-%s.spool" % (version, timestamp))
+                    durable_write(backup, self.snapshot.read_bytes())
                 with db:
                     yield db
                 changed = (
@@ -103,6 +150,7 @@ class ProjectStore(Store):
                             target.flush()
                             os.fsync(target.fileno())
                         atomic_replace(pending, self.snapshot)
+                        self.write_manifest(db)
                         self.stamp.write_text(json.dumps(self.signature()))
                     finally:
                         local.unlink(missing_ok=True)
@@ -270,6 +318,7 @@ class Workspace(Store):
         raise NotFound("Project record not found")
 
     def import_project(self, value):
+        validate_import(value)
         parent = Path(self.setting("projects_directory") or self.root / "projects").resolve()
         parent.mkdir(parents=True, exist_ok=True)
         folder = Path(tempfile.mkdtemp(prefix="Untitled Spool project-", dir=parent))
