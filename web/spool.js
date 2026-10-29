@@ -87,24 +87,12 @@ const graphActions = {
   },
   [ACTIONS.open]: data => workflowLinks.open(data),
   [LINK_APPLIED]: data => workflowLinks.applied(data),
-  [ACTIONS.ping]: () => {
-    const record = workflowLinks.current();
-    return {
-      bridgeVersion: BRIDGE_VERSION,
-      connected: true,
-      bridgeId,
-      workflowLinks: true,
-      linkedWorkflow: record
-        ? {
-            projectId: record.link.projectId,
-            clipId: record.link.clipId,
-            deadline: app.rootGraph.nodes.some(
-              n => ['DeadlineSubmit', 'SaveAndSubmitNode'].includes(n.type) && ![2, 4].includes(n.mode),
-            ),
-          }
-        : null,
-    };
-  },
+  [ACTIONS.ping]: () => ({
+    bridgeVersion: BRIDGE_VERSION,
+    connected: true,
+    bridgeId,
+    workflowLinks: true,
+  }),
 };
 async function loadWorkflow(data) {
   if (!data.workflow?.nodes?.length)

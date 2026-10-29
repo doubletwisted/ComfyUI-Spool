@@ -54,15 +54,21 @@
     const deadline = comfy.LiteGraph.createNode('DeadlineSubmit');
     app.rootGraph.add(deadline);
     linked.changeTracker.captureCanvasState();
+    // Two takes stop at the review, so nothing renders; the clip's Execute on decides, not the open graph.
+    const takes = shot().count;
+    shot().count = 2;
     await n.queueClips([shot()]);
+    shot().count = takes;
     check(
-      'An unapplied Deadline node cannot silently queue the saved local workflow',
-      $('toast').textContent.includes('Apply this clip') &&
-        $('toast').textContent.includes('Deadline') &&
+      'An unapplied Deadline node in Comfy does not block generating the saved local workflow',
+      $('modal').classList.contains('review-dialog') &&
+        $('modal').textContent.includes('Local ComfyUI') &&
+        !$('toast').textContent.includes('Apply this clip') &&
         !n.state.jobs.length,
     );
+    $('closeModal').click();
     check(
-      'The Deadline guard preserves the assigned recipe and unsaved Comfy graph',
+      'Generating leaves the assigned recipe and unsaved Comfy graph as they were',
       shot().workflowVersion === version && app.rootGraph.nodes.includes(deadline),
     );
     app.rootGraph.remove(deadline);

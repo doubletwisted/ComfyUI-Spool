@@ -5,12 +5,10 @@ export function createQueueActions({
   storage,
   retryKey,
   getClips,
-  getBridge,
   getRecipes,
   getCloudDefinitions,
   getDefinitions,
   isConnected,
-  pingAction,
   projectKey,
   projectEdit,
   request,
@@ -68,26 +66,6 @@ export function createQueueActions({
     return queueSubmission
       .start(async () => {
         if (!clips.length) return;
-        if (getBridge()) {
-          const live = await getBridge()
-              .call(pingAction, {}, { timeoutMs: 300 })
-              .catch(() => null),
-            linked = live?.linkedWorkflow;
-          if (
-            linked?.projectId === projectKey &&
-            linked.deadline &&
-            clips.some(
-              c =>
-                c.id === linked.clipId &&
-                !Object.values(getRecipes()[c.workflowVersion]?.prompt || {}).some(n =>
-                  ['DeadlineSubmit', 'SaveAndSubmitNode'].includes(n.class_type),
-                ),
-            )
-          )
-            throw Error(
-              'Apply this clip’s Comfy changes before generating. Its saved workflow has no Deadline submit node.',
-            );
-        }
         for (const c of clips) {
           const reason = queueReason(c);
           if (reason) throw Error(c.name + ': ' + reason);

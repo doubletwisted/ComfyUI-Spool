@@ -46,7 +46,6 @@ function queueFixture(extra = {}) {
     sessionStorage,
     STORAGE_KEY: 'project',
     crypto,
-    bridgeClient: null,
     B: { ACTIONS: { ping: 'ping' } },
     projectKey: 'p',
     cloudDefinitions: {},
@@ -72,12 +71,10 @@ function queueFixture(extra = {}) {
     storage: sessionStorage,
     retryKey: 'project:queue-request',
     getClips: () => context.state.clips,
-    getBridge: () => context.bridgeClient,
     getRecipes: () => context.nativeRecipes,
     getCloudDefinitions: () => context.cloudDefinitions,
     getDefinitions: () => context.productDefinitions,
     isConnected: () => context.productCapabilities.connected,
-    pingAction: 'ping',
     projectKey: 'p',
     projectEdit: context.projectEdit,
     request: (...args) => context.request(...args),
@@ -94,11 +91,9 @@ function queueFixture(extra = {}) {
   return { ...api, context, sent, messages, state, sessionStorage };
 }
 
-for (const dependency of ['bridge', 'flush']) {
+{
   const gate = deferred(),
-    f = queueFixture(
-      dependency === 'bridge' ? { bridgeClient: { call: () => gate.promise } } : { flushNative: () => gate.promise },
-    );
+    f = queueFixture({ flushNative: () => gate.promise });
   const first = f.queueClips(f.state.clips),
     second = f.queueClips(f.state.clips);
   assert.equal(f.queueSubmission.sending, true);
@@ -107,7 +102,7 @@ for (const dependency of ['bridge', 'flush']) {
   assert.match(f.messages[0], /already in progress/);
   gate.resolve();
   await first;
-  assert.equal(f.sent.length, 1, dependency + ' permits one operation');
+  assert.equal(f.sent.length, 1, 'flush permits one operation');
   assert.equal(f.state.clips[0].inputValues.seed.__spool_int__, '5');
   assert.equal(f.state.clips[0].takeId, 'chosen');
   assert.equal(f.queueSubmission.pending, null);
