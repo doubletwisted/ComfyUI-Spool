@@ -1006,7 +1006,10 @@ async function startEditor(isFailed) {
   }
   const takeBatchKey = t =>
     t.generated
-      ? 'generated:' + (t.request?.workflowVersion ?? '') + ':' + JSON.stringify(takeBatchInputs(t))
+      ? 'generated:' +
+        (t.summary?.workflowVersion ?? t.request?.workflowVersion ?? '') +
+        ':' +
+        JSON.stringify(takeBatchInputs(t))
       : t.original
         ? 'original'
         : 'imported';

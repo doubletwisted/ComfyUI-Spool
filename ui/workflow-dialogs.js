@@ -70,6 +70,7 @@ export function createWorkflowDialogs({
       m = t?.media;
     const snapshot = t?.workflowSnapshot || t?.request?.capture;
     if (Array.isArray(snapshot?.workflow?.nodes)) return { capture: snapshot };
+    if (t?.recipeGraph) return { take: t };
     const inline = m?.workflowData || (m?.workflow ? { workflow: m.workflow, prompt: m.prompt } : null);
     if (Array.isArray(inline?.workflow?.nodes)) return { capture: inline };
     return m?.embeddedGraph ? { media: m } : null;
@@ -78,6 +79,8 @@ export function createWorkflowDialogs({
     const graph = editableGraph(c);
     if (!graph) return null;
     if (graph.capture) return graph.capture;
+    if (graph.take)
+      return (await request('projects/' + projectKey + '/takes/' + encodeURIComponent(graph.take.id))).request.capture;
     const held = await mediaEvidence(graph.media);
     return held?.workflowData || (held?.workflow ? { workflow: held.workflow, prompt: held.prompt } : null);
   }

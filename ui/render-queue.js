@@ -155,7 +155,7 @@ export function createRenderQueue({
         : '';
       const result = getState()
           .clips.flatMap(c => c.takes)
-          .find(t => t.generated && t.request?.attemptId === j.id),
+          .find(t => t.generated && (t.summary?.attemptId ?? t.request?.attemptId) === j.id),
         output = result?.media?.originalFile;
       const details =
         '<div class="render-execution"><p>' +
