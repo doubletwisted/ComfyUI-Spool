@@ -62,6 +62,8 @@ First public release.
 - Detailed render diagnostics are pruned after 30 days; results and their
   completion times are kept.
 - Seed modes (fixed, increment, decrement, randomize) with exact 64-bit seeds.
+  The generation review shows each shot's route and seeds, and warns when
+  several takes would repeat the same seed.
 - Spool ships its own built-in workflows with more of their media inputs
   connected: MiniMax H3 and H3 Max Reference to Video on Comfy Cloud (reference
   images, video and audio), FLUX 3 Image to Video (up to 10 keyframes), and the

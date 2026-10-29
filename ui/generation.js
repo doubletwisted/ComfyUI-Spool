@@ -47,6 +47,16 @@ export function createQueueSubmission({ storage, key, submit }) {
 
 export const seedControls = clip =>
   (clip.bindings || []).filter(b => b.role === 'seed' && !b.asset && isIntegerValue(clip.inputValues?.[b.key]));
+// Where a clip's takes compute, by the same rule as `requests.prepare`: a Deadline
+// submit node in the recipe wins, then the clip's choice, then the recipe's.
+export function executionRoute(clip, recipe) {
+  if (Object.values(recipe?.prompt || {}).some(n => ['DeadlineSubmit', 'SaveAndSubmitNode'].includes(n.class_type)))
+    return 'Deadline';
+  return (clip?.executionTarget || recipe?.executionTarget) === 'cloud' ? 'Comfy Cloud' : 'Local ComfyUI';
+}
+// Several takes with a fixed seed (or no exposed seed) repeat the same request.
+export const repeatsSameRequest = clip =>
+  (clip.count || 1) > 1 && !['different', 'increment', 'decrement', 'randomize'].includes(clip.seedMode);
 export function reviewSignature(project, ids) {
   const selected = new Set(ids),
     fields = [

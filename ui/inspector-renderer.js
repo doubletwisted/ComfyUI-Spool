@@ -1,3 +1,4 @@
+import { executionRoute } from './generation.js';
 import { visibleInputs } from './input-groups.js';
 // Editor adapters are explicit; rendering always reads the current draft.
 export function createInspectorRenderer({
@@ -111,13 +112,7 @@ export function createInspectorRenderer({
         '"><span>' +
         workflowLabel +
         '<small class="workflow-route">' +
-        (Object.values(getNativeRecipes()[c.workflowVersion]?.prompt || {}).some(n =>
-          ['DeadlineSubmit', 'SaveAndSubmitNode'].includes(n.class_type),
-        )
-          ? 'Deadline'
-          : c.executionTarget === 'cloud'
-            ? 'Comfy Cloud'
-            : 'Local ComfyUI') +
+        executionRoute(c, getNativeRecipes()[c.workflowVersion]) +
         '</small></span><div class="clip-workflow-actions"><button class="outline" id="editClipWorkflow">Edit in Comfy</button><button class="outline" id="reloadTakeWorkflow" title="Restore the selected take’s saved workflow and inputs, replacing current edits">Reload workflow from take</button></div></div>' +
         (!setup.ready
           ? '<p class="' +

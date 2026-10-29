@@ -5,9 +5,16 @@ export function createDialogs({ $, esc, svg, pause, cancelCapture, stopDiagnosti
   function showModal(title, body, footer = '') {
     modalCleanup?.();
     modalCleanup = null;
-    $('modal').classList.remove('project-dialog', 'render-dialog', 'template-dialog', 'shortcut-dialog');
+    $('modal').classList.remove(
+      'project-dialog',
+      'render-dialog',
+      'template-dialog',
+      'shortcut-dialog',
+      'review-dialog',
+    );
     pause();
-    modalReturnFocus = document.activeElement;
+    // Redrawing an open dialog keeps the focus target from before it opened.
+    if (!$('modalOverlay').contains(document.activeElement)) modalReturnFocus = document.activeElement;
     $('modal').innerHTML =
       '<div class="modal-head"><h2 id="modalTitle">' +
       esc(title) +

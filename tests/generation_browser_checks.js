@@ -65,8 +65,15 @@
   $('generate').click();
   await wait(() => !field('modalOverlay').hidden && field('generationReviewQueue'));
   check(
-    root().getElementById('modal').textContent.includes('Fixed seeds'),
-    'Same-settings batches are explicit before submission',
+    root().getElementById('modal').textContent.includes('Seed is Fixed, so all 3 takes use seed 18446744073709551615'),
+    'Same-settings batches warn that their takes repeat before submission',
+  );
+  root().querySelector('[data-vary-seeds="shot"]').click();
+  await wait(() => !root().querySelector('[data-vary-seeds]') && field('generationReviewQueue'));
+  check(
+    (await read()).document.clips[0].seedMode === 'increment' &&
+      [...root().querySelectorAll('.review-seeds li')].map(li => li.textContent).join() === '0,1,2',
+    'The repeat warning switches the shot to incrementing seeds and redraws the review',
   );
   field('generationReviewCancel').click();
   check((await read()).document.jobs.length === jobsBefore, 'Cancelling generation review submits nothing');
@@ -76,9 +83,8 @@
   check(saved.document.clips[0].seedMode === 'increment', 'Seed choice persists in the shared shot');
   $('generate').click();
   await wait(() => !field('modalOverlay').hidden && field('generationReviewQueue'));
-  const review = root().getElementById('modal').textContent;
   check(
-    ['Seed: 0', 'Seed: 1', 'Seed: 2'].every(seed => review.includes(seed)),
+    [...root().querySelectorAll('.review-seeds li')].map(li => li.textContent).join() === '0,1,2',
     'Batch review increments before generation and wraps uint64 to 0, 1, 2',
   );
   const fetch = w.fetch;

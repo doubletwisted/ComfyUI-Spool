@@ -88,6 +88,7 @@ async function startEditor(isFailed) {
       '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h1m3 0h1m3 0h1m3 0h1M6 13h1m3 0h1m3 0h1M7 16h10"/>',
     close: '<path d="m6 6 12 12M18 6 6 18"/>',
     check: '<path d="m5 12 4 4L20 5"/>',
+    warning: '<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.3"/>',
   };
   let diagnosticsTimer = 0;
   const $ = id => document.getElementById(id);
@@ -1989,6 +1990,7 @@ async function startEditor(isFailed) {
   }
   const renderQueueOwner = createRenderQueue({
     $,
+    edits,
     esc,
     svg,
     request,

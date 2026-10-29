@@ -3,6 +3,7 @@ import * as G from './generation.js';
 // Live getters and narrow actions keep this owner independent of editor initialization.
 export function createRenderQueue({
   $,
+  edits,
   esc,
   svg,
   request,
@@ -399,51 +400,103 @@ export function createRenderQueue({
       toast(error.message);
       return;
     }
-    const signature = G.reviewSignature(getState(), ids);
+    const signature = G.reviewSignature(getState(), ids),
+      total = items.reduce((n, i) => n + i.count, 0),
+      takes = n => n + (n === 1 ? ' take' : ' takes'),
+      decimal = getDecimal(),
+      modes = {
+        same: 'Fixed',
+        different: 'Increment',
+        increment: 'Increment',
+        decrement: 'Decrement',
+        randomize: 'Randomize',
+      };
+    function shot(c) {
+      const controls = G.seedControls(c),
+        count = c.count || 1,
+        own = items.filter(i => i.clipId === c.id),
+        seeds = i =>
+          controls
+            .map(
+              b =>
+                (controls.length > 1 ? esc(b.label) + ' ' : '') +
+                esc(decimal(i.values?.[b.key] ?? c.inputValues[b.key])),
+            )
+            .join(' · '),
+        fixed = controls.map(b => esc(decimal(c.inputValues[b.key]))).join(' / '),
+        warning = !G.repeatsSameRequest(c)
+          ? ''
+          : controls.length
+            ? '<div class="review-warning" role="alert">' +
+              svg('warning') +
+              '<p>Seed is Fixed, so all ' +
+              count +
+              ' takes use seed ' +
+              fixed +
+              ' and will likely come out identical.</p><button class="outline" data-vary-seeds="' +
+              esc(c.id) +
+              '">Increment seeds</button></div>'
+            : '<div class="review-warning" role="alert">' +
+              svg('warning') +
+              '<p>This workflow exposes no seed, so all ' +
+              count +
+              ' takes run identical settings and will likely come out the same.</p></div>';
+      return (
+        '<section class="review-shot"><div class="review-shot-head"><strong>' +
+        esc(c.name) +
+        '</strong><span>' +
+        takes(count) +
+        ' · ' +
+        esc(G.executionRoute(c, getNativeRecipes()[c.workflowVersion])) +
+        '</span></div>' +
+        (controls.length
+          ? '<div class="review-seed-mode">' +
+            (controls.length > 1 ? 'Seeds' : esc(controls[0].label)) +
+            ' · ' +
+            modes[c.seedMode || 'same'] +
+            '</div><ol class="review-seeds">' +
+            own
+              .map(i => '<li>' + seeds(i) + (i.count > 1 ? '<small> × ' + i.count + '</small>' : '') + '</li>')
+              .join('') +
+            '</ol>'
+          : '') +
+        warning +
+        '</section>'
+      );
+    }
     showModal(
-      'Review generation',
-      '<p>' +
-        items.reduce((n, i) => n + i.count, 0) +
-        ' takes. New takes stay unselected.</p>' +
-        clips
-          .map(
-            c =>
-              '<h3>' +
-              esc(c.name) +
-              '</h3><p>' +
-              esc(
-                {
-                  same: 'Fixed seeds',
-                  different: 'Incrementing seeds',
-                  increment: 'Incrementing seeds',
-                  decrement: 'Decrementing seeds',
-                  randomize: 'Random seeds',
-                }[c.seedMode || 'same'],
-              ) +
-              '</p>' +
-              items
-                .filter(i => i.clipId === c.id)
-                .map(
-                  i =>
-                    '<p>' +
-                    i.count +
-                    ' take(s) / ' +
-                    (G.seedControls(c)
-                      .map(
-                        b =>
-                          esc(b.label) +
-                          ': <code>' +
-                          esc(getDecimal()(i.values?.[b.key] ?? c.inputValues[b.key])) +
-                          '</code>',
-                      )
-                      .join(' / ') || 'No mapped seed') +
-                    '</p>',
-                )
-                .join(''),
-          )
-          .join(''),
-      '<button class="outline" id="generationReviewCancel">Cancel</button><button class="primary" id="generationReviewQueue">Queue these takes</button>',
+      'Generate ' + takes(total),
+      '<p class="review-summary">New takes are added to ' +
+        (clips.length === 1 ? 'the shot' : clips.length + ' shots') +
+        ' and stay unselected. The edit does not change.</p><div class="review-shots">' +
+        clips.map(shot).join('') +
+        '</div>',
+      '<button class="outline" id="generationReviewCancel">Cancel</button><button class="primary" id="generationReviewQueue">Queue ' +
+        takes(total) +
+        '</button>',
     );
+    $('modal').classList.add('review-dialog');
+    $('modal')
+      .querySelectorAll('[data-vary-seeds]')
+      .forEach(
+        button =>
+          (button.onclick = async () => {
+            const c = getState().clips.find(c => c.id === button.dataset.varySeeds),
+              controls = c && G.seedControls(c);
+            if (!controls?.length) return;
+            edits.apply(
+              'Change seed behavior',
+              () => {
+                c.seedMode = 'increment';
+                c.seedKey = (controls.find(b => b.key === c.seedKey) || controls[0]).key;
+                c.revision++;
+              },
+              'inspector',
+            );
+            await reviewGeneration(clips);
+            $('generationReviewQueue')?.focus();
+          }),
+      );
     $('generationReviewCancel').onclick = closeModal;
     $('generationReviewQueue').onclick = async () => {
       if (G.reviewSignature(getState(), ids) !== signature) {

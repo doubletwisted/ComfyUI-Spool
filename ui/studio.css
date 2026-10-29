@@ -7365,3 +7365,92 @@ input[type='range'] {
   color: #171717;
   border-radius: 6px;
 }
+/* Generation review: one card per shot, its seeds, and a warning when takes would repeat. */
+#modal.review-dialog {
+  max-width: 520px;
+}
+.review-dialog .modal-head {
+  margin-bottom: 4px;
+}
+.review-dialog .review-summary {
+  margin: 0 0 14px;
+}
+.review-shots {
+  display: grid;
+  gap: 8px;
+}
+.review-shot {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+}
+.review-shot-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.review-shot-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.review-shot-head span {
+  flex-shrink: 0;
+  color: var(--dim);
+  font-size: 11px;
+}
+.review-seed-mode {
+  margin: 12px 0 6px;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.review-seeds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.review-seeds li {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  font: 11px var(--mono);
+}
+.review-seeds small {
+  color: var(--dim);
+  font: inherit;
+}
+.review-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--warning-line);
+  border-radius: 6px;
+  background: var(--warning-surface);
+  color: var(--warning);
+}
+.review-warning .icon {
+  flex-shrink: 0;
+}
+.modal .review-warning p {
+  flex: 1;
+  margin: 0;
+  color: inherit;
+  line-height: 1.45;
+}
+.review-warning button {
+  flex-shrink: 0;
+}

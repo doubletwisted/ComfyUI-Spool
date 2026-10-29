@@ -160,8 +160,7 @@
   await wait(() => n.dialogRoot.getElementById('generationReviewQueue'));
   check(
     'Batch review exposes the exact incremental seeds',
-    n.dialogRoot.getElementById('modal').textContent.includes('Seed: 43') &&
-      n.dialogRoot.getElementById('modal').textContent.includes('Seed: 44'),
+    [...n.dialogRoot.querySelectorAll('.review-seeds li')].map(li => li.textContent).join() === '43,44',
   );
   const originalFetch = w.fetch;
   let lost = false;

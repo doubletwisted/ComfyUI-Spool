@@ -140,9 +140,12 @@ being ignored.
 ## Seeds and take counts
 
 Choose seed behaviour beside the seed: **Fixed**, **Increment**, **Decrement** or
-**Randomize**. Set the number of **Takes** beside Generate. Several takes show
-their exact seeds before they are submitted. The displayed seed moves on only
-after the render is accepted.
+**Randomize**. Set the number of **Takes** beside Generate. Before anything is
+submitted, a review lists each shot with its route and the exact seed of every
+take. If several takes would repeat the same request (a **Fixed** seed, or a
+workflow that exposes no seed), the review warns that they will likely come out
+identical; **Increment seeds** switches the shot to incrementing seeds. The
+displayed seed moves on only after the render is accepted.
 
 Each take is numbered when it is requested, not when it finishes.
 

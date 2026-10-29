@@ -9,6 +9,8 @@ import {
   clearableRender,
   visibleRenderJobs,
   reviewSignature,
+  executionRoute,
+  repeatsSameRequest,
   PENDING,
   TERMINAL,
   RECOVERY,
@@ -96,6 +98,15 @@ assert.equal(new Set(random).size, 16);
 assert.ok(random.every(v => BigInt(v) >= 0n && BigInt(v) <= BigInt(max)));
 assert.equal(seedUpdates([increment], generationItems([increment], definitions, recipes))[0].after.__spool_int__, '2');
 assert.equal(seedUpdates([c], items)[0].after.__spool_int__, '2');
+assert.equal(repeatsSameRequest(c), false);
+assert.equal(repeatsSameRequest({ ...c, seedMode: 'same' }), true);
+assert.equal(repeatsSameRequest({ ...c, seedMode: undefined, bindings: [] }), true);
+assert.equal(repeatsSameRequest({ ...c, seedMode: 'same', count: 1 }), false);
+const deadline = { prompt: { submit: { class_type: 'DeadlineSubmit' } }, executionTarget: 'cloud' };
+assert.equal(executionRoute({ executionTarget: 'cloud' }, deadline), 'Deadline');
+assert.equal(executionRoute({}, { executionTarget: 'cloud' }), 'Comfy Cloud');
+assert.equal(executionRoute({ executionTarget: 'local' }, { executionTarget: 'cloud' }), 'Local ComfyUI');
+assert.equal(executionRoute({}, undefined), 'Local ComfyUI');
 assert.equal(jobElapsed({ status: 'running', createdAt: 100 }, 175), '1m 15s');
 assert.equal(jobElapsed({ status: 'complete', createdAt: 100, finishedAt: 160 }, 999), '1m 0s');
 assert.equal(jobElapsed({ status: 'complete', createdAt: 100 }, 999), '');
