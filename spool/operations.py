@@ -7,6 +7,11 @@ write it only after the save succeeds.
 """
 
 import hashlib
+import copy
+import json
+from pathlib import Path
+
+from .errors import OperationConflict
 
 
 def fit_to_take(document, clip, frames):
@@ -84,12 +89,17 @@ def _write_sidecar(store, source, capture, expected):
     _sidecars().write(source, capture, lock_root=store.root / ".spool" / "locks", expected=expected)
 
 
-def use_take(store, project_id, revision, clip_id, take_id, capture=None):
+def use_take(store, project_id, revision, clip_id, take_id, capture=None, command=None):
     """Use take: choose it for the edit and adopt its generation setup.
 
     A setup read from the take's workflow file that still needs Comfy's
     serialization is written back beside the take once the project saves.
     """
+    if command is not None and store.operation(command["operationId"], project_id, command) is not None:
+        result = store.command(command["operationId"], project_id, revision, command, _missing_take_replay)
+        return _finish_take_command(store, result)
+    if command is not None:
+        capture = copy.deepcopy(capture)
     sidecars = _sidecars()
     source = expected = None
     if capture and capture.get("sidecar"):
@@ -100,10 +110,81 @@ def use_take(store, project_id, revision, clip_id, take_id, capture=None):
         if capture["sidecar"]["needsSerialization"]:
             source, expected = path, capture["sidecar"]["sha256"]
             _refresh_sidecar(capture, source)
+    if command is not None:
+        result = {"clipId": clip_id, "action": "use_take"}
+        if source:
+            result["_sidecar"] = {
+                "source": str(source),
+                "capture": json.dumps(capture, ensure_ascii=False, allow_nan=False),
+                "expected": expected,
+            }
+        saved = store.capture(project_id, revision, clip_id, capture, take_id=take_id, command=(command, result))
+        return _finish_take_command(store, saved)
     saved = store.capture(project_id, revision, clip_id, capture, take_id=take_id)
     if source:
         _write_sidecar(store, source, capture, expected)
     return saved
+
+
+def _missing_take_replay(db, document):
+    raise OperationConflict("The take adoption receipt is no longer available; inspect the project before retrying")
+
+
+def _finish_take_command(store, result):
+    plan = result.get("_sidecar")
+    if plan:
+        source, capture = Path(plan["source"]), json.loads(plan["capture"])
+        try:
+            _sidecars().check_current(source, capture["sidecar"]["sha256"])
+        except ValueError:
+            _write_sidecar(store, source, capture, plan["expected"])
+    return {key: value for key, value in result.items() if key != "_sidecar"}
+
+
+def trim_clip(document, clip, edge, frame, frames):
+    """Normal edge trim, with the same gap and six-frame bounds as the timeline."""
+    track = clip.get("videoTrack", 1)
+    first = next(i for i, c in enumerate(document["clips"]) if c.get("videoTrack", 1) == track)
+    following = next(
+        (
+            c
+            for c in document["clips"][document["clips"].index(clip) + 1 :]
+            if c.get("videoTrack", 1) == clip.get("videoTrack", 1)
+        ),
+        None,
+    )
+    if edge == "in":
+        delta = max(max(-clip["in"], -clip.get("gapBefore", 0)), min(frame - clip["in"], clip["out"] - 6 - clip["in"]))
+        clip["in"] += delta
+        if clip.get("gapBefore", 0) != clip.get("gapBefore", 0) + delta:
+            clip["gapBefore"] = clip.get("gapBefore", 0) + delta
+    else:
+        track = clip.get("videoTrack", 1)
+        gap = (
+            following.get("gapBefore", 0)
+            if following
+            else document.get("tailGap", 0)
+            if track == 1
+            else document.get("videoTailGaps", {}).get(str(track), 0)
+        )
+        maximum = min(frames - clip["out"], gap) if following else frames - clip["out"]
+        delta = max(clip["in"] + 6 - clip["out"], min(frame - clip["out"], maximum))
+        clip["out"] += delta
+        if following:
+            if following.get("gapBefore", 0) != max(0, gap - delta):
+                following["gapBefore"] = max(0, gap - delta)
+        elif gap:
+            if track == 1:
+                document["tailGap"] = max(0, gap - delta)
+            else:
+                document.setdefault("videoTailGaps", {})[str(track)] = max(0, gap - delta)
+    same_track = [c for c in document["clips"] if c.get("videoTrack", 1) == track]
+    others = [c for c in document["clips"] if c.get("videoTrack", 1) != track]
+    others[first:first] = same_track
+    document["clips"] = others
+    if track == 1:
+        document.setdefault("tailGap", 0)
+    return clip[edge]
 
 
 def apply_capture(

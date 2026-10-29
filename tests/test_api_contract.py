@@ -101,9 +101,14 @@ class ContractFixtureTests(unittest.TestCase):
     def test_command_examples_and_malformed_envelopes(self):
         jsonschema.Draft202012Validator.check_schema(SCHEMA)
         for action, fields in commands.ARGUMENT_FIELDS.items():
-            args = {key: "example" if kind is str else kind() for key, kind in fields.items()}
+            args = {
+                key: "example" if kind is str else (kind[0]() if isinstance(kind, tuple) else kind())
+                for key, kind in fields.items()
+            }
             if "variants" in args:
                 args["variants"] = [{"clipId": "shot"}]
+            if "edge" in args:
+                args["edge"] = "in"
             if "verdict" in args:
                 args["verdict"] = "keep"
             envelope = {

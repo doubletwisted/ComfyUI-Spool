@@ -75,12 +75,33 @@ needs:
 | --- | --- |
 | `set_inputs`, `set_shot_inputs` | `inputs` |
 | `apply_workflow` | `workflow` |
-| `brief` | `edit` |
+| `brief`, `rename_clip`, `trim_clip` | `edit` |
 | `feedback` | `feedback` |
 | `choose_take` | `choose_take` |
+| `use_take` | `use_take` |
 | `cancel` | `cancel` |
 | `recover_submission` | `recover` |
 | `add_note`, `edit_note`, `address_note`, `reopen_note` | `notes` |
+
+`rename_clip` takes `{clipId,name}`. `trim_clip` takes `{clipId,edge:"in"|"out",frame}`
+in absolute project/source frames. These commands target video clips. Trims use
+the studio's normal edge rules: six-frame minimum, available source and gap
+bounds, following positions retained, and existing tail-gap compensation.
+Requests beyond a bound clamp as the studio does; read the resulting clip.
+Independent audio and ripple/roll edits still use revision-checked document saves.
+
+`use_take` takes `{clipId,takeId,capture}` and performs full adoption through the
+same operation as the studio: take choice, trim refit, recipe, bindings, values,
+and generation base. Supply the prepared capture from the studio workflow-setup
+flow; a raw `take-workflow` response may still need Comfy serialization and binding
+preparation. Preserve `provenance.takeBase` and any sidecar hash. Use `capture:null`
+only when the take has no executable metadata. `choose_take` remains a selection
+operation that retains the existing recipe.
+
+Use take saves the project and replay receipt together, then writes a required
+workflow sidecar. If delivery fails, retry the identical command: it resumes that
+write without repeating adoption or replacing a later project edit. A changed
+sidecar is refused rather than overwritten. These edit commands submit no jobs.
 
 Commands outside their scope are refused. To retry after a lost response, send the
 identical envelope with the same operation ID; a changed payload under the same

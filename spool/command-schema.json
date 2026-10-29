@@ -42,7 +42,10 @@
         "add_note",
         "edit_note",
         "address_note",
-        "reopen_note"
+        "reopen_note",
+        "use_take",
+        "trim_clip",
+        "rename_clip"
       ]
     },
     "arguments": {
@@ -143,6 +146,26 @@
               }
             }
           }
+        },
+        "capture": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "edge": {
+          "enum": [
+            "in",
+            "out"
+          ]
+        },
+        "frame": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
         }
       }
     }
@@ -413,6 +436,65 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "use_take"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "takeId",
+              "capture"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "trim_clip"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "edge",
+              "frame"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "rename_clip"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "clipId",
+              "name"
+            ]
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -444,7 +526,8 @@
               "edit",
               "cancel",
               "recover",
-              "notes"
+              "notes",
+              "use_take"
             ]
           }
         },

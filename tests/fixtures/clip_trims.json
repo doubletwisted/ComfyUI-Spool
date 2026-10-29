@@ -1,0 +1,472 @@
+[
+  {
+    "name": "in-shorten",
+    "document": {
+      "fps": 24,
+      "clips": [
+        {
+          "id": "a",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 4,
+          "videoTrack": 1,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    },
+    "clipId": "a",
+    "edge": "in",
+    "frame": 16,
+    "expected": {
+      "clips": [
+        {
+          "id": "a",
+          "in": 16,
+          "out": 50,
+          "gapBefore": 10
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    }
+  },
+  {
+    "name": "in-gap-limit",
+    "document": {
+      "fps": 24,
+      "clips": [
+        {
+          "id": "a",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 4,
+          "videoTrack": 1,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    },
+    "clipId": "a",
+    "edge": "in",
+    "frame": 0,
+    "expected": {
+      "clips": [
+        {
+          "id": "a",
+          "in": 6,
+          "out": 50,
+          "gapBefore": 0
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    }
+  },
+  {
+    "name": "in-minimum",
+    "document": {
+      "fps": 24,
+      "clips": [
+        {
+          "id": "a",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 4,
+          "videoTrack": 1,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    },
+    "clipId": "a",
+    "edge": "in",
+    "frame": 90,
+    "expected": {
+      "clips": [
+        {
+          "id": "a",
+          "in": 44,
+          "out": 50,
+          "gapBefore": 38
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    }
+  },
+  {
+    "name": "out-neighbor-limit",
+    "document": {
+      "fps": 24,
+      "clips": [
+        {
+          "id": "a",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 4,
+          "videoTrack": 1,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        },
+        {
+          "id": "b",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 5,
+          "videoTrack": 1,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    },
+    "clipId": "a",
+    "edge": "out",
+    "frame": 80,
+    "expected": {
+      "clips": [
+        {
+          "id": "a",
+          "in": 10,
+          "out": 55,
+          "gapBefore": 4
+        },
+        {
+          "id": "b",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 0
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    }
+  },
+  {
+    "name": "out-shorten",
+    "document": {
+      "fps": 24,
+      "clips": [
+        {
+          "id": "a",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 4,
+          "videoTrack": 1,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        },
+        {
+          "id": "b",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 5,
+          "videoTrack": 1,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    },
+    "clipId": "a",
+    "edge": "out",
+    "frame": 40,
+    "expected": {
+      "clips": [
+        {
+          "id": "a",
+          "in": 10,
+          "out": 40,
+          "gapBefore": 4
+        },
+        {
+          "id": "b",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 15
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    }
+  },
+  {
+    "name": "tail-without-gap",
+    "document": {
+      "fps": 24,
+      "clips": [
+        {
+          "id": "a",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 4,
+          "videoTrack": 1,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    },
+    "clipId": "a",
+    "edge": "out",
+    "frame": 40,
+    "expected": {
+      "clips": [
+        {
+          "id": "a",
+          "in": 10,
+          "out": 40,
+          "gapBefore": 4
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    }
+  },
+  {
+    "name": "tail-with-gap",
+    "document": {
+      "fps": 24,
+      "clips": [
+        {
+          "id": "a",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 4,
+          "videoTrack": 1,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        }
+      ],
+      "tailGap": 8,
+      "videoTailGaps": {}
+    },
+    "clipId": "a",
+    "edge": "out",
+    "frame": 40,
+    "expected": {
+      "clips": [
+        {
+          "id": "a",
+          "in": 10,
+          "out": 40,
+          "gapBefore": 4
+        }
+      ],
+      "tailGap": 18,
+      "videoTailGaps": {}
+    }
+  },
+  {
+    "name": "v2-tail",
+    "document": {
+      "fps": 24,
+      "clips": [
+        {
+          "id": "a",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 4,
+          "videoTrack": 2,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {
+        "2": 8
+      }
+    },
+    "clipId": "a",
+    "edge": "out",
+    "frame": 40,
+    "expected": {
+      "clips": [
+        {
+          "id": "a",
+          "in": 10,
+          "out": 40,
+          "gapBefore": 4
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {
+        "2": 18
+      }
+    }
+  },
+  {
+    "name": "out-media-limit",
+    "document": {
+      "fps": 24,
+      "clips": [
+        {
+          "id": "a",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 4,
+          "videoTrack": 1,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    },
+    "clipId": "a",
+    "edge": "out",
+    "frame": 150,
+    "expected": {
+      "clips": [
+        {
+          "id": "a",
+          "in": 10,
+          "out": 100,
+          "gapBefore": 4
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    }
+  },
+  {
+    "name": "out-minimum",
+    "document": {
+      "fps": 24,
+      "clips": [
+        {
+          "id": "a",
+          "name": "A",
+          "in": 10,
+          "out": 50,
+          "gapBefore": 4,
+          "videoTrack": 1,
+          "takeId": "take",
+          "takes": [
+            {
+              "id": "take",
+              "media": {
+                "frames": 100
+              }
+            }
+          ]
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    },
+    "clipId": "a",
+    "edge": "out",
+    "frame": 0,
+    "expected": {
+      "clips": [
+        {
+          "id": "a",
+          "in": 10,
+          "out": 16,
+          "gapBefore": 4
+        }
+      ],
+      "tailGap": 0,
+      "videoTailGaps": {}
+    }
+  }
+]

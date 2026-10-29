@@ -48,6 +48,9 @@ Replace every placeholder from fresh state. Scope is a command contract, not aut
 | `apply_workflow` | `workflow` | `{clipId, workflowVersion}`; uses an existing project recipe as the library does: resets bindings/values to its defaults, sets the recipe's execution target, resets seed behavior to Fixed and removes old shot routing and take setup. Built-in recipes leave media sources empty. |
 | `brief` | `edit` | `{text}`; changes the project brief. |
 | `feedback` | `feedback` | `{clipId, takeId, verdict}` where verdict is `keep`, `reject`, `revise` or `unrated`; does not select a take. |
+| `rename_clip` | `edit` | `{clipId,name}`; rename a video clip. |
+| `trim_clip` | `edit` | `{clipId,edge:"in"|"out",frame}`; absolute edge in project/source frames, clamped by the same six-frame, source and gap limits as normal studio trimming. Read the applied value. |
+| `use_take` | `use_take` | `{clipId,takeId,capture}`; full adoption using the studio's prepared capture, with atomic revision/replay ownership. Raw take metadata may need binding preparation and live Comfy serialization first; see generation.md. Null is accepted only for a take with no executable metadata. |
 | `choose_take` | `choose_take` | `{clipId, takeId}`; puts the take in the edit and, like Use take, shortens the clip to a shorter take (a gap keeps following clips in place). It does not adopt the take's workflow; use the full adoption flow in generation.md for that. |
 | `cancel` | `cancel` | `{attemptId}`; scope includes the attempt's clip. Targeted adapter support depends on execution state. |
 | `recover_submission` | `recover` | `{attemptId}`; finds an existing owned Deadline submission; does not authorize a new render. |
@@ -98,3 +101,9 @@ The CLI reports non-JSON HTTP failures as `http_error`, connection failures as
 `network_error`, and invalid JSON as `invalid_response` on stderr (exit 1).
 Pass `--wire-json` to preserve tagged exact integers in machine stdout; the default
 prints readable integers. Versionless CLI/agent requests remain supported.
+
+Rename/trim commands target video clips. Independent audio and ripple/roll edits
+still require a revision-checked document save. Use take writes any required
+sidecar after project commit; exact-envelope retry resumes failed delivery
+without repeating adoption. A later manual sidecar change is protected by its
+hash and may require inspection before retrying. None of these actions queue.

@@ -11,7 +11,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from PIL import Image
 
-from spool import sidecars, take_workflow, requests, receipts
+from spool import sidecars, take_workflow, requests, receipts, commands
 from spool.collection import Collector
 from spool.graph_inputs import named_bindings
 from spool.media import Media
@@ -105,6 +105,42 @@ class SidecarTests(unittest.TestCase):
         return sidecars.write(
             self.source, capture or self.capture, lock_root=self.store.root / ".spool/locks", **kwargs
         )
+
+    def test_use_take_command_retries_sidecar_delivery_without_repeating_the_edit(self):
+        self.source.with_suffix(".json").write_text(json.dumps(self.capture["workflow"]))
+        capture = take_workflow.resolve(self.store, self.id, "shot", "take")
+        capture.update(prompt=self.capture["prompt"], result=self.capture["result"], bindings=[])
+        data = {
+            "operationId": "use-sidecar",
+            "revision": self.store.revision(self.id),
+            "actor": "test",
+            "scope": {"projectId": self.id, "clipIds": ["shot"], "capabilities": ["use_take"]},
+            "action": "use_take",
+            "arguments": {"clipId": "shot", "takeId": "take", "capture": capture},
+        }
+        frozen = copy.deepcopy(data)
+        with patch("spool.operations._write_sidecar", side_effect=OSError("controlled write failure")):
+            with self.assertRaisesRegex(OSError, "controlled write failure"):
+                commands.execute(self.store, self.media, self.id, data)
+        saved = self.store.get(self.id)
+        self.assertEqual(
+            saved["revision"], data["revision"] + 1, "The project and operation commit before file delivery"
+        )
+        self.assertEqual(data, frozen)
+        saved["document"]["clips"][0]["name"] = "Human edit"
+        later = self.store.save(self.id, saved["revision"], saved["document"])
+        result = commands.execute(self.store, self.media, self.id, data)
+        self.assertNotIn("_sidecar", result)
+        self.assertEqual(self.store.revision(self.id), later["revision"])
+        self.assertEqual(self.store.clip(self.id, "shot")["name"], "Human edit")
+        self.assertFalse(sidecars.read(self.source)["sidecar"]["needsSerialization"])
+        with patch("spool.operations._write_sidecar") as write:
+            self.assertEqual(commands.execute(self.store, self.media, self.id, data), result)
+            write.assert_not_called()
+        self.write(setup(seed=99))
+        with self.assertRaisesRegex(ValueError, "sidecar changed"):
+            commands.execute(self.store, self.media, self.id, data)
+        self.assertEqual(sidecars.read(self.source)["prompt"]["seed"]["inputs"]["value"], 99)
 
     @patch(
         "spool.media._probe",

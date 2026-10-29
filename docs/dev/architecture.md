@@ -29,7 +29,9 @@ executor. `__main__.py` runs the same routes standalone (`python -m spool`).
 - **Commands and operations:** `commands.py` holds typed agent commands with scope,
   budgets and operation replay. `operations.py` holds the project operations both
   routes and commands perform (take choice and trim refit, workflow assignment,
-  Use take and Apply to clip with their `take.json` ordering).
+  Use take and Apply to clip with their `take.json` ordering). Scoped Use take
+  uses the same capture operation inside the command transaction; its receipt
+  retains an ordered sidecar-delivery plan for hash-checked retry after commit.
 - **Requests and attempts:** `requests.py` freezes a generation request
   independently of a running Comfy. `attempts.py` is the Attempt module: statuses,
   allowed transitions, Cancel policy and `target_of`, the one rule for where an

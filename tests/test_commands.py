@@ -10,9 +10,10 @@ from unittest.mock import patch
 import jsonschema
 from pathlib import Path
 
-from spool import commands, requests, templates
+from spool import commands, requests, templates, operations
 from spool.wire import wire
 from spool.store import Conflict
+from spool.errors import OperationConflict
 import test_queue_operations as fixtures
 
 
@@ -68,6 +69,74 @@ class CommandTests(unittest.TestCase):
         schema = json.loads((Path(__file__).resolve().parent.parent / "spool/command-schema.json").read_text())
         jsonschema.validate(wire(data), schema)
         return value
+
+    def test_scoped_rename_and_trim_replay_preserve_following_positions(self):
+        document = self.project["document"]
+        clip = document["clips"][0]
+        clip["gapBefore"] = 10
+        following = copy.deepcopy(clip)
+        following.update(id="following", gapBefore=20)
+        document["clips"].append(following)
+        self.project = self.store.save(self.project["id"], self.project["revision"], document)
+        rename = self.envelope("rename_clip", {"clipId": "shot", "name": "Renamed"}, capability="edit")
+        renamed = self.execute(rename)
+        self.assertEqual(self.execute(rename), renamed)
+        self.project = self.store.get(self.project["id"])
+        self.assertEqual(self.project["document"]["clips"][0]["name"], "Renamed")
+        trim = self.envelope("trim_clip", {"clipId": "shot", "edge": "in", "frame": 4}, "trim-in", "edit")
+        result = self.execute(trim)
+        self.assertEqual(self.execute(trim), result)
+        self.project = self.store.get(self.project["id"])
+        clip, following = self.project["document"]["clips"]
+        self.assertEqual((clip["in"], clip["out"], clip["gapBefore"], following["gapBefore"]), (4, 24, 14, 20))
+        self.execute(self.envelope("trim_clip", {"clipId": "shot", "edge": "out", "frame": 80}, "trim-out", "edit"))
+        clip, following = self.store.get(self.project["id"])["document"]["clips"]
+        self.assertEqual((clip["out"], following["gapBefore"]), (44, 0))
+        self.assertEqual(clip["gapBefore"] + clip["out"] - clip["in"] + following["gapBefore"], 54)
+        with self.assertRaises(Conflict):
+            self.execute(self.envelope("rename_clip", {"clipId": "shot", "name": "Stale"}, "stale", "edit"))
+        for args in ({"clipId": "shot", "edge": "in", "frame": True}, {"clipId": "shot", "edge": "bad", "frame": 0}):
+            with self.assertRaises(ValueError):
+                self.execute(self.envelope("trim_clip", args, "invalid", "edit"))
+        with self.assertRaises(ValueError):
+            self.execute(self.envelope("rename_clip", {"clipId": "outside", "name": "No"}, "outside", "edit"))
+
+    def test_use_take_adopts_setup_atomically_and_replays_after_intervening_edit(self):
+        capture = self.store.workflow(self.project["document"]["clips"][0]["workflowVersion"])
+        capture["provenance"] = {"takeBase": {"takeId": "original", "source": "Prepared take setup"}}
+        capture["bindings"] = [{"key": "seed", "nodeId": "load", "input": "seed", "label": "Seed"}]
+        command = self.envelope("use_take", {"clipId": "shot", "takeId": "original", "capture": capture})
+        original = copy.deepcopy(command)
+        result = self.execute(command)
+        self.assertEqual(command, original, "Preparation must not mutate the frozen replay envelope")
+        saved = self.store.get(self.project["id"])
+        clip = saved["document"]["clips"][0]
+        self.assertEqual(clip["takeId"], "original")
+        self.assertEqual(clip["generationBase"]["source"], "Prepared take setup")
+        self.assertEqual(clip["inputValues"]["seed"], capture["prompt"]["load"]["inputs"]["seed"])
+        self.assertNotEqual(clip["workflowVersion"], self.project["document"]["clips"][0]["workflowVersion"])
+        saved["document"]["clips"][0]["name"] = "Human edit"
+        later = self.store.save(saved["id"], saved["revision"], saved["document"])
+        self.assertEqual(self.execute(command), result)
+        self.assertEqual(self.store.get(saved["id"])["revision"], later["revision"])
+        self.assertEqual(self.store.get(saved["id"])["document"]["clips"][0]["name"], "Human edit")
+        bad = copy.deepcopy(command)
+        bad["operationId"] = "wrong-take"
+        bad["revision"] = later["revision"]
+        bad["arguments"]["capture"]["provenance"]["takeBase"]["takeId"] = "other"
+        with self.assertRaises(ValueError):
+            self.execute(bad)
+        self.assertIsNone(self.store.operation("wrong-take", saved["id"], bad))
+
+    def test_a_missing_take_replay_receipt_never_repeats_adoption(self):
+        data = self.envelope("use_take", {"clipId": "shot", "takeId": "original", "capture": None})
+        with patch.object(self.store, "operation", return_value=[]):
+            with self.assertRaises(OperationConflict):
+                operations.use_take(
+                    self.store, self.project["id"], self.project["revision"], "shot", "original", command=data
+                )
+        self.assertEqual(self.store.revision(self.project["id"]), self.project["revision"])
+        self.assertIsNone(self.store.operation(data["operationId"], self.project["id"], data))
 
     def test_explore_respects_float_contract_with_integral_default(self):
         recipe = self.store.workflow(self.project["document"]["clips"][0]["workflowVersion"])

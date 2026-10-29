@@ -1,4 +1,6 @@
 import unittest
+import json
+from pathlib import Path
 
 from spool import operations
 
@@ -109,3 +111,19 @@ class RestageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClipTrimTests(unittest.TestCase):
+    def test_normal_trim_matches_shared_timeline_cases(self):
+        cases = json.loads((Path(__file__).parent / "fixtures/clip_trims.json").read_text())
+        for case in cases:
+            with self.subTest(case["name"]):
+                doc = case["document"]
+                clip = next(c for c in doc["clips"] if c["id"] == case["clipId"])
+                operations.trim_clip(doc, clip, case["edge"], case["frame"], 100)
+                snapshot = {
+                    "clips": [{k: c.get(k, 0) for k in ("id", "in", "out", "gapBefore")} for c in doc["clips"]],
+                    "tailGap": doc.get("tailGap", 0),
+                    "videoTailGaps": doc.get("videoTailGaps", {}),
+                }
+                self.assertEqual(snapshot, case["expected"])

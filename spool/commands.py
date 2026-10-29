@@ -20,6 +20,9 @@ ACTION_CAPABILITIES = {
     "set_shot_inputs": "inputs",
     "apply_workflow": "workflow",
     "choose_take": "choose_take",
+    "use_take": "use_take",
+    "trim_clip": "edit",
+    "rename_clip": "edit",
     "feedback": "feedback",
     "brief": "edit",
     "cancel": "cancel",
@@ -36,6 +39,9 @@ ARGUMENT_FIELDS = {
     "set_shot_inputs": {"clipId": str, "inputs": list},
     "apply_workflow": {"clipId": str, "workflowVersion": str},
     "choose_take": {"clipId": str, "takeId": str},
+    "use_take": {"clipId": str, "takeId": str, "capture": (dict, type(None))},
+    "trim_clip": {"clipId": str, "edge": str, "frame": int},
+    "rename_clip": {"clipId": str, "name": str},
     "feedback": {"clipId": str, "takeId": str, "verdict": str},
     "brief": {"text": str},
     "cancel": {"attemptId": str},
@@ -69,6 +75,10 @@ def validate_envelope(data):
     for key, kind in argument_types.items():
         if key in arguments:
             require(isinstance(arguments[key], kind))
+    if action == "trim_clip":
+        require(arguments["edge"] in ("in", "out") and type(arguments["frame"]) is int)
+    if action == "rename_clip":
+        require(1 <= len(arguments["name"].strip()) <= 200)
     if "mode" in arguments:
         require(arguments["mode"] in ("repeat", "explore"))
     if "verdict" in arguments:
@@ -306,6 +316,19 @@ def execute(store, media, project_id, data):
     if action not in ("brief", "cancel", "recover_submission") and not clip_id:
         raise ValueError("Supply an explicit shot ID for this command")
     scope_check(project_id, scope, ACTION_CAPABILITIES[action], [clip_id] if clip_id else [])
+    if action == "use_take":
+        # Resolve replay before preparing inputs or consulting a possibly changed take.
+        if store.operation(identity, project_id, data) is not None:
+            return operations.use_take(store, project_id, revision, clip_id, arguments["takeId"], command=data)
+        capture = arguments["capture"]
+        if capture is None:
+            from . import take_workflow
+
+            if take_workflow.resolve(store, project_id, clip_id, arguments["takeId"]) is not None:
+                raise ValueError("Supply this take's prepared capture to adopt its generation setup")
+        else:
+            capture = media.prepare_workflow(copy.deepcopy(capture), strict=True, allow_external=False)
+        return operations.use_take(store, project_id, revision, clip_id, arguments["takeId"], capture, command=data)
     adopted = None
     cancellation = None
     if action == "cancel":
@@ -372,6 +395,15 @@ def execute(store, media, project_id, data):
             if capture is None:
                 raise ValueError("Captured workflow is outside this project")
             operations.assign_workflow(clip, arguments["workflowVersion"], capture)
+        elif action == "rename_clip":
+            clip["name"] = arguments["name"].strip()
+        elif action == "trim_clip":
+            projected = ledger.attach(copy.deepcopy(document), store.project_attempts(project_id, db))
+            choices = next(c for c in projected["clips"] if c["id"] == clip_id)["takes"]
+            take = next((t for t in choices if t["id"] == clip.get("takeId")), None)
+            if not take:
+                raise ValueError("The chosen take is no longer available")
+            operations.trim_clip(document, clip, arguments["edge"], arguments["frame"], take["media"]["frames"])
         elif action == "choose_take":
             projected = ledger.attach(copy.deepcopy(document), store.project_attempts(project_id, db))
             choices = next(c for c in projected["clips"] if c["id"] == clip_id)["takes"]

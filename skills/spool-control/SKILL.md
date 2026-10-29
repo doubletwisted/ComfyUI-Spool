@@ -40,7 +40,7 @@ python -m spool command PROJECT_ID --url http://127.0.0.1:PORT --file envelope.j
 - For importing media, structural timeline edits, audio, export and project backups, read [editing.md](references/editing.md).
 - For copyable HTTP, atomic source-switch and offline timeline/export examples, read [worked-operations.md](references/worked-operations.md).
 
-Prefer a typed command when it covers the requested change. Use revision-checked document saves for timeline operations that have no command. Do not manipulate SQLite or fabricate generated takes, receipts or execution state.
+Prefer a typed command when it covers the requested change. Video clip rename and normal edge trims have `rename_clip` and `trim_clip`; full prepared take adoption has `use_take`. Use revision-checked document saves for timeline operations that have no command. Do not manipulate SQLite or fabricate generated takes, receipts or execution state.
 
 ## Preserve intent and verify
 

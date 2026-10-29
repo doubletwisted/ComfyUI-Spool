@@ -1155,7 +1155,9 @@ class Store:
             edit.save(document)
         return self.get(project_id)
 
-    def capture(self, project_id, revision, clip_id, capture, overrides=None, take_id=None, reset_inputs=False):
+    def capture(
+        self, project_id, revision, clip_id, capture, overrides=None, take_id=None, reset_inputs=False, command=None
+    ):
         if capture is not None:
             validate_capture(capture)
         elif take_id is None:
@@ -1204,13 +1206,27 @@ class Store:
             clip.pop("shotInputs", None)
             clip.pop("seedKey", None)
             clip["seedMode"] = "same"
-        with self.editing(project_id, revision, "Project changed before capture; reload and capture again") as edit:
+
+        def apply_capture(db):
             if capture is not None:
-                self._capture_clip(edit.db, project_id, clip, capture, overrides)
+                self._capture_clip(db, project_id, clip, capture, overrides)
             else:
                 clip.pop("workflowVersion", None)
                 clip["bindings"], clip["inputValues"] = [], {}
                 clip["revision"] = clip.get("revision", 0) + 1
+
+        if command is not None:
+            envelope, result = command
+
+            def apply(db, current):
+                apply_capture(db)
+                current.clear()
+                current.update(document)
+                return result, True
+
+            return self.command(envelope["operationId"], project_id, revision, envelope, apply)
+        with self.editing(project_id, revision, "Project changed before capture; reload and capture again") as edit:
+            apply_capture(edit.db)
             edit.save(document)
         return self.get(project_id)
 
