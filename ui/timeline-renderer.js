@@ -356,7 +356,25 @@ export function createTimelineRenderer({
     else refreshGestureHints();
     $('seek').max = length;
   }
+  function renderProgress() {
+    for (const [id, node] of laneNodes) {
+      const c = getState().clips.find(c => c.id === id);
+      if (!c) continue;
+      const pending = pendingJobs(c).length,
+        count = T.realTakes(c).length,
+        badge = node.querySelector('.clip-takes-status');
+      if (!badge) continue;
+      badge.classList.toggle('busy', !!pending);
+      const label =
+        (count ? count + ' ' + (count === 1 ? 'take' : 'takes') : '') + (pending ? ' ? ' + pending + ' pending' : '');
+      if (badge.textContent !== label) {
+        badge.textContent = label;
+        invalidateLane();
+      }
+    }
+  }
   return {
+    renderProgress,
     renderTimeline,
     get laneNodes() {
       return laneNodes;

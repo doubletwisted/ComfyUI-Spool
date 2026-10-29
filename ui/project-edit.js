@@ -1,6 +1,6 @@
 // Per-editor ownership of the shared edit. View state, rendering and graph capture
 // stay in adapters; request ordering and revision/draft decisions stay here.
-export function createProjectEdit({ project, document, apply, request, blocked, notify }) {
+export function createProjectEdit({ project, document, apply, request, blocked, notify, progress }) {
   const path = 'projects/' + project.id;
   let revision = project.revision,
     last = signature(),
@@ -128,7 +128,8 @@ export function createProjectEdit({ project, document, apply, request, blocked, 
         value.revision < revision
       )
         return;
-      if (!value.document) {
+      const progressOnly = !value.document;
+      if (progressOnly) {
         const progress = new Map(value.jobs.map(job => [job.id, job]));
         value = {
           ...project,
@@ -139,6 +140,16 @@ export function createProjectEdit({ project, document, apply, request, blocked, 
             jobs: projectJobs().map(({ farmProgress, nodeProgress, ...job }) => ({ ...job, ...progress.get(job.id) })),
           },
         };
+      }
+      if (progressOnly && value.revision === revision) {
+        if (JSON.stringify(value.document.jobs) !== JSON.stringify(projectJobs())) {
+          if (progress) progress(value.document.jobs);
+          else apply(value, false);
+          project = value;
+        }
+        syncToken = value.syncToken;
+        status();
+        return;
       }
       if (value.revision !== revision || JSON.stringify(value.document.jobs) !== JSON.stringify(projectJobs())) {
         if (blocked('replace')) {

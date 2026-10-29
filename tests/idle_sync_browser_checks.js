@@ -66,6 +66,48 @@
       !reads.at(-1).value.document && JSON.stringify(n.state.clips) === before,
     );
     check('Idle sync does not submit generation', !n.state.jobs.length);
+    // Controlled progress transport against installed renderers; no execution.
+    const baseline = await original(path).then(r => r.json());
+    window.fetch = async (input, options) =>
+      String(input) === path && options?.method === 'GET'
+        ? new Response(
+            JSON.stringify({
+              ...baseline,
+              document: { ...baseline.document, jobs: [{ id: 'progress-fixture', clipId: 'shot', status: 'queued' }] },
+            }),
+            { headers: { 'Content-Type': 'application/json' } },
+          )
+        : original(input, options);
+    await n.poll();
+    const authored = n.state,
+      clips = n.state.clips,
+      card = document.querySelector('[data-clip]'),
+      draws = n.laneDraws;
+    window.fetch = async (input, options) =>
+      String(input) === path && options?.method === 'GET'
+        ? new Response(
+            JSON.stringify({
+              revision: baseline.revision,
+              syncToken: baseline.syncToken,
+              jobs: [
+                { id: 'progress-fixture', status: 'running', nodeProgress: [{ id: 'sampler', value: 1, max: 4 }] },
+              ],
+            }),
+            { headers: { 'Content-Type': 'application/json' } },
+          )
+        : original(input, options);
+    await n.poll();
+    check(
+      'Controlled progress updates preserve authored state and installed timeline nodes',
+      n.state === authored &&
+        n.state.clips === clips &&
+        document.querySelector('[data-clip]') === card &&
+        n.laneDraws === draws,
+    );
+    check(
+      'Controlled progress refreshes jobs without marking the document dirty',
+      n.state.jobs[0].nodeProgress[0].value === 1 && !n.dirty,
+    );
   } finally {
     window.fetch = original;
   }

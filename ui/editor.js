@@ -5337,6 +5337,14 @@ async function startEditor(isFailed) {
     project: BOOT,
     document: nativeDocument,
     apply: applyNativeProject,
+    progress: jobs => {
+      state.jobs = jobs;
+      timelineRenderer.renderProgress();
+      renderPendingTakes(selected());
+      queueLabel();
+      renderJobStatus();
+      if ($('queueList')) renderQueueList();
+    },
     request,
     blocked: operation =>
       isFailed() ||

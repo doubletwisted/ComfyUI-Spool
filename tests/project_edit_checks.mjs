@@ -23,7 +23,7 @@ const captureRejected = edit => {
   assert.throws(() => edit.beginCapture({}), /Finish/);
   return true;
 };
-function fixture() {
+function fixture(onProgress) {
   const state = {
     project: 'initial',
     jobs: [],
@@ -65,6 +65,12 @@ function fixture() {
       }
       state.jobs = copy(project.document.jobs);
     },
+    progress: onProgress
+      ? jobs => {
+          state.jobs = copy(jobs);
+          onProgress(jobs);
+        }
+      : undefined,
     request: async (path, body, method, headers) => {
       calls.push({ path, body, method, headers });
       if (hold) return await hold(path, body, method, headers);
@@ -500,3 +506,31 @@ check('A stale in-flight response cannot acknowledge a newer sync token', syncEp
 }
 
 console.log(JSON.stringify({ passed: checks.length, checks }, null, 2));
+
+const progressUpdates = [],
+  progressEdit = fixture(jobs => progressUpdates.push(jobs));
+progressEdit.setHold(() =>
+  Promise.resolve({
+    ...progressEdit.receipt(1, 'initial', [{ id: 'job', status: 'queued', name: 'Kept name' }]),
+    syncToken: 'jobs-1',
+  }),
+);
+await progressEdit.edit.poll();
+const progressClips = progressEdit.state.clips,
+  progressApplies = progressEdit.applied.length;
+progressEdit.setHold(() =>
+  Promise.resolve({
+    revision: 1,
+    syncToken: 'jobs-1',
+    jobs: [{ id: 'job', status: 'running', nodeProgress: [{ id: 'sampler', value: 1, max: 4 }] }],
+  }),
+);
+await progressEdit.edit.poll();
+assert.equal(progressEdit.applied.length, progressApplies, 'Progress-only replies bypass project receipt adoption');
+assert.equal(progressEdit.state.clips, progressClips, 'Progress preserves authored object identity');
+assert.equal(progressUpdates.length, 1);
+assert.equal(progressUpdates[0][0].name, 'Kept name');
+assert.equal(progressUpdates[0][0].nodeProgress[0].value, 1);
+await progressEdit.edit.poll();
+assert.equal(progressUpdates.length, 1, 'Unchanged progress does not repaint');
+assert.equal(progressEdit.edit.dirty, false);
