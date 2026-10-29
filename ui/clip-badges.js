@@ -88,7 +88,7 @@ export function createClipBadges({
       (!notes && !fresh ? ' hidden' : '') +
       '>' +
       (notes
-        ? '<span class="clip-attention-badge notes" data-open-notes="' +
+        ? '<span class="clip-attention-badge open-notes" data-open-notes="' +
           notes +
           '" title="' +
           notes +
@@ -104,7 +104,7 @@ export function createClipBadges({
           '</span>'
         : '') +
       (fresh
-        ? '<span class="clip-attention-badge takes" data-unseen-takes="' +
+        ? '<span class="clip-attention-badge unseen-takes" data-unseen-takes="' +
           fresh +
           '" title="' +
           fresh +

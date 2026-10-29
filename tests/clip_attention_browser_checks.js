@@ -58,6 +58,22 @@
   });
   const fresh = clip().takes.filter(t => !before.has(t.id) && t.generated);
   check('Three real CPU arrivals appear as unseen without selecting the clip', count('unseen-takes') === 3);
+  check(
+    'The unseen-take badge is visible on the timeline clip',
+    (() => {
+      const shown = badge('unseen-takes'),
+        box = shown.getBoundingClientRect(),
+        label = shown.closest('.clip-label').getBoundingClientRect();
+      return (
+        shown.checkVisibility() &&
+        box.width > 0 &&
+        box.top >= label.top &&
+        box.bottom <= label.bottom &&
+        box.left >= label.left &&
+        box.right <= label.right
+      );
+    })(),
+  );
   const freshCards = () => fresh.map(t => d.querySelector('[data-take="' + t.id + '"]'));
   check(
     'Each new arrival is marked on its own take card',

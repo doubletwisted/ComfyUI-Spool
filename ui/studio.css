@@ -5870,12 +5870,12 @@ input[type='range'] {
   width: 10px;
   height: 10px;
 }
-.clip-attention-badge.notes {
+.clip-attention-badge.open-notes {
   color: #ffcf77;
   background: #30250e;
   border-color: #705321;
 }
-.clip-attention-badge.takes {
+.clip-attention-badge.unseen-takes {
   color: #abd4ff;
   background: #122b44;
   border-color: #396080;
@@ -6072,10 +6072,7 @@ input[type='range'] {
   stroke: currentColor;
   stroke-width: 1.5;
 }
-.clip-attention-badge.takes {
-  position: absolute;
-  right: 4px;
-  bottom: 20px;
+.clip-attention-badge.unseen-takes {
   width: auto;
   min-width: 22px;
   height: 15px;
@@ -6084,8 +6081,7 @@ input[type='range'] {
   border-radius: 4px;
 }
 @container (max-width:40px) {
-  .clip-attention-badge.takes {
-    right: 1px;
+  .clip-attention-badge.unseen-takes {
     min-width: 19px;
     font-size: 7px;
     padding: 1px 2px;
