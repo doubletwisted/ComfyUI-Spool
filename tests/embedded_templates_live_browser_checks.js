@@ -5,10 +5,14 @@
     n = w.spoolNative,
     $ = id => d.getElementById(id) || n.dialogRoot.getElementById(id),
     checks = [];
-  const searchLtx = frame => {
+  const searchLtx = async frame => {
     const input = frame.contentDocument.querySelector('[aria-labelledby="global-workflow-template-selector"] input');
     input.value = 'LTX';
     input.dispatchEvent(new frame.contentWindow.Event('input', { bubbles: true }));
+    // Let Vue paint the pending search before checking it. In frontend 1.57 the
+    // 400 ms debounce can replace cards already on screen and cancel their load.
+    await new Promise(resolve => frame.contentWindow.requestAnimationFrame(resolve));
+    await wait(() => !input.closest('label')?.querySelector('.animate-spin'));
   };
   const check = (label, value) => {
       if (!value) throw Error(label);
@@ -70,7 +74,7 @@
   );
   // The native chooser virtualizes its cards; search rather than assuming LTX
   // appears in the first screen of an evolving installed template catalog.
-  searchLtx(frame);
+  await searchLtx(frame);
   await wait(() => native.querySelector('h3[title="LTX-2.3: Image to Video"]'));
   const selected = native.querySelector('h3[title="LTX-2.3: Image to Video"]');
   check('Installed LTX template is available', !!selected);
@@ -139,7 +143,7 @@
   media.remove();
   $('browseComfyTemplates').click();
   await wait(() => $('comfyTemplateBrowser')?.classList.contains('ready'));
-  searchLtx($('comfyTemplateBrowser'));
+  await searchLtx($('comfyTemplateBrowser'));
   await wait(() => $('comfyTemplateBrowser').contentDocument.querySelector('h3[title="LTX-2.3: Image to Video"]'));
   return {
     checks,

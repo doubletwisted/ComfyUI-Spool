@@ -109,6 +109,11 @@ fails on any page exception. Without names it runs every check except the opt-in
 profiles (`workflow-project-profile`, `workflow-capture-bundle`); check names are
 the keys of `CHECKS` in `tests/run_browser_checks.cjs`.
 
+`embedded-templates-live` uses the installed native Comfy chooser. Wait for its
+search indicator to settle before clicking a result: frontend 1.57 debounces
+search and cancels pending template preparation when the results change, even
+if the chosen card was already visible before searching.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SPOOL_BROWSER_BASE` | `http://127.0.0.1:8195` | Test host address |

@@ -5,6 +5,8 @@ All notable changes to Spool are recorded here. Versions follow
 
 ## 0.1.0 (unreleased)
 
+- Wait for ComfyUI's debounced template search in the live browser check, avoiding
+  cancelled selections with frontend 1.57.4. Template selection behavior is unchanged.
 - Fetch compact take summaries in the studio and load full take evidence on demand.
   Current local reads bypass the shared project lock; settled receipts are checked
   less often. Keep completion times when diagnostic history expires after 30 days,
