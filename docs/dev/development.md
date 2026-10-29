@@ -66,15 +66,6 @@ pull requests that change more than docs. Run it by hand from the Actions tab to
 also cover Windows and macOS; macOS minutes cost ten times as much in a private
 repository. Browser and live checks still run locally.
 
-## Agent skill evals
-
-[`evals/`](../../evals/README.md) measures how a model following the shipped
-`spool-control` skill handles scoped commands, notes, budgets and safe retries on
-synthetic projects. The gate runs its simulator, grader and scripted-model loop
-tests offline, with no host, API key or charge. Real Anthropic/OpenAI runs are
-manual and paid: run them only when the owner asks, following the eval README.
-Keep simulated scores separate from live evidence.
-
 ## A test host
 
 Browser and live checks use an isolated CPU ComfyUI host. It keeps projects,

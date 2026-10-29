@@ -1,6 +1,5 @@
 # Development material that Comfy Registry packages leave out.
 tests/
-evals/
 promo/
 .native-test/
 docs/archive/

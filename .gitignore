@@ -6,7 +6,6 @@ node_modules/
 *.tmp.html
 *.tmp.mjs
 .worktrees/
-evals/runs/
 
 # Kept on the maintainer's machine only.
 /AGENTS.local.md
