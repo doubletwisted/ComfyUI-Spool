@@ -1,7 +1,7 @@
 // The studio's keyboard and pointer shortcuts, grouped for the shortcut sheet.
 // Keep in step with the editor's keydown handler in ui/editor.js.
 import { keyText } from './keys.js';
-export const SHORTCUTS = Object.freeze([
+const SHORTCUTS = Object.freeze([
   [
     'Playback and review',
     [

@@ -18,10 +18,11 @@ if os.name == "nt":
 missing = []
 if importlib.util.find_spec("ruff") is None:
     missing.append("ruff (python -m pip install -r requirements-dev.txt)")
-if not (ROOT / "node_modules" / "prettier").is_dir() or not (ROOT / "node_modules" / "eslint").is_dir():
-    missing.append("Prettier and ESLint (npm ci)")
-if not (ROOT / "node_modules" / "typescript").is_dir():
-    missing.append("TypeScript (npm ci)")
+node_tools = [
+    name for name in ("prettier", "eslint", "knip", "typescript") if not (ROOT / "node_modules" / name).is_dir()
+]
+if node_tools:
+    missing.append(", ".join(node_tools) + " (npm ci)")
 if missing:
     sys.exit("The gate needs " + " and ".join(missing) + ". See docs/dev/development.md.")
 
@@ -30,6 +31,7 @@ commands = [
     [sys.executable, "-m", "ruff", "check", "."],
     ["node", "node_modules/prettier/bin/prettier.cjs", "--check", "."],
     ["node", "node_modules/eslint/bin/eslint.js", "."],
+    ["node", "node_modules/knip/bin/knip.js", "--no-progress"],
     ["node", "node_modules/typescript/bin/tsc", "--project", "tsconfig.json"],
     [sys.executable, "tests/editor_contract_checks.py"],
 ]

@@ -1,8 +1,8 @@
 import { inheritLineage } from './ledger.js';
 // Authored timeline operations mutate the supplied document. UI and persistence stay in the editor.
-export const MIN_FRAMES = 6,
-  SPLIT_MARGIN = 6,
-  SNAP_PIXELS = 7;
+const MIN_FRAMES = 6,
+  SPLIT_MARGIN = 6;
+export const SNAP_PIXELS = 7;
 const copy = x => JSON.parse(JSON.stringify(x));
 const clamp = (x, min, max) => Math.max(min, Math.min(max, x));
 const defaultAudioTracks = { sourceMuted: false, sourceSolo: false, musicMuted: false, musicSolo: false };
@@ -120,7 +120,7 @@ export function gapAfter(doc, index) {
     next = clips[clips.indexOf(c) + 1];
   return next ? next.gapBefore || 0 : tailGap(doc, videoTrack(c));
 }
-export function setGapAfter(doc, index, frames) {
+function setGapAfter(doc, index, frames) {
   if (gapAfter(doc, index) === frames) return;
   const c = doc.clips[index],
     clips = trackClips(doc, videoTrack(c)),
@@ -334,7 +334,7 @@ export function audioNeighbor(doc, c, edge) {
     )
   );
 }
-export const pictureEnd = doc => Math.max(0, ...layout(doc).map(r => r.end));
+const pictureEnd = doc => Math.max(0, ...layout(doc).map(r => r.end));
 export function exportRange(doc) {
   const limit = total(doc),
     end = clamp(
@@ -460,7 +460,7 @@ export function addVideoTrack(doc) {
   return (doc.videoTracks = videoTracks(doc) + 1);
 }
 export const sourceTrackHidden = (doc, track) => (doc.audioTracks?.hiddenSourceTracks || []).includes(track);
-export function showAudioTrack(doc, kind, track = 1) {
+function showAudioTrack(doc, kind, track = 1) {
   doc.audioTracks ??= {};
   if (kind === 'music') doc.audioTracks.musicHidden = false;
   else doc.audioTracks.hiddenSourceTracks = (doc.audioTracks.hiddenSourceTracks || []).filter(t => t !== track);

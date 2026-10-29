@@ -2,7 +2,7 @@
 // so only the labels change: Ctrl reads Cmd and Alt reads Option on a Mac.
 export const isMac = platform => /mac|iphone|ipad/i.test(platform || '');
 
-export const MAC =
+const MAC =
   typeof navigator !== 'undefined' &&
   isMac(
     /** @type {Navigator & {userAgentData?: {platform?: string}}} */ (navigator).userAgentData?.platform ||

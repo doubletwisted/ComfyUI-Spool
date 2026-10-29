@@ -128,7 +128,7 @@ export function editSignature(project) {
   );
 }
 // A media record is the same shape in Python and here: a string id and a media kind.
-export function mediaRecords(value, found = []) {
+function mediaRecords(value, found = []) {
   if (Array.isArray(value)) {
     for (const child of value) mediaRecords(child, found);
   } else if (value && typeof value === 'object') {

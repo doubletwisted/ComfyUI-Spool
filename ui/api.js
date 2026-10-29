@@ -24,7 +24,7 @@ export function requestLabel(path, verb) {
 }
 
 // A failed reply carries its status and, for revision conflicts, the current project.
-export async function replyValue(response, fallback = 'Spool request failed') {
+async function replyValue(response, fallback = 'Spool request failed') {
   let value = null;
   try {
     value = await response.json();

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "ui/bootstrap.js",
+    "ui/editor.js",
+    "web/*.js",
+    "tests/*.{mjs,cjs}",
+    "tests/*_browser_checks.js"
+  ],
+  "project": [
+    "ui/**/*.js",
+    "web/**/*.js",
+    "tests/**/*.{js,mjs,cjs}"
+  ],
+  "paths": {
+    "/spool/ui/*": [
+      "ui/*"
+    ]
+  },
+  "ignoreUnresolved": [
+    "/scripts/app.js",
+    "../../scripts/app.js"
+  ]
+}
