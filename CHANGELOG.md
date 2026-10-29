@@ -12,6 +12,9 @@ All notable changes to Spool are recorded here. Versions follow
   size without upscaling. Keep copies in the machine-local workspace cache and
   remove the Full / 1/2 / 1/4 playback setting. Single-media reads skip take-ledger
   projection, and playback requests return immediately while encoding continues.
+- Refresh browser playback when a source is replaced, prepare newly collected
+  takes without an edit, and stop active playback encoding during shutdown.
+  First-video imports prepare at the resolved footage frame rate.
 
 - Fetch compact take summaries in the studio and load full take evidence on demand.
   Current local reads bypass the shared project lock; settled receipts are checked

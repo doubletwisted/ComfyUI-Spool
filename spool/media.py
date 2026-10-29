@@ -61,7 +61,8 @@ def _video_stream(probe):
     )
 
 
-def _review_probe(path, fps):
+def _review_probe(path, fps, run=None):
+    run = run or subprocess.run
     probe = _probe(path)
     duration = int(_video_stream(probe)["nb_frames"]) / fps
     if (
@@ -71,7 +72,7 @@ def _review_probe(path, fps):
         # -shortest can leave buffered AAC packets beyond the final video frame.
         pending = path.with_name(path.stem + "-" + uid() + ".mp4")
         try:
-            subprocess.run(
+            run(
                 [
                     find_tool("ffmpeg"),
                     "-v",
@@ -1066,6 +1067,7 @@ class Media:
     def preview(self, metadata, width, height, fps):
         """Cache a timeline-sized playback source, shared by shots from the same original."""
         source = self.original_source(metadata)
+        run = self.playback.run if self.playback is not None else subprocess.run
         output = self.preview_path(metadata, width, height, fps)
         output.parent.mkdir(parents=True, exist_ok=True)
         if not output.exists():
@@ -1081,7 +1083,7 @@ class Media:
                     if not ffmpeg:
                         raise ValueError("Install ffmpeg for video playback")
                     native = rate(source["fps"] or _video_stream(_probe(source["path"]))["avg_frame_rate"], fps)
-                    subprocess.run(
+                    run(
                         [
                             ffmpeg,
                             "-v",
@@ -1125,7 +1127,7 @@ class Media:
                         capture_output=True,
                         timeout=1800,
                     )
-                    _review_probe(pending, fps)
+                    _review_probe(pending, fps, run)
                 pending.replace(output)
             finally:
                 pending.unlink(missing_ok=True)

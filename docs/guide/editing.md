@@ -121,6 +121,9 @@ shorter than the take.
   database; shared project folders keep originals, import proxies and shot files.
   Export always reads the originals. Older `.spool/previews` playback copies are
   unused and can be reclaimed with `python -m spool prune`.
+  Newly received takes prepare without an edit. Reviewing a replacement file uses
+  its new playback copy. Closing the host stops unfinished playback encoding;
+  it can prepare again next time.
 - Right-click the viewer for **Export frame** (a full-resolution PNG), **Fit to
   viewer** and **Fullscreen**.
 

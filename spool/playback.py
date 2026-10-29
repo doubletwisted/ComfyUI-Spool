@@ -1,7 +1,8 @@
 """One bounded playback encoder shared by every project on this host."""
 
 import threading
-from concurrent.futures import ThreadPoolExecutor, Future
+import subprocess
+from concurrent.futures import ThreadPoolExecutor, Future, CancelledError
 
 
 class PlaybackQueue:
@@ -9,10 +10,14 @@ class PlaybackQueue:
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="spool-playback")
         self.lock = threading.Lock()
         self.jobs = {}
+        self.closed = False
+        self.process = None
 
     def submit(self, media, record, width, height, fps):
         key = media.preview_path(record, width, height, fps)
         with self.lock:
+            if self.closed:
+                raise CancelledError("Playback preparation stopped")
             if key.is_file():
                 future = Future()
                 future.set_result(media.preview_result(record, width, height, fps))
@@ -48,5 +53,40 @@ class PlaybackQueue:
             raise
         return media.preview_result(record, width, height, fps)
 
+    def run(self, command, *, check, capture_output, timeout):
+        """Run playback ffmpeg with shutdown ownership, including its final remux."""
+        with self.lock:
+            if self.closed:
+                raise CancelledError("Playback preparation stopped")
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE if capture_output else None,
+                stderr=subprocess.PIPE if capture_output else None,
+            )
+            self.process = process
+        try:
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate()
+                raise
+            result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+            if check:
+                result.check_returncode()
+            return result
+        finally:
+            with self.lock:
+                self.process = None
+            if process.stdout:
+                process.stdout.close()
+            if process.stderr:
+                process.stderr.close()
+
     def close(self):
+        with self.lock:
+            self.closed = True
+            if self.process is not None:
+                # communicate() in the worker reaps it before shutdown joins that worker.
+                self.process.kill()
         self.executor.shutdown(wait=True, cancel_futures=True)

@@ -872,7 +872,9 @@ def register(server, store, media, executor=None):
                 shot.update({key: source[key] for key in ("workflow", "prompt", "workflowData") if key in source})
         if request.query.get("projectId"):
             document = await asyncio.to_thread(store.document, request.query["projectId"])
-            await asyncio.to_thread(media.prepare_playback, {**document, "clips": [], "media": [source]})
+            await asyncio.to_thread(
+                media.prepare_playback, {**document, "fps": footage["fps"], "clips": [], "media": [source]}
+            )
         return response(footage)
 
     @routes.post("/spool/api/export")

@@ -61,7 +61,7 @@ export function createProjectDialogs({
         getFps() +
         '" ' +
         (occupied ? 'readonly' : '') +
-        '></label><p class="small">Resolution sets the timeline and export size. Preview Full uses this size; 1/2 and 1/4 reduce playback resolution. Export uses original footage. Workflow generation size is controlled by each workflow.</p><p class="small">' +
+        '></label><p class="small">Resolution sets the timeline and export size. Playback copies are prepared automatically at this size without upscaling. Export uses original footage. Workflow generation size is controlled by each workflow.</p><p class="small">' +
         (occupied
           ? 'Frame rate is fixed after media is added to preserve edit timing.'
           : 'The first video sets the frame rate unless you choose one here.') +

@@ -148,5 +148,30 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 0));
   check('Completion notifies once', changes.join() === 'ready');
 }
 
+// Replacements and refreshed server proxies must not inherit a ready browser entry.
+{
+  const asked = [];
+  const previews = createPreviews({
+    target: () => ({ width: 960, height: 540, fps: 24 }),
+    request: async m => {
+      asked.push(m);
+      return { file: '_playback/' + asked.length + '.mp4' };
+    },
+    changed: () => {},
+  });
+  const first = media('first');
+  await previews.status(first).pending;
+  const replacement = { ...first, id: 'replacement' };
+  const entry = previews.status(replacement);
+  check('A new media id at the same source path requests its own playback', entry.state === 'preparing');
+  await entry.pending;
+  check('The replacement plays its new copy', entry.file === '_playback/2.mp4');
+  const refreshed = { ...replacement, file: 'previews/new-source-signature.mp4' };
+  const refreshedEntry = previews.status(refreshed);
+  check('A changed server proxy signature invalidates the same media id', refreshedEntry.state === 'preparing');
+  await refreshedEntry.pending;
+  check('The refreshed source plays its new copy', refreshedEntry.file === '_playback/3.mp4');
+}
+
 console.log('Previews: sizing, sharing, failure, retry and clearing passed');
 console.log(checks.length + ' checks');

@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
@@ -676,6 +676,33 @@ class ProjectFolderTests(unittest.TestCase):
             self.capture["prompt"]["save"],
         )
 
+    def test_receipt_arrival_prepares_playback_without_an_authored_edit(self):
+        project = requests.accept(
+            self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}]
+        )
+        attempt = self.store.attempt(project["document"]["jobs"][0]["id"])
+        self.base_media.playback = Mock()
+        collector = Collector(self.workspace, self.base_media)
+        collector.scan()
+        before = self.store.sync_state(project["id"])
+        self.base_media.playback.submit.reset_mock()
+        Image.new("RGB", (16, 16), "blue").save(self.roots[1] / "result.png")
+        history = {
+            "status": {"completed": True, "status_str": "success"},
+            "outputs": {"save": {"images": [{"filename": "result.png", "type": "output"}]}},
+        }
+        artifacts, primary = self.media.collect(attempt, history, False)
+        receipts.write(self.media.receipt_path(attempt).parent, attempt, artifacts, primary, history)
+        collector.scan()
+        after = self.store.sync_state(project["id"])
+        self.assertEqual(after["revision"], before["revision"])
+        self.assertGreater(after["cursor"], before["cursor"])
+        submitted = self.base_media.playback.submit.call_args_list
+        self.assertTrue(any(call.args[1]["id"] == primary["id"] for call in submitted), "New receipt was not prepared")
+        self.base_media.playback.submit.reset_mock()
+        collector.scan()
+        self.base_media.playback.submit.assert_not_called()
+
     def test_local_result_goes_to_clip_folder_and_receipt_recovery_is_portable(self):
         project = requests.accept(
             self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}]
@@ -1159,6 +1186,28 @@ class ProjectFolderTests(unittest.TestCase):
         self.store.save(project["id"], project["revision"], project["document"])
         with self.assertRaisesRegex(ValueError, "no longer"):
             self.store.media_record(project["id"], "render")
+
+    def test_import_prepares_playback_at_resolved_footage_rate(self):
+        async def check():
+            server = SimpleNamespace(routes=web.RouteTableDef(), app=web.Application())
+            register(server, self.workspace, self.base_media)
+            server.app.cleanup_ctx.clear()
+            server.app.add_routes(server.routes)
+            footage = {"fps": 30, "source": {"id": "source", "kind": "video"}, "shots": []}
+            with (
+                patch.object(Media, "keep_input", return_value=self.root / "video.mp4"),
+                patch.object(Media, "import_footage", return_value=footage),
+                patch.object(Media, "prepare_playback") as prepare,
+            ):
+                async with TestClient(TestServer(server.app)) as client:
+                    response = await client.post(
+                        "/spool/api/import-footage?projectId=" + self.project["id"],
+                        json={"path": str(self.root / "video.mp4"), "detectCuts": False},
+                    )
+                    self.assertEqual(response.status, 200, await response.text())
+                    self.assertEqual(prepare.call_args.args[0]["fps"], 30)
+
+        asyncio.run(check())
 
     def test_preview_returns_preparing_while_encoder_is_blocked(self):
         async def check():

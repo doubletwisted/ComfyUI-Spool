@@ -20,7 +20,7 @@ class Collector:
         self.folders = FolderTakes()
         self.history_checked = {}
         self.retained_at = {}
-        self.playback_revisions = {}
+        self.playback_checkpoints = {}
 
     def annotate_progress(self, project):
         for job in project["document"]["jobs"]:
@@ -84,10 +84,11 @@ class Collector:
         if media.project_id:
             self.folders.scan(store, media, project_id)
         if media.playback is not None and project_id:
-            revision = store.revision(project_id)
-            if self.playback_revisions.get(key) != revision:
+            state = store.sync_state(project_id)
+            checkpoint = (state["revision"], state["cursor"])
+            if self.playback_checkpoints.get(key) != checkpoint:
                 media.prepare_playback(store.projected(project_id))
-                self.playback_revisions[key] = revision
+                self.playback_checkpoints[key] = checkpoint
         if key not in self.retained_at or now - self.retained_at[key] >= 86400:
             store.retain_history()
             self.retained_at[key] = now

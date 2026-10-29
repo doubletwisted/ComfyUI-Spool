@@ -1,11 +1,12 @@
 """Playback queue coordination, cache identity and legacy cleanup, without timed sleeps."""
 
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from threading import Event
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from PIL import Image
 
@@ -119,3 +120,55 @@ class PlaybackTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "encoder failed"):
                 queue.status(self.media, self.record, 320, 180, 24)
         queue.submit(self.media, self.record, 320, 180, 24).result(timeout=10)
+
+    def test_shutdown_reaps_active_encoder_and_removes_partial_output(self):
+        queue = PlaybackQueue()
+        self.media.playback = queue
+        source = self.root / "video.mp4"
+        source.write_bytes(b"video fixture")
+        record = {"id": "video", "kind": "video", "file": source.name, "fps": "24/1"}
+        entered, release = Event(), Event()
+        process = Mock(returncode=-15)
+        process.kill.side_effect = release.set
+
+        def communicate(**kwargs):
+            entered.set()
+            if not release.wait(10):
+                raise AssertionError("Encoder was not stopped")
+            return b"", b"terminated"
+
+        process.communicate.side_effect = communicate
+
+        def start(command, **kwargs):
+            Path(command[-1]).write_bytes(b"partial video")
+            return process
+
+        def old_run(command, **kwargs):
+            start(command)
+            communicate()
+            raise subprocess.CalledProcessError(-15, command)
+
+        shutdown = queue.executor.shutdown
+
+        def join(**kwargs):
+            # Check ordering without blocking shutdown on a deliberately held encode.
+            process.kill.assert_called_once()
+            shutdown(**kwargs)
+
+        with (
+            patch("spool.media.find_tool", return_value="ffmpeg"),
+            patch("subprocess.Popen", side_effect=start),
+            patch("subprocess.run", side_effect=old_run),
+            patch.object(queue.executor, "shutdown", side_effect=join),
+        ):
+            pending = queue.submit(self.media, record, 960, 540, 24)
+            try:
+                self.assertTrue(entered.wait(5))
+                queue.close()
+                self.assertTrue(pending.done())
+                self.assertIsInstance(pending.exception(), subprocess.CalledProcessError)
+                process.communicate.assert_called_once()
+                self.assertEqual(list(self.media.playback_cache.glob("*.mp4")), [])
+            finally:
+                release.set()
+                shutdown(wait=True, cancel_futures=True)

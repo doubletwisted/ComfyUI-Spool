@@ -8,7 +8,9 @@ export function createPreviews({
   const entries = new Map();
   const keyFor = media => {
     const size = target();
-    return [media.originalFile || media.file, size.width, size.height, size.fps].join('|');
+    // The server's review file includes its source signature; replacements also get a new media id.
+    // Source-level sharing belongs to the backend, which can verify the file on disk.
+    return JSON.stringify([media.id, media.originalFile, media.file, size.width, size.height, size.fps]);
   };
 
   function status(media) {
