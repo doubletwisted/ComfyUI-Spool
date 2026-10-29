@@ -67,8 +67,8 @@ current media and unions imported workflows for undo/redo/cancel.
 Conflict reload retains its explicit history clear: a remote library-only change
 can have the same edit signature, so `receiveProject` does not always clear it.
 
-Compact poll responses containing only job status/progress use the `progress`
-adapter. They retain authored object identity and the accepted revision. The
+Compact poll responses and full same-revision receipts containing only job
+status/progress use the `progress` adapter. They retain authored object identity and the accepted revision. The
 studio patches render rows, pending-take status and clip badges without adopting
 a project receipt or rebuilding timeline/inspector DOM. Full receipts continue
 through the existing revision and ledger-adoption checks.

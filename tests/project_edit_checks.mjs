@@ -516,6 +516,7 @@ progressEdit.setHold(() =>
   }),
 );
 await progressEdit.edit.poll();
+progressUpdates.length = 0;
 const progressClips = progressEdit.state.clips,
   progressApplies = progressEdit.applied.length;
 progressEdit.setHold(() =>
@@ -534,3 +535,19 @@ assert.equal(progressUpdates[0][0].nodeProgress[0].value, 1);
 await progressEdit.edit.poll();
 assert.equal(progressUpdates.length, 1, 'Unchanged progress does not repaint');
 assert.equal(progressEdit.edit.dirty, false);
+
+progressEdit.setHold(() =>
+  Promise.resolve({
+    ...progressEdit.receipt(1, 'initial', [{ id: 'job', status: 'complete', name: 'Kept name' }]),
+    syncToken: 'jobs-2',
+  }),
+);
+await progressEdit.edit.poll();
+assert.equal(
+  progressEdit.state.clips,
+  progressClips,
+  'Full same-revision progress receipts also preserve authored identity',
+);
+assert.equal(progressEdit.applied.length, progressApplies, 'Full job-only receipts bypass project adoption');
+assert.equal(progressUpdates.length, 2);
+assert.equal(progressEdit.state.jobs[0].status, 'complete');

@@ -129,8 +129,13 @@ export function createProjectEdit({ project, document, apply, request, blocked, 
         value.revision < revision
       )
         return;
-      const progressOnly = !value.document;
-      if (progressOnly) {
+      const withoutJobs = ({ jobs, ...document }) => document;
+      const progressOnly =
+        !value.document ||
+        (value.revision === revision &&
+          JSON.stringify(withoutJobs(value.document)) === JSON.stringify(withoutJobs(project.document)) &&
+          JSON.stringify(value.recipes) === JSON.stringify(project.recipes));
+      if (!value.document) {
         const progress = new Map(value.jobs.map(job => [job.id, job]));
         value = {
           ...project,
