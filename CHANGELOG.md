@@ -11,6 +11,7 @@ All notable changes to Spool are recorded here. Versions follow
   and retain operation identities to prevent expired commands from running again.
 - Track newly discovered external files across same-folder renames. Replacements
   become new takes and never silently replace the take already in the edit.
+- Busy queue and processing indicators use steady highlights instead of opacity pulses.
 - Job progress refreshes Renders and clip badges without rebuilding the current edit.
 
 - Stabilize API failures with error codes, publish command actions and a command

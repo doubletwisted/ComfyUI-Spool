@@ -178,7 +178,7 @@ are left alone when their origin cannot be proved.
 ## Renders
 
 **Renders** in the top bar opens a panel beside the studio; you can keep editing
-while it is open. It groups takes by shot, with each one's stage, progress and
+while it is open. Busy indicators use steady highlights. It groups takes by shot, with each one's stage, progress and
 time. Progress updates keep the current edit and timeline controls in place.
 Expand a row for its seed, worker, output path and execution record.
 
