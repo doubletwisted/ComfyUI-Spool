@@ -171,7 +171,8 @@ class SidecarTests(unittest.TestCase):
     def test_a_take_made_without_optional_inputs_keeps_them_in_its_workflow(self):
         loader = lambda node: {"id": node, "type": "LoadImage", "widgets_values": [""], "widgets_values_named": {"image": ""}}
         graph = {"version": .4, "nodes": [loader("ref1"), loader("ref2"), {"id": "gen", "type": "Reference"}, {"id": "save", "type": "SaveVideo"}], "links": []}
-        prompt = {"ref1": {"class_type": "LoadImage", "inputs": {"image": ""}}, "ref2": {"class_type": "LoadImage", "inputs": {"image": ""}},
+        # The recipe still names a reference that was removed before this run.
+        prompt = {"ref1": {"class_type": "LoadImage", "inputs": {"image": ""}}, "ref2": {"class_type": "LoadImage", "inputs": {"image": "removed-reference.png"}},
                   "gen": {"class_type": "Reference", "inputs": {"image_1": ["ref1", 0], "image_2": ["ref2", 0], "seed": 1}},
                   "save": {"class_type": "SaveVideo", "inputs": {"video": ["gen", 0], "filename_prefix": "result"}}}
         slot = lambda key, node: {"key": key, "nodeId": node, "input": "image", "asset": True, "optional": True, "group": "Images", "omit": [node]}

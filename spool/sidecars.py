@@ -106,6 +106,10 @@ def write_result(store, media, attempt, result):
         # Empty optional inputs were left out of the run. Keep the recipe's nodes and
         # links so Use take restores them, with the values the take used.
         full = copy.deepcopy(capture["prompt"])
+        omitted = set(attempt["request"]["omittedInputs"])
+        for binding in capture.get("bindings", []):
+            if binding["key"] in omitted and binding["nodeId"] in full:
+                full[binding["nodeId"]]["inputs"][binding["input"]] = ""
         for identity, node in prompt.items():
             if identity in full:
                 full[identity]["inputs"].update({k: v for k, v in node["inputs"].items() if not isinstance(v, list)})
