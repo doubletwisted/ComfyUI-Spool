@@ -1023,6 +1023,12 @@ class ProjectFolderTests(unittest.TestCase):
         with patch("spool.system.deadline_installed", return_value=True):
             with self.assertRaisesRegex(ValueError, "not on this farm"):
                 choose({"target": "deadline", "deadline": {"pool": "cpu"}}, "unknown-pool")
+            with self.assertRaisesRegex(ValueError, "separated by commas"):
+                choose({"target": "deadline", "deadline": {"machine_list": "GPU 01"}}, "bad-workers")
+            self.assertEqual(
+                requests.deadline_launcher(definitions, {"machine_list": " GPU01, GPU02 ,"})["inputs"]["machine_list"],
+                "GPU01,GPU02",
+            )
             with self.assertRaisesRegex(ValueError, "renders on local or deadline"):
                 choose({"target": "cloud"}, "cloud")
             choose({"target": "deadline", "deadline": {"pool": "gpu", "priority": 70}}, "deadline")

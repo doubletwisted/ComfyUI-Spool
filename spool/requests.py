@@ -1,6 +1,7 @@
 """Freeze generation requests independently of a running Comfy executor."""
 
 import copy
+import re
 
 from . import attempts, cloud, system
 from .media import SAVER_GROUPS, contained, sha256
@@ -69,6 +70,11 @@ def deadline_launcher(definitions, settings):
                 raise ValueError("Choose a Deadline " + name + " within its range")
         elif not isinstance(value, str):
             raise ValueError("Deadline " + name + " must be text")
+        if name == "machine_list":
+            # The plugin's job writer accepts only bare comma-separated names, as its node sends them.
+            value = ",".join(part.strip() for part in value.split(",") if part.strip())
+            if value and not re.fullmatch(r"[A-Za-z0-9_,.\-]+", value):
+                raise ValueError("List Deadline workers by name, separated by commas")
         inputs[name] = value
     return {"class_type": "DeadlineSubmit", "inputs": inputs}
 
