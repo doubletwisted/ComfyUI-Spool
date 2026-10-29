@@ -34,14 +34,22 @@ executor. `__main__.py` runs the same routes standalone (`python -m spool`).
   independently of a running Comfy. `attempts.py` is the Attempt module: statuses,
   allowed transitions, Cancel policy and `target_of`, the one rule for where an
   attempt computes. `ownership.py` gives one process the dispatch role.
-- **Execution targets:** three adapters behind `attempts.target_of`.
-  `execution.py` runs the host checks every local or Deadline attempt passes, then
-  submits to this Comfy's queue (local) or to Deadline. `farm.py` observes and
-  collects Deadline jobs and holds every `deadlinecommand` call (ownership lookup,
-  fail, recovery search); `deadline_job.py`, `deadline_task.py` and
-  `farm_protocol.py` are the submission, worker script and receipt protocol.
-  `cloud.py` dispatches, observes, cancels and collects Comfy Cloud jobs through
-  `comfy-sdk` in its own loop, because it needs no local Comfy.
+- **Execution targets:** `execution_targets.py` defines one `ExecutionAdapter`
+  contract and the local, Deadline and Cloud adapters, selected by
+  `attempts.target_of`. `prepare`, `submit`, `observe`, `cancel` and `recover`
+  return dictionaries with submission material, acknowledgments, observations or
+  decisions; adapters never write the project store. Cancellation separates the
+  ownership check, transactional plan and external send so an unconfirmed delivery
+  stays retryable. Recovery never resubmits uncertain work.
+  `execution.py` owns local/Deadline claims, executor identity, host hooks and
+  validation, the frozen-prompt semantic check and guarded status transitions.
+  `farm.py` applies Deadline observations and verifies/accepts worker receipts;
+  it holds every `deadlinecommand` call. `deadline_job.py`, `deadline_task.py`
+  and `farm_protocol.py` are the submission, worker script and receipt protocol.
+  `cloud.py` drives the same adapter contract through `comfy-sdk` in its own loop,
+  because it needs no local Comfy; it persists job IDs and accepts downloaded
+  receipts through the shared collector. `commands.py` applies adapter cancellation
+  and recovery decisions under the existing scope, replay and delivery guards.
 - **Results:** `receipts.py` (atomic, versioned receipts), `collection.py`
   (recovery without Comfy's queue), `folder_takes.py` (external takes in clip
   folders), `sidecars.py` (`take.json` workflows), `take_files.py` (permanent

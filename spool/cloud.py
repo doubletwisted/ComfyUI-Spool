@@ -20,9 +20,9 @@ except ImportError:  # Comfy Cloud is optional; editing and local generation sti
 
 from . import attempts, receipts
 from .credentials import cloud_key
-from .media import check_frozen, contained
 from .ownership import ExecutorLock, ExecutorBusy
 from .store import uid
+from .execution_targets import adapter_for
 
 
 FREE_TIER = "Running on Comfy Cloud needs a plan that allows API keys. To pay with Comfy credits instead, choose Execute on: Local ComfyUI · Partner Nodes."
@@ -102,6 +102,7 @@ class CloudExecutor:
         root.mkdir(exist_ok=True)
         self.ownership = ExecutorLock(root)
         self.limit = asyncio.Semaphore(4)
+        self.adapter = adapter_for({"target": attempts.CLOUD})
 
     async def observe(self, attempt):
         async with self.limit:
@@ -128,30 +129,21 @@ class CloudExecutor:
             return
         if attempt["status"] in attempts.TERMINAL:
             return
-        if not state and attempt["status"] not in (attempts.INTENT, attempts.WAITING):
-            if attempt["status"] == attempts.CANCEL_REQUESTED:
-                # No job ID was recorded, so there is no Cloud job Spool could stop or collect.
-                await transition(
-                    attempts.CANCELLED,
-                    error="Cancelled before Spool recorded a Comfy Cloud job ID. If Cloud ran it, Spool will not collect the result.",
-                )
-            elif attempt["status"] != attempts.UNCERTAIN:
-                await transition(
-                    attempts.UNCERTAIN,
-                    error="Cloud submission was interrupted before its job ID was recorded. No automatic resubmission.",
-                )
+        recovery = self.adapter.recover(attempt, {"state": state})
+        if not recovery.get("observe"):
+            if "status" in recovery:
+                await transition(recovery["status"], error=recovery["error"])
             return
         key = await storage_call(cloud_key)
         if not key or not available():
             return  # Accepted intents wait for a key and the SDK; their frozen inputs remain intact.
         try:
             address = endpoint()
-            if state and state["endpoint"] != address:
-                raise ValueError("Restore COMFY_BASE_URL to " + state["endpoint"] + " to observe this Cloud job")
+            self.adapter.recover(attempt, {"state": state, "address": address})
             client = await storage_call(lambda: AsyncComfy(api_key=key))
             async with client:
                 if state:
-                    job = await client.jobs.get(state["jobId"])
+                    job = (await self.adapter.observe(attempt, {"client": client, "state": state, "key": key}))["job"]
                 elif attempt["status"] in (attempts.INTENT, attempts.WAITING):
                     if not await storage_call(store.claim, attempt["id"], self.session_id):
                         return
@@ -161,66 +153,37 @@ class CloudExecutor:
                         return
                     # The constructor authenticates the deployment. api_key on
                     # submit authenticates its Partner Nodes through extra_data.
-                    job = await client.submit(workflow, api_key=key, idempotency_key=attempt["id"])
-                    state = {"jobId": job.id, "endpoint": address}
+                    submitted = await self.adapter.submit(
+                        attempt, {"client": client, "workflow": workflow, "key": key, "address": address}
+                    )
+                    job, state = submitted["job"], submitted["state"]
                     await storage_call(store.set_setting, "cloud:" + attempt["id"], state)
                 observed = (await storage_call(store.attempt, attempt["id"]))["status"]
-                if (
-                    observed == "cancel_requested"
-                    and job.status not in ("succeeded", "failed", "expired", "canceled")
-                    and not state.get("cancelSent")
-                ):
-                    job = await job.cancel()
-                    state["cancelSent"] = True
-                    await storage_call(store.set_setting, "cloud:" + attempt["id"], state)
-                if job.status == "succeeded":
-                    await transition(attempts.COLLECTING)
+                if observed == attempts.CANCEL_REQUESTED:
+                    cancelled = await self.adapter.cancel(attempt, {"stage": "send", "job": job, "state": state})
+                    job = cancelled["job"]
+                    if cancelled["sent"]:
+                        state["cancelSent"] = True
+                        await storage_call(store.set_setting, "cloud:" + attempt["id"], state)
+                observation = await self.adapter.observe(attempt, {"job": job, "key": key, "status": observed})
+                if "status" in observation:
+                    await transition(
+                        observation["status"], **({"error": observation["error"]} if "error" in observation else {})
+                    )
+                if observation.get("collect"):
                     await self.collect(attempt, media, job, address)
                     await storage_call(self.collector.ingest, attempt)
-                elif job.status in ("failed", "expired", "canceled"):
-                    await transition(
-                        attempts.FAILED if job.status in ("failed", "expired") else attempts.CANCELLED,
-                        error=str(job.error).replace(key, "[redacted]") if job.error else None,
-                    )
-                elif observed != "cancel_requested":
-                    await transition(attempts.RUNNING if job.status == "running" else attempts.QUEUED)
         except asyncio.CancelledError:
             raise
         except Exception as error:
-            # A submit timeout may already have incurred a charge. Only a
-            # recorded job ID permits automatic observation/download retries.
-            status = (
-                attempts.COLLECTION_PENDING
-                if state
-                else attempts.FAILED
-                if isinstance(error, (InvalidWorkflow, Unauthorized, Forbidden, InsufficientCredits, ValueError))
-                else attempts.UNCERTAIN
-            )
-            message = str(error).replace(key, "[redacted]")
-            if isinstance(error, Forbidden) and "free tier" in message.lower():
-                message += " " + FREE_TIER
-            await transition(status, error=message)
+            # Only recorded job IDs permit observation/download retries after an ambiguous submit.
+            recovery = self.adapter.recover(attempt, {"state": state, "key": key, "error": error})
+            await transition(recovery["status"], error=recovery["error"])
 
     def prepare_submission(self, store, media, attempt, client, address):
-        request = attempt["request"]
-        workflow = client.workflows.from_json(
-            execution_prompt(request["prompt"], request["capture"]["result"]["nodeId"])
-        )
-        # Submit only ancestors of the explicitly selected output.
-        # Intermediate SaveText/SaveVideo branches must not incur
-        # additional API generations on the Cloud deployment.
-        for asset in request.get("assets", []):
-            if asset["nodeId"] not in workflow.json:
-                continue
-            path = contained(media.host_roots["input"], asset["frozen"])
-            check_frozen(path, asset, "A frozen Cloud input changed before submission")
-            workflow.set_input(asset["nodeId"], asset["input"], client.assets.from_file(path))
-        store.dispatched(
-            attempt["id"],
-            {"target": "cloud", "endpoint": address, "idempotencyKey": attempt["id"]},
-            {"selectedOutput": request["capture"]["result"]},
-        )
-        return workflow
+        prepared = self.adapter.prepare(attempt, {"media": media, "client": client, "address": address})
+        store.dispatched(attempt["id"], prepared["dispatch"], prepared["validation"])
+        return prepared["workflow"]
 
     async def collect(self, attempt, media, job, address):
         selection = attempt["request"]["capture"]["result"]

@@ -1,9 +1,9 @@
 """Deadline observations and verified ingestion; never infer media from task order."""
 
+import asyncio
 import hashlib
 import json
 import os
-import re
 import shutil
 import subprocess
 import time
@@ -11,6 +11,7 @@ from pathlib import Path
 
 from . import attempts, farm_protocol, sidecars, system
 from .media import contained
+from .execution_targets import adapter_for
 
 
 class FarmCollector:
@@ -100,49 +101,13 @@ class FarmCollector:
             and time.monotonic() - self.observed_at.get(row["id"], 0) > 15
         ):
             self.observed_at[row["id"]] = time.monotonic()
-            try:
-                observation = deadline_command(["-GetJob", ack["jobId"], "true"])
-            except (OSError, RuntimeError, subprocess.SubprocessError):
-                observation = ""
-            fields = dict(line.split("=", 1) for line in observation.splitlines() if "=" in line)
-            tasks = {}
-            status = fields.get("JobStatus", fields.get("Status"))
-            if attempt["status"] == attempts.CANCEL_REQUESTED and status != "Completed":
-                if status in ("Failed", "Suspended"):
-                    transition(attempts.CANCELLED)
-            elif status == "Active":
-                try:
-                    task_state = deadline_command(["-GetJobTasks", ack["jobId"], "true"])
-                except (OSError, RuntimeError, subprocess.SubprocessError):
-                    task_state = ""
-                tasks = dict(line.split("=", 1) for line in task_state.splitlines() if "=" in line)
-                if tasks.get("TaskStatus", tasks.get("Status")) == "Rendering":
-                    transition(attempts.FARM_RUNNING)
-                elif tasks.get("TaskStatus", tasks.get("Status")) in ("Queued", "Pending"):
-                    transition(attempts.FARM_QUEUED)
-            elif fields.get("JobStatus", fields.get("Status")) == "Rendering":
-                transition(attempts.FARM_RUNNING)
-            elif fields.get("JobStatus", fields.get("Status")) == "Completed":
+            observation = asyncio.run(adapter_for(attempt["request"], row).observe(attempt, {"jobId": ack["jobId"]}))
+            if "status" in observation:
                 transition(
-                    attempts.COLLECTION_PENDING,
-                    error="Deadline completed; awaiting verified worker receipt",
+                    observation["status"], **{k: v for k, v in observation.items() if k not in ("status", "progress")}
                 )
-            elif fields.get("JobStatus", fields.get("Status")) in ("Failed", "Suspended"):
-                transition(
-                    attempts.FARM_ATTENTION,
-                    error="Deadline job is "
-                    + fields.get("JobStatus", fields.get("Status"))
-                    + "; operator action may be needed, no automatic resubmission",
-                )
-            if fields:
-                progress = tasks.get("TaskProgress", tasks.get("Progress", fields.get("SingleTaskProgress", "")))
-                match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*%\s*", progress)
-                self.observations[attempt["id"]] = {
-                    "percent": min(100, float(match[1])) if match else None,
-                    "worker": tasks.get("TaskSlaveName", tasks.get("SlaveName", "")),
-                    "message": tasks.get("TaskRenderStatus", tasks.get("RenderStatus", "")),
-                    "observedAt": time.time(),
-                }
+            if "progress" in observation:
+                self.observations[attempt["id"]] = observation["progress"]
         namespace = contained(root, "spool-receipts/" + attempt["id"])
         if not namespace.exists():
             return

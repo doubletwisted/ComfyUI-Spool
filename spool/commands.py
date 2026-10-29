@@ -1,11 +1,13 @@
 """Small typed commands shared by human controls and external agents."""
 
+import asyncio
 import copy
 import json
 import subprocess
 
 from .errors import NotFound, OperationConflict, InvalidRequest
-from . import attempts, farm, ledger, operations, requests, notes
+from . import ledger, operations, requests, notes
+from .execution_targets import adapter_for
 from .store import Conflict, linked
 from .workflow_inputs import input_problem
 
@@ -311,47 +313,19 @@ def execute(store, media, project_id, data):
         attempt = store.attempt(arguments["attemptId"])
         if attempt["project_id"] != project_id or attempt["clip_id"] not in scope.get("clipIds", []):
             raise ValueError("Attempt is outside the cancellation scope")
-        if (
-            attempt["status"] not in ("intent", "waiting_for_host", "complete", "failed", "cancelled")
-            and attempts.target_of(attempt["request"]) != attempts.CLOUD
-        ):
-            submission = store.submission_for(attempt["id"])
-            # Local attempts have no submission; the cancel policy decides for them below.
-            if attempts.target_of(attempt["request"], submission) == attempts.DEADLINE:
-                if not submission or not submission["external_id"]:
-                    raise ValueError("Claimed work needs an owned Deadline job; resolve uncertain submission first")
-                with store.connect() as db:
-                    done = store.cancellation_done(db, attempt["id"])
-                try:
-                    owner = submission["id"] if done else farm.job_value(submission["external_id"], "SpoolSubmissionId")
-                except (OSError, RuntimeError, subprocess.SubprocessError) as error:
-                    raise ValueError(
-                        "Cancellation was not sent; retry Cancel request after the Deadline lookup recovers: "
-                        + str(error)
-                    ) from error
-                if owner != submission["id"]:
-                    raise ValueError(
-                        "Cancellation refused: external job ownership did not match; no cancellation was sent"
-                    )
-                if not done:
-                    cancellation = (submission["id"], submission["external_id"])
+        submission = store.submission_for(attempt["id"])
+        with store.connect() as db:
+            done = store.cancellation_done(db, attempt["id"])
+        adapter = adapter_for(attempt["request"], submission)
+        cancellation = asyncio.run(
+            adapter.cancel(attempt, {"stage": "check", "submission": submission, "done": done})
+        ).get("delivery")
     if action == "recover_submission":
         attempt = store.attempt(arguments["attemptId"])
         if attempt["project_id"] != project_id or attempt["clip_id"] not in scope.get("clipIds", []):
             raise ValueError("Submission is outside recovery scope")
         submission = store.submission_for(attempt["id"])
-        if not submission:
-            raise ValueError("This attempt has no Deadline submission")
-        found = farm.submission_jobs(submission["id"])
-        if len(found) > 1:
-            raise Conflict("Multiple jobs match; operator resolution required")
-        if found:
-            if (
-                farm.job_value(found[0], "SpoolSubmissionId") != submission["id"]
-                or farm.job_value(found[0], "SpoolAttemptId") != attempt["id"]
-            ):
-                raise ValueError("Deadline job identity failed ownership verification")
-            adopted = found[0]
+        adopted = adapter_for(attempt["request"], submission).recover(attempt, {"submission": submission})["jobId"]
 
     def apply(db, document):
         clips = [*document["clips"], *document.get("audioClips", [])] if action in note_actions else document["clips"]
@@ -421,39 +395,25 @@ def execute(store, media, project_id, data):
             if not attempt or attempt["clip_id"] not in scope.get("clipIds", []):
                 raise ValueError("Attempt is outside the cancellation scope")
             submission = store.submission_for(attempt["id"], db)
-            target = attempts.target_of(json.loads(attempt["request"]), submission)
-            outcome = attempts.cancel_action(attempt["status"], target, bool(submission and submission["external_id"]))
-            if outcome == "refused":
-                if attempt["status"] in attempts.TERMINAL:
-                    raise ValueError("This job has already finished")
-                if target == attempts.LOCAL:
-                    raise ValueError(
-                        "Cancel a running local render from ComfyUI's queue; Spool records the outcome Comfy reports"
-                    )
-                raise ValueError("Claimed work needs an owned Deadline job; resolve uncertain submission first")
-            if outcome == "cancelled":
-                store.transition(attempt["id"], attempts.CANCELLED, db=db, expected=attempt["status"])
-                return {"attemptId": attempt["id"], "status": "cancelled"}, False
-            if target == attempts.CLOUD:
-                store.transition(attempt["id"], attempts.CANCEL_REQUESTED, db=db, expected=attempt["status"])
-                return {"attemptId": attempt["id"], "status": "cancel_requested", "target": "cloud"}, False
-            note = "Cancellation delivery is unconfirmed; retry Cancel request to confirm delivery."
-            if not store.cancellation_done(db, attempt["id"]):
-                if cancellation != (submission["id"], submission["external_id"]):
-                    raise Conflict("Deadline job changed during cancellation ownership lookup; retry Cancel request")
-                store.claim_cancellation(db, identity)
-                store.transition(
-                    attempt["id"], attempts.CANCEL_REQUESTED, error=note, db=db, expected=attempt["status"]
+            adapter = adapter_for(json.loads(attempt["request"]), submission)
+            plan = asyncio.run(
+                adapter.cancel(
+                    attempt,
+                    {
+                        "stage": "plan",
+                        "submission": submission,
+                        "delivery": cancellation,
+                        "done": store.cancellation_done(db, attempt["id"]),
+                    },
                 )
-            else:
-                note = "Cancellation requested; late results remain collectable"
-            return {
-                "attemptId": attempt["id"],
-                "status": "cancel_requested",
-                "jobId": submission["external_id"],
-                "submissionId": submission["id"],
-                "note": note,
-            }, False
+            )
+            if plan.get("claim"):
+                store.claim_cancellation(db, identity)
+            if plan.get("transition", True):
+                store.transition(
+                    attempt["id"], plan["status"], error=plan.get("error"), db=db, expected=attempt["status"]
+                )
+            return plan["result"], False
         elif action == "recover_submission":
             if adopted:
                 store.adopt_submission_job(db, submission["id"], adopted)
@@ -470,7 +430,7 @@ def execute(store, media, project_id, data):
     result = store.command(identity, project_id, revision, data, apply)
     if action == "cancel" and cancellation and store.start_cancellation(identity, result["attemptId"], *cancellation):
         try:
-            farm.fail_job(result["jobId"])
+            asyncio.run(adapter.cancel(attempt, {"stage": "send", "jobId": result["jobId"]}))
         except (OSError, RuntimeError, subprocess.SubprocessError) as error:
             store.finish_cancellation(identity, str(error))
             raise

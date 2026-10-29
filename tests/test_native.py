@@ -22,6 +22,7 @@ sys.modules[package.__name__] = package
 store_module = importlib.import_module("native_spool.spool.store")
 media_module = importlib.import_module("native_spool.spool.media")
 execution_module = importlib.import_module("native_spool.spool.execution")
+targets_module = importlib.import_module("native_spool.spool.execution_targets")
 receipts_module = importlib.import_module("native_spool.spool.receipts")
 ledger_module = importlib.import_module("native_spool.spool.ledger")
 wire_module = importlib.import_module("native_spool.spool.wire")
@@ -106,7 +107,7 @@ class BackendTests(unittest.TestCase):
         )
 
     def test_cloud_key_is_private_execution_data_and_never_saved_in_project(self):
-        with patch.object(execution_module, "cloud_key", return_value="comfyui-private-fixture"):
+        with patch.object(targets_module, "cloud_key", return_value="comfyui-private-fixture"):
             result = self.submit()
         self.assertEqual(self.queue.pending[0][5], {"api_key_comfy_org": "comfyui-private-fixture"})
         self.assertNotIn("api_key_comfy_org", self.queue.pending[0][3])

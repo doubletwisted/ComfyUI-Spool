@@ -123,7 +123,7 @@ class DeadlineJobTests(unittest.TestCase):
                 return True, None, ["submit"] if "submit" in prompt else ["save"], {}
 
             executor = LocalExecutor(self.store, self.media, server, validate)
-            with patch("spool.execution.deadline_job.submit", return_value="owned-job") as submit:
+            with patch("spool.execution_targets.deadline_job.submit", return_value="owned-job") as submit:
                 asyncio.run(executor.dispatch(attempt))
                 self.assertEqual(submit.call_count, 0 if changed else 1)
             self.assertEqual(queued, [])
@@ -143,7 +143,7 @@ class DeadlineJobTests(unittest.TestCase):
             return True, None, ["submit"] if "submit" in prompt else ["save"], {}
 
         executor = LocalExecutor(self.store, self.media, server, validate)
-        with patch("spool.execution.deadline_job.submit", return_value="owned-job") as submit:
+        with patch("spool.execution_targets.deadline_job.submit", return_value="owned-job") as submit:
             with (
                 patch.object(self.store, "acknowledge", side_effect=RuntimeError("Stopped before acknowledgment")),
                 self.assertLogs(level="ERROR"),

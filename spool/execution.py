@@ -1,17 +1,15 @@
 import asyncio
-import copy
 import json
 import logging
 import subprocess
-import time
-from . import attempts, receipts, deadline_job, farm_protocol
+from . import attempts, receipts, farm_protocol
 from .media import check_frozen, contained
 from .ownership import ExecutorLock, ExecutorBusy, executor_identity
 from .requests import local_compatibility
 from . import requests
 from .store import uid, Conflict
 from .collection import Collector
-from .credentials import cloud_key
+from .execution_targets import adapter_for
 
 
 def workflow_metadata(extra_data):
@@ -122,32 +120,23 @@ class LocalExecutor:
             return changed
 
         try:
-            farm = target == attempts.DEADLINE
-            package = await self._deadline_package(store, attempt) if farm else None
-            payload = {
-                "prompt": copy.deepcopy(request["prompt"]),
-                "prompt_id": attempt["prompt_id"],
-                "extra_data": {
-                    "extra_pnginfo": {
-                        "workflow": request["capture"].get("workflow") or {},
-                        "spool": {
-                            "attempt_id": attempt["id"],
-                            "take_id": attempt["take_id"],
-                            "fingerprint": request["fingerprint"],
-                        },
-                    }
-                },
-            }
+            adapter = adapter_for(request)
+            prepared = adapter.prepare(attempt, {})
+            package = prepared.get("package")
+            if package is not None:
+                submission = await asyncio.to_thread(store.submission, attempt["id"], package)
+                package["submissionId"] = submission["id"]
+            payload = prepared["payload"]
             payload = self.server.trigger_on_prompt(payload)
             prompt = payload["prompt"]
             self.server.node_replace_manager.apply_replacements(prompt)
             local_compatibility(
-                {k: v for k, v in prompt.items() if not farm or k != request["launcherNodeId"]},
+                {k: v for k, v in prompt.items() if k not in prepared["omit"]},
                 request["capture"]["result"],
             )
             targets = (
                 [request["capture"]["result"]["nodeId"]]
-                if request["capture"].get("resultOnly") and not farm
+                if prepared["resultOnly"]
                 else payload.get("partial_execution_targets")
             )
             valid = await self.validate(attempt["prompt_id"], prompt, targets)
@@ -157,7 +146,7 @@ class LocalExecutor:
                 payload,
                 {"valid": valid[0], "acceptedOutputs": valid[2], "nodeErrors": valid[3], "error": valid[1]},
             )
-            expected_output = request["launcherNodeId"] if farm else request["capture"]["result"]["nodeId"]
+            expected_output = prepared["output"]
             if not valid[0] or expected_output not in valid[2]:
                 await transition(attempts.FAILED, error=json.dumps({"error": valid[1], "nodeErrors": valid[3]}))
                 return
@@ -167,72 +156,29 @@ class LocalExecutor:
                     error="A host hook changed the frozen workflow. Apply a compatible graph before generating.",
                 )
                 return
-            if farm and (problem := await self._deadline_problem(attempt, prompt)):
-                await transition(attempts.FAILED, error=problem)
-                return
+            for check in prepared["checks"]:
+                checked = await self.validate(
+                    attempt["prompt_id"], {k: v for k, v in prompt.items() if k not in check["omit"]}, [check["output"]]
+                )
+                if not checked[0] or check["output"] not in checked[2]:
+                    await transition(attempts.FAILED, error=check["error"] + json.dumps(checked[1]))
+                    return
             await asyncio.to_thread(verify_frozen_inputs, media, request, prompt)
             if not await transition(
                 attempts.DISPATCHING, result={"validation": {"acceptedOutputs": valid[2], "nodeErrors": valid[3]}}
             ):
                 return
-            if farm:
-                await self._submit_deadline(store, attempt, package, transition)
-            else:
-                await self._submit_local(attempt, payload, prompt, valid, transition)
+            if prepared["submitStatus"] != attempts.DISPATCHING and not await transition(prepared["submitStatus"]):
+                return
+            submitted = await adapter.submit(
+                attempt, {**prepared, "server": self.server, "payload": payload, "valid": valid}
+            )
+            if "jobId" in submitted:
+                await asyncio.to_thread(store.acknowledge, package["submissionId"], submitted["jobId"])
+            await transition(submitted["status"])
         except Exception as error:
             await transition(attempts.UNCERTAIN, error=str(error))
             logging.exception("Spool dispatch needs reconciliation")
-
-    async def _deadline_package(self, store, attempt):
-        """The immutable package the Deadline job script verifies; recording it marks the submission."""
-        request = attempt["request"]
-        launcher = request["launcherNodeId"]
-        package = {
-            "schemaVersion": 2,
-            **{k: request[k] for k in ("projectId", "clipId", "takeId", "attemptId", "fingerprint")},
-            "variationIndex": 0,
-            "result": request["capture"]["result"],
-            "assets": request["assets"],
-            "resultRoot": request["prompt"][launcher]["inputs"]["output_directory"],
-        }
-        submission = await asyncio.to_thread(store.submission, attempt["id"], package)
-        package["submissionId"] = submission["id"]
-        return package
-
-    async def _deadline_problem(self, attempt, prompt):
-        """Why a Deadline workflow cannot leave this host, after Comfy's hooks ran, or None."""
-        request = attempt["request"]
-        worker_prompt = {k: v for k, v in prompt.items() if k != request["launcherNodeId"]}
-        worker_validation = await self.validate(
-            attempt["prompt_id"], worker_prompt, [request["capture"]["result"]["nodeId"]]
-        )
-        if not worker_validation[0] or request["capture"]["result"]["nodeId"] not in worker_validation[2]:
-            return "Selected worker output failed host validation: " + json.dumps(worker_validation[1])
-        return None
-
-    async def _submit_deadline(self, store, attempt, package, transition):
-        if not await transition(attempts.SUBMITTING):
-            return
-        job_id = await asyncio.to_thread(deadline_job.submit, attempt["request"], package)
-        await asyncio.to_thread(store.acknowledge, package["submissionId"], job_id)
-        await transition(attempts.FARM_QUEUED)
-
-    async def _submit_local(self, attempt, payload, prompt, valid, transition):
-        number = self.server.number
-        self.server.number += 1
-        extra = payload.get("extra_data", {})
-        # Mirror Comfy's /prompt handler (0.42): derived workflow metadata and a creation time.
-        extra.pop("workflow_metadata", None)
-        if (metadata := workflow_metadata(extra)) is not None:
-            extra["workflow_metadata"] = metadata
-        extra["create_time"] = int(time.time() * 1000)
-        # Comfy merges this private slot into extra_data for execution and
-        # removes it from queue/history responses. Never persist the key.
-        sensitive = {}
-        if api_key := cloud_key():
-            sensitive["api_key_comfy_org"] = api_key
-        self.server.prompt_queue.put((number, attempt["prompt_id"], prompt, extra, valid[2], sensitive))
-        await transition(attempts.QUEUED)
 
     def pending_attempts(self):
         """Pending local and Deadline attempts with their project media."""
@@ -250,7 +196,7 @@ class LocalExecutor:
 
     def observe(self, store, media, attempt, running_ids, pending_ids):
         """Record what Comfy reports for one local attempt; True when it still needs dispatch."""
-        attempt_id, prompt_id = attempt["id"], attempt["prompt_id"]
+        attempt_id = attempt["id"]
         observed = attempt["status"]
 
         def transition(status, **kwargs):
@@ -260,25 +206,20 @@ class LocalExecutor:
                 observed = status
             return changed
 
-        history = self.server.prompt_queue.get_history(prompt_id=prompt_id).get(prompt_id)
-        if not history and attempt["result"]:
-            history = json.loads(attempt["result"]).get("history")
         receipt_file = media.receipt_path(attempt)
-        if not history and receipt_file.is_file():
-            try:
-                history = json.loads(receipt_file.read_text(encoding="utf-8")).get("history")
-            except (OSError, ValueError) as error:
-                transition(attempts.COLLECTION_PENDING, error=str(error))
-                return False
+        observation = asyncio.run(
+            adapter_for(attempt["request"]).observe(
+                attempt,
+                {
+                    "server": self.server,
+                    "receipt": receipt_file,
+                    "running": running_ids,
+                    "pending": pending_ids,
+                },
+            )
+        )
+        history = observation.get("history")
         if history:
-            status = history.get("status", {})
-            if not status.get("completed") or status.get("status_str") != "success":
-                transition(
-                    attempts.FAILED,
-                    result={"history": history},
-                    error="Workflow failed; partial outputs are retained in history",
-                )
-                return False
             transition(
                 attempts.COLLECTING,
                 result={"history": history, "dispatch": store.dispatch_record(attempt_id)},
@@ -290,11 +231,9 @@ class LocalExecutor:
                 self.collector.ingest(attempt)
             except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
                 transition(attempts.COLLECTION_PENDING, error=str(error))
-        elif prompt_id in running_ids:
-            transition(attempts.RUNNING)
-        elif prompt_id in pending_ids:
-            transition(attempts.QUEUED)
-        elif attempt["status"] in {attempts.INTENT, attempts.WAITING}:
+        elif "status" in observation:
+            transition(observation["status"], **{k: v for k, v in observation.items() if k != "status"})
+        elif observation.get("dispatch"):
             return True
         elif (store.owner(attempt_id) or "").startswith(self.identity):
             transition(
