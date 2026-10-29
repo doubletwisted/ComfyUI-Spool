@@ -166,4 +166,9 @@ for(const action of ['undo','remove','workflow']){
  f.c.inputValues.a='';f.c.inputValues.b='';await f.replaceInputImage(f.c,1,{name:'three.png',type:'image/png',size:4});
  assert.deepEqual([f.c.inputValues.a,f.c.inputValues.b],['three.png','']);
 }
+{
+ // A reference video taken from the timeline keeps its soundtrack.
+ const f=inputFixture('video');f.c.bindings[0].audio=true;f.c.shotInputs=[];f.useTimelineVideo('shot',0);
+ assert.equal(JSON.stringify(f.c.shotInputs),JSON.stringify([{key:'source',source:'selected',audio:true}]));
+}
 console.log('Editor submission and input replacement lifecycles passed (deferred production handlers; no host or execution).');

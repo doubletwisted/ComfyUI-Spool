@@ -1751,7 +1751,7 @@ function useTimelineVideo(clipId,index){
  const b=c.bindings[index],current=take(c);if(b.slot!=='video'||current.placeholder||current.media.kind!=='video')return;
  inputReplacements.choose(c.id,b.key);
  if(c.shotInputs?.some(s=>s.key===b.key&&s.source==='selected'))return;
- edits.apply('Use timeline video',()=>{c.shotInputs=[...(c.shotInputs||[]).filter(s=>s.key!==b.key),{key:b.key,source:'selected'}];settleGroups(c);c.revision++;},'inspector');
+ edits.apply('Use timeline video',()=>{c.shotInputs=[...(c.shotInputs||[]).filter(s=>s.key!==b.key),{key:b.key,source:'selected',...(b.audio?{audio:true}:{})}];settleGroups(c);c.revision++;},'inspector');
  $('inspectorContent').querySelector('[data-media-input="'+index+'"] [data-use-timeline-video]')?.focus({preventScroll:true});
 }
 // Filled inputs of a group stay in its first slots, so "Image 2" in a prompt is the second one shown.

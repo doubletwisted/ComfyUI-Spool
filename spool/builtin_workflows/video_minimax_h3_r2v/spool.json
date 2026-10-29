@@ -7,7 +7,7 @@
   "inputs": [
     {"node": "138", "input": "value", "label": "Prompt", "role": "positive", "type": "STRING"},
     {"group": "Reference images", "label": "Reference image", "slot": "reference", "nodes": ["137", "139", "147", "148", "149", "150", "151", "152", "153"]},
-    {"group": "Reference video", "label": "Reference video", "slot": "video", "nodes": [{"node": "154", "alsoRemove": ["155"]}]},
+    {"group": "Reference video", "label": "Reference video", "slot": "video", "audio": true, "nodes": [{"node": "154", "alsoRemove": ["155"]}]},
     {"group": "Reference audio", "label": "Reference audio", "slot": "audio", "nodes": ["156"]},
     {"node": "115", "input": "aspect_ratio", "label": "Aspect ratio", "role": "resolution", "options": ["1:1 (Square)", "2:3 (Portrait Photo)", "3:2 (Photo)", "3:4 (Portrait Standard)", "4:3 (Standard)", "9:16 (Portrait Widescreen)", "16:9 (Widescreen)", "21:9 (Ultrawide)"]},
     {"node": "115", "input": "megapixels", "label": "Resolution (megapixels)", "role": "resolution", "type": "FLOAT"},

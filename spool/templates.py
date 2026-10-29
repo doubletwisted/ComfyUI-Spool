@@ -90,7 +90,8 @@ def own_capture(template_id):
             number = (lambda index: ' ' + str(index + 1)) if len(entry['nodes']) > 1 else (lambda index: '')
             for index, slot in enumerate(entry['nodes']):
                 node_id, removal = leaving(slot)
-                bindings.append(media(node_id, entry['label'] + number(index), entry['slot'], optional=True, group=entry['group'], **removal))
+                bindings.append(media(node_id, entry['label'] + number(index), entry['slot'], optional=True, group=entry['group'],
+                                      **removal, **({'audio': True} if entry.get('audio') else {})))
         elif prompt[entry['node']]['class_type'] in LOADERS:
             node_id, removal = leaving(entry)
             bindings.append(media(node_id, entry['label'], entry['slot'], **({'optional': True, **removal} if entry.get('optional') else {})))

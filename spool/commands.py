@@ -185,6 +185,9 @@ def execute(store, media, project_id, data):
                 if type(value) is not type(original) and not (type(original) is float and type(value) is int) and not numeric_float:
                     raise ValueError("Input literal type changed")
             clip.setdefault("inputValues", {}).update(values)
+            emptied = {key for key, value in values.items() if value == "" and controls[key].get("optional")}
+            if emptied and clip.get("shotInputs"):
+                clip["shotInputs"] = [s for s in clip["shotInputs"] if s.get("key") not in emptied]
         elif action == "set_shot_inputs":
             bindings = {b["key"]: b for b in capture.get("bindings", [])}
             for value in arguments["inputs"]:

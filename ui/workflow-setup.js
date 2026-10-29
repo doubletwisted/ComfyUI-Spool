@@ -13,7 +13,7 @@ export function matchClipInputs(target,source,recipe,definitions,fps){
    // The shot fills one reference, and only the first slot of one group.
    const first=!b.group||target.bindings.find(other=>other.group===b.group)===b;
    if(!(image||video||audio)||b.slot==='reference'&&reference||b.group&&(grouped||!first))continue;
-   if(b.slot==='reference')reference=true;if(b.group)grouped=true;settings.push({key:b.key,source:'selected',...(image?{frame:b.slot==='lastFrame'?'last':'first'}:{})});continue;
+   if(b.slot==='reference')reference=true;if(b.group)grouped=true;settings.push({key:b.key,source:'selected',...(image?{frame:b.slot==='lastFrame'?'last':'first'}:{}),...(video&&b.audio?{audio:true}:{})});continue;
   }
   let value;
   if(b.role==='resolution'&&['ratio','aspect_ratio'].includes(b.input.split('.').at(-1))&&media.width&&media.height){
@@ -79,10 +79,12 @@ export function createWorkflowSetup({edit, flush, clip, dialog, save}) {
    const controls=()=>{
     if(!result||issue)return [];
     if(builtin)return preparedVersion?capture.bindings.map(b=>({...b,value:capture.prompt[b.nodeId].inputs[b.input]})):builtinInputs(capture,definitions,result,builtin);
-    const held=replaceInputs?(previous?.bindings||[]).flatMap(b=>{
+    // Apply to clip keeps the clip's inputs; Use take keeps the take's optional and grouped inputs.
+    const kept=replaceInputs?previous:takeId&&capture.bindings?.some(b=>b.optional)?capture:null;
+    const held=(kept?.bindings||[]).flatMap(b=>{
      const node=capture.prompt[b.nodeId],value=node?.inputs[b.input];
-     return node?.class_type===previous.prompt[b.nodeId]?.class_type&&(['string','number','boolean'].includes(typeof value)||isExactInt(value))?[{...b,value}]:[];
-    }):[];
+     return node?.class_type===kept.prompt[b.nodeId]?.class_type&&(['string','number','boolean'].includes(typeof value)||isExactInt(value))?[{...b,value}]:[];
+    });
     let inputs=[...held,...keyInputs(capture.prompt,definitions,result).filter(b=>!held.some(old=>old.nodeId===b.nodeId&&old.input===b.input))];
     if(replaceInputs){
      const sources=sourceInputs(capture.prompt,definitions,result).map(source=>{

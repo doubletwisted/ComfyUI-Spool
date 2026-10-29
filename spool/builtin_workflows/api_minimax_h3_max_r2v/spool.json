@@ -7,7 +7,7 @@
   "inputs": [
     {"node": "14", "input": "value", "label": "Prompt", "role": "positive"},
     {"group": "Reference images", "label": "Reference image", "slot": "reference", "nodes": ["6", "23"]},
-    {"group": "Reference video", "label": "Reference video", "slot": "video", "nodes": ["24"]},
+    {"group": "Reference video", "label": "Reference video", "slot": "video", "audio": true, "nodes": ["24"]},
     {"node": "4", "input": "model.resolution", "label": "Resolution", "role": "resolution"},
     {"node": "4", "input": "model.ratio", "label": "Aspect ratio", "role": "resolution"},
     {"node": "4", "input": "model.duration", "label": "Duration (seconds)", "role": "duration", "unit": "seconds"},

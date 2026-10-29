@@ -209,9 +209,13 @@ class CommandTests(unittest.TestCase):
         self.execute(self.envelope("set_inputs", {"clipId": "shot", "values": {"4/image": "subject.png"}}, "fill", "inputs"))
         self.assertIsNone(commands.status(self.store, self.project["id"])["shots"][0]["inputProblem"])
         self.project = self.store.get(self.project["id"])
-        self.execute(self.envelope("set_inputs", {"clipId": "shot", "values": {"4/image": ""}}, "clear", "inputs"))
+        document = self.project["document"]
+        document["clips"][0]["shotInputs"] = [{"key": "7/file", "source": "selected"}]
+        self.project = self.store.save(self.project["id"], self.project["revision"], document)
+        self.execute(self.envelope("set_inputs", {"clipId": "shot", "values": {"4/image": "", "7/file": ""}}, "clear", "inputs"))
         shot = commands.status(self.store, self.project["id"])["shots"][0]
         self.assertEqual((shot["inputs"]["4/image"], shot["inputProblem"]), ("", "Add a reference image or video."))
+        self.assertEqual(self.store.get(self.project["id"])["document"]["clips"][0]["shotInputs"], [])
 
     def test_choose_take_fits_the_clip_to_a_shorter_take_like_use_take(self):
         document = self.project["document"]
