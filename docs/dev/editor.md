@@ -47,3 +47,9 @@ and audio players/mixing. Current document and pixel scale come from getters;
 repaint/save/trim adapters keep the original operation order. Preview quality
 and preparation policy are unchanged. Take-review transitions and viewer
 zoom/gestures still belong to the composition runtime.
+
+`ui/timeline-renderer.js` retains clip-lane nodes, markup memoization and the
+geometry-only drag repaint. `ui/timeline-pointer.js` owns pointer thresholds,
+clip/audio/fade gestures, marquee, scrub, panning, interruption cancellation and
+release order. Its adapters explicitly read current interaction state and apply
+selection, history, repaint and save actions.

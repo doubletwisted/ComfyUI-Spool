@@ -171,6 +171,8 @@ representation and retains its exact-prompt verification.
 `editor.js`, the runtime. See [editor.md](editor.md). Focused modules hold the
 contracts that have tests of their own:
 
+- `timeline-renderer.js` and `timeline-pointer.js`: timeline DOM reuse and
+  pointer gesture lifetimes, separate from pure timeline edits.
 - `timeline.js`: pure timeline operations ([timeline.md](timeline.md)).
 - `project-edit.js`: draft, revision, save, poll and capture ownership
   ([project-edit.md](project-edit.md)).

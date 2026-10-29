@@ -1,3 +1,5 @@
+import { createTimelinePointer } from './timeline-pointer.js';
+import { createTimelineRenderer } from './timeline-renderer.js';
 import { createViewer } from './viewer.js';
 import { createDialogs } from './dialogs.js';
 import { createActionMenu } from './action-menu.js';
@@ -381,8 +383,6 @@ async function startEditor(isFailed) {
   const INITIAL = { ...BOOT.document, selected: null, frame: 0, zoom: 100, snap: true, muted: true, loop: false };
   const defaultAudioTracks = { sourceMuted: false, sourceSolo: false, musicMuted: false, musicSolo: false };
   const drawn = {};
-  let pendingClipMove = null,
-    clipMoveRAF = 0;
   let inspectorTab = 'inputs',
     trimPreviewTimer = 0,
     savedHistory = null,
@@ -2349,312 +2349,56 @@ async function startEditor(isFailed) {
     const target = review.candidate;
     if (target?.takeId) chooseTake(target.clipId, target.takeId);
   }
-  // Geometry during a drag: the clip set and its content are unchanged, so positions
-  // are written to the nodes that are already there instead of rebuilding the lane and
-  // re-binding every handler and filmstrip. The full renderer runs again when the
-  // gesture ends, which is also when filmstrip frames and labels catch up — deferring
-  // them avoids re-decoding thumbnails on every drag frame.
-  let laneNodes = new Map(),
-    laneOrder = [],
-    laneDrawn = false;
-  function applyClipGeometry(rows) {
-    const sharedIn = new Set(),
-      sharedOut = new Set(),
-      previous = new Map();
-    for (const { clip: c } of rows) {
-      const track = T.videoTrack(c),
-        prev = previous.get(track);
-      if (prev && !c.gapBefore) {
-        sharedIn.add(c.id);
-        sharedOut.add(prev.id);
-      }
-      previous.set(track, c);
-    }
-    for (const { clip: c, start } of rows) {
-      const node = laneNodes.get(c.id);
-      if (!node) return false;
-      setStyle(node, 'left', start * ppf + 'px');
-      setStyle(node, 'width', Math.max(14, (c.out - c.in) * ppf) + 'px');
-      setStyle(node, 'top', 'calc(var(--video-top-' + T.videoTrack(c) + ') + 6px)');
-      setStyle(node, 'height', 'calc(var(--video-height-' + T.videoTrack(c) + ') - 12px)');
-      const meta = node.querySelector('.clip-meta span:last-child'),
-        duration = seconds(c.out - c.in);
-      if (meta && meta.textContent !== duration) meta.textContent = duration;
-      node.querySelector('[data-trim="in"]')?.classList.toggle('shared', sharedIn.has(c.id));
-      node.querySelector('[data-trim="out"]')?.classList.toggle('shared', sharedOut.has(c.id));
-    }
-    // The memo still holds the pre-gesture markup, so the next full render must write:
-    // otherwise returning to exactly the starting state would short-circuit and leave the
-    // styles this pass wrote in place.
-    drawn['clipLane'] = null;
-    return true;
-  }
-  function renderTimeline() {
-    const rows = layout(),
-      length = total(),
-      viewport = $('timelineScroll').clientWidth,
-      count = T.videoTracks(state),
-      sharedIn = new Set(),
-      sharedOut = new Set(),
-      previous = new Map();
-    for (const { clip: c } of rows) {
-      const track = T.videoTrack(c),
-        prev = previous.get(track);
-      if (prev && !c.gapBefore) {
-        sharedIn.add(c.id);
-        sharedOut.add(prev.id);
-      }
-      previous.set(track, c);
-    }
-    activeVideoTrack = Math.min(activeVideoTrack, count);
-    draw(
-      'videoTrackLabels',
-      Array.from({ length: count }, (_, i) => {
-        const track = count - i;
-        return (
-          '<div class="track-label' +
-          (!T.videoTrackEnabled(state, track) ? ' disabled-track' : '') +
-          '" style="height:var(--video-height-' +
-          track +
-          ')"><button class="track-toggle video-track-toggle" data-toggle-video-track="' +
-          track +
-          '" aria-label="' +
-          (T.videoTrackEnabled(state, track) ? 'Disable' : 'Enable') +
-          ' video track V' +
-          track +
-          '" aria-pressed="' +
-          T.videoTrackEnabled(state, track) +
-          '" title="' +
-          (T.videoTrackEnabled(state, track) ? 'Disable' : 'Enable') +
-          ' V' +
-          track +
-          ' picture and linked audio">' +
-          svg(T.videoTrackEnabled(state, track) ? 'eye' : 'eyeOff') +
-          '</button><button class="track-select' +
-          (track === activeVideoTrack ? ' active' : '') +
-          '" data-select-track="' +
-          track +
-          '" aria-pressed="' +
-          (track === activeVideoTrack) +
-          '" title="Add new clips to V' +
-          track +
-          '">V' +
-          track +
-          '</button>' +
-          trackResizeHandle('video:' + track, 'video track V' + track) +
-          '</div>'
-        );
-      }).join(''),
-    );
-    $('videoTrackLabels')
-      .querySelectorAll('[data-select-track]')
-      .forEach(
-        b =>
-          (b.onclick = () => {
-            activeVideoTrack = Number(b.dataset.selectTrack);
-            renderTimeline();
-            saveView();
-            $('editor').focus({ preventScroll: true });
-          }),
-      );
-    $('videoTrackLabels')
-      .querySelectorAll('[data-toggle-video-track]')
-      .forEach(
-        b =>
-          (b.onclick = () => {
-            const track = Number(b.dataset.toggleVideoTrack),
-              value = !T.videoTrackEnabled(state, track);
-            edits.apply((value ? 'Enable' : 'Disable') + ' video track V' + track, () => {
-              pause();
-              T.setVideoTrackEnabled(state, track, value);
-            });
-            $('videoTrackLabels')
-              .querySelector('[data-toggle-video-track="' + track + '"]')
-              ?.focus({ preventScroll: true });
-          }),
-      );
-    renderAudioTrackHeaders(count);
-    const empty = !state.clips.length && !(state.audioClips || []).length,
-      extra = empty ? 160 : 0,
-      usable = Math.max(1, viewport - extra);
-    ppf = drag?.scale || (Math.max(0.0001, usable / Math.max(length, fps * 5)) * state.zoom) / 100;
-    const width = Math.max(viewport, Math.ceil(Math.max(length, 120) * ppf) + extra);
-    $('timelineContent').style.width = width + 'px';
-    $('zoomValue').textContent = state.zoom + '%';
-    const second = Math.round(fps),
-      interval =
-        [
-          1,
-          2,
-          5,
-          Math.round(second / 4),
-          Math.round(second / 2),
-          ...[1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200, 2400].map(n => n * second),
-        ]
-          .filter(n => n > 0)
-          .sort((a, b) => a - b)
-          .find(n => n * ppf >= 96) || Math.ceil(96 / ppf),
-      ticks = [];
-    for (let f = 0; f < width / ppf; f += interval) {
-      const seconds = Math.floor(f / second),
-        frames = f % second,
-        label = frames
-          ? seconds + 's ' + frames + 'f'
-          : seconds < 60
-            ? seconds + 's'
-            : Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
-      ticks.push('<span class="tick" title="' + tc(f) + '" style="left:' + f * ppf + 'px">' + label + '</span>');
-      if (interval > 1) ticks.push('<span class="tick minor" style="left:' + (f + interval / 2) * ppf + 'px"></span>');
-    }
-    draw('ruler', ticks.join(''));
-    renderExportRange();
-    const sourceHandles =
-      drag && ['slip', 'slide'].includes(drag.kind)
-        ? (() => {
-            const c = state.clips.find(c => c.id === drag.id),
-              r = rowFor(c.id);
-            return (
-              '<div class="source-handles" style="top:var(--video-top-' +
-              T.videoTrack(c) +
-              ');height:calc(var(--video-height-' +
-              T.videoTrack(c) +
-              ') - 2px);left:' +
-              (r.start - c.in) * ppf +
-              'px;width:' +
-              take(c).media.frames * ppf +
-              'px"></div>'
-            );
-          })()
-        : '';
-    const order = rows.map(({ clip: c }) => c.id);
-    // Slip and slide draw the source-handle overlay inside the lane string, so they keep
-    // the full path; every other gesture changes geometry only.
-    if (!(
-      laneDrawn &&
-      drag &&
-      drag.kind !== 'slip' &&
-      drag.kind !== 'slide' &&
-      order.length === laneOrder.length &&
-      order.every((id, index) => laneOrder[index] === id) &&
-      applyClipGeometry(rows)
-    )) {
-      const lane =
-        Array.from(
-          { length: count },
-          (_, i) =>
-            '<div class="video-track-lane" data-video-track="' +
-            (count - i) +
-            '" style="position:absolute;top:var(--video-top-' +
-            (count - i) +
-            ');height:var(--video-height-' +
-            (count - i) +
-            ');width:100%"></div>',
-        ).join('') +
-        sourceHandles +
-        rows
-          .map(({ clip: c, start }, index) => {
-            const t = take(c),
-              trial = review.audition?.clipId === c.id ? c.takes.find(t => t.id === review.audition.takeId) : null,
-              width = (c.out - c.in) * ppf,
-              frames = t.media.kind === 'video' ? [c.in, Math.max(c.in, Math.min(c.out, t.media.frames) - 1)] : [c.in];
-            const film = frames
-              .map(frame => '<img src="' + esc(url(t.media.poster)) + '" data-frame="' + frame + '" alt="">')
-              .join('');
-            const pending = pendingJobs(c).length,
-              takeCount = T.realTakes(c).length;
-            return (
-              '<div class="timeline-clip ' +
-              (trial ? ' audition' : t.placeholder ? ' no-take' : '') +
-              (!T.videoEnabled(state, c) ? ' disabled-clip' : '') +
-              '" data-clip="' +
-              c.id +
-              '" data-workflow="' +
-              c.workflow +
-              '" style="top:calc(var(--video-top-' +
-              T.videoTrack(c) +
-              ') + 6px);height:calc(var(--video-height-' +
-              T.videoTrack(c) +
-              ') - 12px);left:' +
-              start * ppf +
-              'px;width:' +
-              Math.max(14, width) +
-              'px" tabindex="0" role="button" aria-pressed="false" aria-label="' +
-              esc(c.name) +
-              (!T.videoEnabled(state, c) ? ' disabled' : '') +
-              ' timeline clip"><div class="filmstrip">' +
-              film +
-              '</div><div class="clip-label"><span class="clip-type">' +
-              (workflows[c.workflow]?.short || 'MEDIA') +
-              '</span><strong>' +
-              esc(c.name) +
-              '</strong>' +
-              clipAttention(c) +
-              '</div><div class="clip-meta"><span>' +
-              (trial
-                ? 'T' + String(trial.number).padStart(2, '0') + ' trial'
-                : t.placeholder
-                  ? 'No take'
-                  : 'T' + String(t.number).padStart(2, '0')) +
-              '</span><span class="clip-takes-status' +
-              (pending ? ' busy' : '') +
-              '">' +
-              (takeCount ? takeCount + ' ' + (takeCount === 1 ? 'take' : 'takes') : '') +
-              (pending ? ' · ' + pending + ' pending' : '') +
-              '</span><span>' +
-              seconds(c.out - c.in) +
-              '</span></div><div class="trim-handle in' +
-              (sharedIn.has(c.id) ? ' shared' : '') +
-              '" data-trim="in" title="Start edge"></div><div class="trim-handle out' +
-              (sharedOut.has(c.id) ? ' shared' : '') +
-              '" data-trim="out" title="End edge"></div></div>'
-            );
-          })
-          .join('') +
-        (length ? '' : '<div class="timeline-empty">Drop a workflow or media here to begin.</div>');
-      if (draw('clipLane', lane)) {
-        laneNodes = new Map();
-        $('clipLane')
-          .querySelectorAll('[data-clip]')
-          .forEach(node => {
-            laneNodes.set(node.dataset.clip, node);
-            const c = state.clips.find(c => c.id === node.dataset.clip);
-            node
-              .querySelectorAll('.filmstrip img')
-              .forEach(img => thumbnails.bind(img, take(c).media, Number(img.dataset.frame), fps));
-            node.classList.toggle('current', node.dataset.clip === viewer.currentClip);
-            node.onpointerdown = e => startClipDrag(e, node.dataset.clip);
-            node.onkeydown = e => {
-              if (e.key === 'Enter') {
-                selectClip(node.dataset.clip, true, e);
-                e.preventDefault();
-              }
-            };
-          });
-      }
-      laneOrder = order;
-      laneDrawn = true;
-    }
-    $('addShot').style.left =
-      T.trackClips(state, activeVideoTrack).reduce((n, c) => n + (c.gapBefore || 0) + c.out - c.in, 0) * ppf + 8 + 'px';
-    $('addShot').style.top = 'calc(var(--video-top-' + activeVideoTrack + ') + 34px)';
-    $('addShot').style.height = 'calc(var(--video-height-' + activeVideoTrack + ') - 12px)';
-    $('addShot').hidden = state.clips.length > 0 || (state.audioClips || []).length > 0;
-    renderAudioTimeline(rows, false);
-    applyTrackHeights();
-    $('sequenceStats').textContent =
-      state.clips.length +
-      ' ' +
-      (state.clips.length === 1 ? 'clip' : 'clips') +
-      ' · ' +
-      tc(length) +
-      (selectionIds().length > 1 ? ' / ' + selectionIds().length + ' selected' : '');
-    // Gesture hints depend on the held modifiers and the selected cut, neither of which
-    // changes while a pointer drag is running; resolving them for every node on every
-    // frame was the hottest entry in the drag profile. They refresh when the drag ends.
-    if (drag) gestureHintsStale = true;
-    else refreshGestureHints();
-    $('seek').max = length;
-  }
+  const timelineRenderer = createTimelineRenderer({
+    $,
+    getState: () => state,
+    getActiveTrack: () => activeVideoTrack,
+    setActiveTrack: value => {
+      activeVideoTrack = value;
+    },
+    getPixelScale: () => ppf,
+    setPixelScale: value => {
+      ppf = value;
+    },
+    getDrag: () => drag,
+    getCurrentClip: () => viewer.currentClip,
+    invalidateLane: () => {
+      drawn.clipLane = null;
+    },
+    markGestureHintsStale: () => {
+      gestureHintsStale = true;
+    },
+    layout,
+    total,
+    setStyle,
+    seconds,
+    draw,
+    svg,
+    trackResizeHandle,
+    edits,
+    pause: () => pause(),
+    saveView,
+    renderAudioTrackHeaders,
+    getFps: () => fps,
+    tc,
+    renderExportRange,
+    rowFor,
+    take,
+    review,
+    pendingJobs,
+    workflows,
+    esc,
+    url,
+    clipAttention,
+    thumbnails,
+    startClipDrag: (...args) => startClipDrag(...args),
+    selectClip,
+    renderAudioTimeline,
+    applyTrackHeights,
+    selectionIds,
+    refreshGestureHints,
+  });
+  const { renderTimeline } = timelineRenderer;
   function selectClip(id, seekTo = false, modifiers = {}, preserve = false) {
     const clip = state.clips.find(c => c.id === id);
     if (clip) activeVideoTrack = T.videoTrack(clip);
@@ -2816,463 +2560,84 @@ async function startEditor(isFailed) {
     });
     setStatus('Split at ' + tc(state.frame));
   }
-  function timelineFrame(e) {
-    const rect = $('timelineScroll').getBoundingClientRect();
-    return (e.clientX - rect.left + $('timelineScroll').scrollLeft) / ppf;
-  }
-  function snapFrame(frame, ignore) {
-    if (!state.snap) return Math.round(frame);
-    return T.snap(T.snapPoints(state, ignore), frame, T.SNAP_PIXELS / ppf);
-  }
-  function startClipDrag(e, id) {
-    if (e.button !== 0 || pointerBusy()) return;
-    hideTrimPreview();
-    const c = state.clips.find(c => c.id === id),
-      index = state.clips.indexOf(c),
-      edge = e.target.closest('[data-trim]')?.dataset.trim || null,
-      linked = !!e.currentTarget?.dataset.linkedAudio;
-    if (!edge && (e.ctrlKey || e.metaKey || e.shiftKey)) {
-      e.preventDefault();
-      $('editor').focus({ preventScroll: true });
-      selectClip(id, false, e);
-      return;
-    }
-    const collapseSelection = !edge && selectionIds().includes(id) && selectionIds().length > 1;
-    selectTimelineItem(id, {}, !edge);
-    activeVideoTrack = T.videoTrack(c);
-    const shared = T.isSharedEdge(state, index, edge);
-    e.preventDefault();
-    $('editor').focus({ preventScroll: true });
-    pause();
-    editView();
-    selectedCut = shared ? { id, edge, audio: false } : null;
-    nudgeGroup = null;
-    if (linked) inspectorTab = 'audio';
-    const ids = selectionIds().slice();
-    drag = {
-      ...T.beginEdit(state, { id, kind: 'pending', edge, snapEnabled: state.snap, snapTolerance: T.SNAP_PIXELS / ppf }),
-      ids,
-      group: ids.length > 1,
-      collapseSelection,
-      shared,
-      linked,
-      startX: e.clientX,
-      startY: e.clientY,
-      scale: ppf,
-      moved: false,
-      targetIndex: index,
-    };
-    if (drag.group) drag.snapPoints = T.snapPoints(state, ids);
-    $('timelineScroll').setPointerCapture(e.pointerId);
-    renderInspector();
-    renderTimeline();
-    updateViewer(true);
-    buttons();
-  }
-  function lockClipGesture(e) {
-    const d = drag,
-      action = clipGesture(
-        { id: d.id, edge: d.edge, shared: d.shared },
-        e.shiftKey || held.shift,
-        e.altKey || held.alt,
-      );
-    if (action.blocked) {
-      toast(action.blocked);
-      cancelClipDrag();
-      return false;
-    }
-    if (d.group && action.kind !== 'move') {
-      setTimelineSelection([d.id]);
-      d.group = false;
-      renderInspector();
-    }
-    d.kind = action.kind;
-    d.mode = action.mode;
-    d.overwrite = d.kind === 'move' && d.mode !== 'copy' && d.ids.every(id => state.clips.some(c => c.id === id));
-    if (d.mode === 'copy') copyDragSelection();
-    d.moved = true;
-    $('editor').style.setProperty('--active-edit-cursor', gestureCursor(action));
-    if (d.kind !== 'move') $('editor').classList.add('editing-clip');
-    return true;
-  }
-  function copyDragSelection() {
-    const d = drag;
-    d.copies = {};
-    for (const c of [...state.clips, ...(state.audioClips || [])].filter(c => d.ids.includes(c.id))) {
-      const audio = (state.audioClips || []).includes(c),
-        next = copy(c);
-      next.id = (audio ? 'audio-' : 'clip-') + crypto.randomUUID();
-      next.name += ' copy';
-      if (!audio) L.inheritLineage(c, next);
-      (audio ? state.audioClips : state.clips).push(next);
-      d.copies[c.id] = next.id;
-    }
-    $('editor').classList.add('copying-clip');
-    d.id = d.copies[d.id];
-    d.ids = Object.values(d.copies);
-    d.snapPoints = T.snapPoints(d.before);
-    setTimelineSelection(d.ids);
-    renderInspector();
-  }
-  function moveSelectedGroup(e) {
-    const d = drag,
-      rawDelta = (e.clientX - d.startX) / d.scale,
-      delta = d.snapEnabled
-        ? T.snapMove(d.before, d.copies ? Object.keys(d.copies) : d.ids, rawDelta, d.snapTolerance, d.snapPoints)
-        : Math.round(rawDelta);
-    const rect = $('clipLane').getBoundingClientRect(),
-      targetTrack =
-        !d.group && state.clips.some(c => c.id === d.id) && e.clientY >= rect.top && e.clientY < rect.bottom
-          ? trackAt(e)
-          : undefined,
-      applied = T.moveGroup(state, d.before, d.ids, delta, targetTrack, { overwrite: d.overwrite, copies: d.copies });
-    d.applied = applied;
-    d.targetTrack = targetTrack;
-    if (targetTrack) activeVideoTrack = targetTrack;
-    if (state.clips.some(c => c.id === d.id)) state.frame = rowFor(d.id).start;
-    else state.frame = clamp(d.before.frame, 0, total());
-    renderTimeline();
-    updateViewer(true);
-    if (!d.ghost) {
-      d.ghost = document.createElement('div');
-      d.ghost.className = 'drag-ghost';
-      document.body.append(d.ghost);
-    }
-    d.ghost.textContent =
-      (d.copies ? 'Copy ' : d.overwrite ? 'Overwrite ' : 'Move ') +
-      d.ids.length +
-      ' ' +
-      (d.ids.length === 1 ? 'clip' : 'clips') +
-      ' ' +
-      (applied >= 0 ? '+' : '') +
-      applied +
-      'f';
-    d.ghost.style.left = Math.max(8, Math.min(e.clientX + 12, innerWidth - d.ghost.offsetWidth - 8)) + 'px';
-    d.ghost.style.top = Math.max(8, Math.min(e.clientY - 20, innerHeight - d.ghost.offsetHeight - 8)) + 'px';
-    setStatus(d.ghost.textContent + (applied !== delta ? ' - occupied track or start limit' : ''));
-  }
-  function moveMarquee(e) {
-    const d = drag,
-      rect = $('timelineContent').getBoundingClientRect(),
-      x = e.clientX - rect.left,
-      y = e.clientY - rect.top,
-      left = Math.min(d.x, x),
-      top = Math.min(d.y, y),
-      right = Math.max(d.x, x),
-      bottom = Math.max(d.y, y);
-    if (!d.moved && Math.abs(x - d.x) < 4 && Math.abs(y - d.y) < 4) return;
-    d.moved = true;
-    d.ghost.hidden = false;
-    Object.assign(d.ghost.style, {
-      left: left + 'px',
-      top: top + 'px',
-      width: right - left + 'px',
-      height: bottom - top + 'px',
+  const { timelineFrame, snapFrame, startClipDrag, cancelClipDrag, pointerBusy, startFadeDrag, startAudioDrag } =
+    createTimelinePointer({
+      getFps: () => fps,
+      setInspectorTab: value => {
+        inspectorTab = value;
+      },
+      isTimelineResizing: () => timelineDrag,
+      getTimelinePan: () => timelinePan,
+      setTimelinePan: value => {
+        timelinePan = value;
+      },
+      setSelectedCut: value => {
+        selectedCut = value;
+      },
+      setNudgeGroup: value => {
+        nudgeGroup = value;
+      },
+      getState: () => state,
+      setState: value => {
+        state = value;
+      },
+      getPixelScale: () => ppf,
+      getDrag: () => drag,
+      setDrag: value => {
+        drag = value;
+      },
+      setSelectionAnchor: value => {
+        selectionAnchor = value;
+      },
+      setActiveTrack: value => {
+        activeVideoTrack = value;
+      },
+      isTrackResizing: () => trackResize,
+      isPanelDragging: () => panelDrag,
+      areGestureHintsStale: () => gestureHintsStale,
+      $: (...args) => $(...args),
+      copy: (...args) => copy(...args),
+      interruptions,
+      held,
+      review,
+      history,
+      projectData: (...args) => projectData(...args),
+      trackAt: (...args) => trackAt(...args),
+      selectionIds: (...args) => selectionIds(...args),
+      setTimelineSelection: (...args) => setTimelineSelection(...args),
+      selectTimelineItem: (...args) => selectTimelineItem(...args),
+      total: (...args) => total(...args),
+      layout: (...args) => layout(...args),
+      editActions,
+      rowFor: (...args) => rowFor(...args),
+      clamp: (...args) => clamp(...args),
+      tc: (...args) => tc(...args),
+      editingSignature,
+      save: (...args) => save(...args),
+      toast: (...args) => toast(...args),
+      setStatus: (...args) => setStatus(...args),
+      buttons: (...args) => buttons(...args),
+      preserveTakes: (...args) => preserveTakes(...args),
+      render: (...args) => render(...args),
+      renderInspector: (...args) => renderInspector(...args),
+      renderTakes: (...args) => renderTakes(...args),
+      editView: (...args) => editView(...args),
+      renderTimeline,
+      selectClip: (...args) => selectClip(...args),
+      setFrame: (...args) => setFrame(...args),
+      updateViewer: (...args) => updateViewer(...args),
+      pause: (...args) => pause(...args),
+      selectedAudio: (...args) => selectedAudio(...args),
+      audioSettings: (...args) => audioSettings(...args),
+      renderAudioTimeline: (...args) => renderAudioTimeline(...args),
+      selectAudio: (...args) => selectAudio(...args),
+      hideTrimPreview: (...args) => hideTrimPreview(...args),
+      updateTrimPreview: (...args) => updateTrimPreview(...args),
+      clipGesture: (...args) => clipGesture(...args),
+      gestureCursor: (...args) => gestureCursor(...args),
+      audioNeighbor: (...args) => audioNeighbor(...args),
+      refreshGestureHints: (...args) => refreshGestureHints(...args),
     });
-    const ids = d.regions
-      .filter(r => r.left < right && r.right > left && r.top < bottom && r.bottom > top)
-      .map(r => r.id);
-    setTimelineSelection([...d.base, ...ids]);
-    renderTimeline();
-    renderInspector();
-    buttons();
-  }
-  $('timelineScroll').addEventListener('pointerdown', e => {
-    if (
-      e.button !== 0 ||
-      pointerBusy() ||
-      e.target.closest('button,input,[data-clip],[data-linked-audio],[data-audio],#ruler')
-    )
-      return;
-    e.preventDefault();
-    $('editor').focus({ preventScroll: true });
-    pause();
-    editView();
-    hideTrimPreview();
-    selectedCut = null;
-    const rect = $('timelineContent').getBoundingClientRect(),
-      before = copy(state),
-      base = e.ctrlKey || e.metaKey ? selectionIds().slice() : [],
-      regions = [
-        ...$('timelineContent').querySelectorAll('[data-clip],[data-audio],[data-linked-audio]:not(.no-audio)'),
-      ].map(node => {
-        const r = node.getBoundingClientRect();
-        return {
-          id: node.dataset.clip || node.dataset.audio || node.dataset.linkedAudio,
-          left: r.left - rect.left,
-          right: r.right - rect.left,
-          top: r.top - rect.top,
-          bottom: r.bottom - rect.top,
-        };
-      });
-    setTimelineSelection(base);
-    const ghost = document.createElement('div');
-    ghost.className = 'selection-marquee';
-    ghost.hidden = true;
-    $('timelineContent').append(ghost);
-    drag = {
-      kind: 'marquee',
-      before,
-      base,
-      regions,
-      ghost,
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      moved: false,
-    };
-    $('timelineScroll').setPointerCapture(e.pointerId);
-    renderInspector();
-    renderTimeline();
-    buttons();
-  });
-
-  function clearClipDrag() {
-    cancelAnimationFrame(clipMoveRAF);
-    clipMoveRAF = 0;
-    pendingClipMove = null;
-    hideTrimPreview();
-    drag?.ghost?.remove();
-    for (const node of $('timelineContent').querySelectorAll('[data-clip]')) node.style.opacity = '';
-    $('editor').style.removeProperty('--active-edit-cursor');
-    $('dropLine').hidden = true;
-    $('editor').classList.remove('dragging-clip', 'editing-clip', 'copying-clip', 'scrubbing');
-  }
-  // A clip drag, panel or timeline resize, or track resize owns the pointer until it ends.
-  function pointerBusy() {
-    return !!(drag || panelDrag || timelineDrag || trackResize);
-  }
-  function cancelClipDrag() {
-    if (!drag) return;
-    const before = drag.before;
-    clearClipDrag();
-    drag = null;
-    if (gestureHintsStale) refreshGestureHints();
-    if (before) state = preserveTakes(before);
-    render();
-    save();
-    setStatus('Edit cancelled');
-  }
-  function handleClipPointerMove(e) {
-    if (!drag) return;
-    if (drag.kind === 'marquee') {
-      moveMarquee(e);
-      return;
-    }
-    if (drag.kind === 'fade') {
-      moveFadeDrag(e);
-      return;
-    }
-    if (drag.kind === 'audio') {
-      moveAudioDrag(e);
-      return;
-    }
-    if (drag.kind === 'pending') {
-      if (Math.abs(e.clientX - drag.startX) < 4 && Math.abs(e.clientY - drag.startY) < 4) return;
-      if (!lockClipGesture(e)) return;
-    }
-    if (drag.kind === 'scrub') {
-      setFrame(snapFrame(timelineFrame(e)), true);
-      return;
-    }
-    if (drag.kind === 'move') {
-      moveSelectedGroup(e);
-      return;
-    }
-    const c = state.clips.find(c => c.id === drag.id);
-    if (!c) return;
-    const dx = e.clientX - drag.startX;
-    $('editor').classList.add('editing-clip');
-    let delta = Math.round(dx / drag.scale);
-    if (state.snap && drag.kind !== 'slip') {
-      const original = drag.start + (drag.kind === 'out' ? drag.original.out - drag.original.in : 0),
-        position = original + delta,
-        near = T.snap(drag.snapPoints, position, T.SNAP_PIXELS / drag.scale);
-      delta = near - original;
-    }
-    const applied = T.applyEdit(state, drag, delta),
-      row = rowFor(c.id);
-    drag.applied = applied;
-    state.frame = ['slip', 'slide'].includes(drag.kind)
-      ? clamp(drag.before.frame, row.start, row.end - 1)
-      : drag.kind === 'in'
-        ? row.start
-        : row.end - 1;
-    renderTimeline();
-    updateViewer(true);
-    updateTrimPreview(drag, applied);
-    if (!drag.ghost) {
-      drag.ghost = document.createElement('div');
-      drag.ghost.className = 'drag-ghost edit-feedback';
-      document.body.append(drag.ghost);
-    }
-    drag.ghost.textContent =
-      editActions[drag.mode].name + ' ' + (applied >= 0 ? '+' : '') + applied + 'f | ' + tc(c.in) + ' - ' + tc(c.out);
-    drag.ghost.style.left = Math.max(8, Math.min(e.clientX + 14, innerWidth - drag.ghost.offsetWidth - 8)) + 'px';
-    drag.ghost.style.top = Math.max(8, Math.min(e.clientY - 34, innerHeight - drag.ghost.offsetHeight - 8)) + 'px';
-    setStatus(
-      editActions[drag.mode].name +
-        ' ' +
-        (applied >= 0 ? '+' : '') +
-        applied +
-        ' frames' +
-        (applied !== delta ? ' - limit reached' : ''),
-    );
-  }
-  function flushClipPointerMove() {
-    cancelAnimationFrame(clipMoveRAF);
-    clipMoveRAF = 0;
-    if (pendingClipMove) {
-      const move = pendingClipMove;
-      pendingClipMove = null;
-      handleClipPointerMove(move);
-    }
-  }
-  window.addEventListener('pointermove', e => {
-    if (!drag) return;
-    pendingClipMove = { clientX: e.clientX, clientY: e.clientY, shiftKey: e.shiftKey, altKey: e.altKey };
-    if (!clipMoveRAF) clipMoveRAF = requestAnimationFrame(flushClipPointerMove);
-  });
-  window.addEventListener('pointerup', () => {
-    if (!drag) return;
-    flushClipPointerMove();
-    const done = drag;
-    clearClipDrag();
-    drag = null;
-    if (gestureHintsStale) refreshGestureHints();
-    if (done.kind === 'scrub') {
-      save();
-      return;
-    }
-    if (done.kind === 'marquee') {
-      selectionAnchor = state.selectedAudio || state.selected;
-      renderInspector();
-      renderTimeline();
-      buttons();
-      save();
-      return;
-    }
-    if (done.kind === 'pending') {
-      if (done.collapseSelection) selectTimelineItem(done.id);
-      renderTimeline();
-      renderInspector();
-      save();
-      buttons();
-      return;
-    }
-    if (done.kind === 'audio' && !done.moved && done.collapseSelection) {
-      selectTimelineItem(done.id);
-      renderInspector();
-    }
-    if (
-      done.kind === 'move' &&
-      done.overwrite &&
-      done.applied !== undefined &&
-      (done.applied !== 0 || (done.targetTrack && done.targetTrack !== T.videoTrack(done.original)))
-    ) {
-      T.overwriteMove(
-        state,
-        done.before,
-        done.ids,
-        done.applied,
-        done.targetTrack,
-        () => 'clip-' + crypto.randomUUID(),
-      );
-      state.frame = rowFor(done.id).start;
-      setStatus('Clip placed - covered footage overwritten');
-    }
-    if (editingSignature(projectData()) !== editingSignature(done.before)) {
-      history.record(
-        done.before,
-        done.copies
-          ? 'Duplicate ' + (done.group ? done.ids.length + ' clips' : done.original.name)
-          : done.group
-            ? 'Move ' + done.ids.length + ' clips'
-            : done.kind === 'fade'
-              ? 'Fade ' + done.side + ' ' + done.original.name
-              : done.kind === 'audio'
-                ? (editActions[done.mode]?.name || 'Edit') + ' audio ' + done.original.name
-                : done.kind === 'move'
-                  ? 'Move ' + done.original.name
-                  : editActions[done.mode].name +
-                    ' ' +
-                    done.original.name +
-                    (done.applied ? ' ' + (done.applied > 0 ? '+' : '') + done.applied + 'f' : ''),
-      );
-    }
-    renderTimeline();
-    renderInspector();
-    updateViewer(true);
-    save();
-    buttons();
-  });
-  window.addEventListener('pointercancel', cancelClipDrag);
-  interruptions.on(cancelClipDrag);
-  $('timelineScroll').addEventListener('lostpointercapture', cancelClipDrag);
-  $('timelineScroll').addEventListener(
-    'pointerdown',
-    e => {
-      if (e.button !== 1 || drag || timelinePan || panelDrag || timelineDrag || trackResize) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const sc = $('timelineScroll');
-      timelinePan = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, left: sc.scrollLeft, top: sc.scrollTop };
-      sc.setPointerCapture(e.pointerId);
-      $('editor').classList.add('timeline-grabbing');
-    },
-    true,
-  );
-  window.addEventListener('pointermove', e => {
-    if (!timelinePan || e.pointerId !== timelinePan.pointerId) return;
-    const sc = $('timelineScroll');
-    sc.scrollLeft = timelinePan.left + timelinePan.x - e.clientX;
-    sc.scrollTop = timelinePan.top + timelinePan.y - e.clientY;
-  });
-  function finishTimelinePan(cancel = false) {
-    if (!timelinePan) return;
-    const p = timelinePan,
-      sc = $('timelineScroll');
-    timelinePan = null;
-    if (cancel) {
-      sc.scrollLeft = p.left;
-      sc.scrollTop = p.top;
-    }
-    if (sc.hasPointerCapture(p.pointerId)) sc.releasePointerCapture(p.pointerId);
-    $('editor').classList.remove('timeline-grabbing');
-  }
-  window.addEventListener('pointerup', () => finishTimelinePan());
-  window.addEventListener('pointercancel', () => finishTimelinePan());
-  interruptions.on(() => finishTimelinePan());
-  $('timelineScroll').addEventListener('lostpointercapture', () => finishTimelinePan());
-  window.addEventListener(
-    'keydown',
-    e => {
-      if (e.key === 'Escape' && timelinePan) {
-        e.preventDefault();
-        e.stopPropagation();
-        finishTimelinePan(true);
-      }
-    },
-    true,
-  );
-  $('timelineScroll').addEventListener('auxclick', e => {
-    if (e.button === 1) e.preventDefault();
-  });
-  $('ruler').onpointerdown = e => {
-    if (e.button !== 0 || panelDrag || timelineDrag || trackResize || drag) return;
-    hideTrimPreview();
-    e.preventDefault();
-    $('editor').focus({ preventScroll: true });
-    pause();
-    if (review.mode !== 'edit' || review.audition) {
-      editView();
-      renderTakes();
-      renderTimeline();
-    }
-    drag = { kind: 'scrub' };
-    $('timelineScroll').setPointerCapture(e.pointerId);
-    $('editor').classList.add('scrubbing');
-    setFrame(snapFrame(timelineFrame(e)), true);
-  };
   let draggedTake = null;
   const takeDropPreview = document.createElement('div');
   takeDropPreview.className = 'take-drop-preview';
@@ -5763,156 +5128,6 @@ async function startEditor(isFailed) {
       const d = T.splitAudio(state, state.frame, 'audio-' + crypto.randomUUID(), c.id);
       state.selectedAudio = d.id;
     });
-  }
-  function startFadeDrag(e, id, bed) {
-    if (e.button !== 0 || pointerBusy()) return;
-    if (e.ctrlKey || e.metaKey || e.shiftKey) {
-      e.preventDefault();
-      bed ? selectAudio(id, e) : selectClip(id, false, e);
-      return;
-    }
-    setTimelineSelection([id]);
-    selectedCut = null;
-    nudgeGroup = null;
-    hideTrimPreview();
-    e.preventDefault();
-    e.stopPropagation();
-    pause();
-    editView();
-    const c = (bed ? state.audioClips : state.clips).find(x => x.id === id);
-    if (!c) return;
-    inspectorTab = 'audio';
-    drag = {
-      kind: 'fade',
-      side: e.target.closest('[data-fade]').dataset.fade,
-      id,
-      bed,
-      startX: e.clientX,
-      before: copy(state),
-      original: copy(c),
-      scale: ppf,
-      moved: false,
-    };
-    $('timelineScroll').setPointerCapture(e.pointerId);
-    $('editor').style.setProperty('--active-edit-cursor', 'ew-resize');
-    $('editor').classList.add('editing-clip');
-    $('editor').focus({ preventScroll: true });
-    renderInspector();
-    renderTimeline();
-  }
-  function moveFadeDrag(e) {
-    const d = drag,
-      c = (d.bed ? state.audioClips : state.clips).find(x => x.id === d.id),
-      a = audioSettings(d.original),
-      key = d.side === 'in' ? 'fadeIn' : 'fadeOut';
-    if (Math.abs(e.clientX - d.startX) < 4 && !d.moved) return;
-    d.moved = true;
-    const value = clamp(
-      a[key] + Math.round((e.clientX - d.startX) / d.scale) * (d.side === 'in' ? 1 : -1),
-      0,
-      Math.floor((c.out - c.in) / 2),
-    );
-    if (value !== audioSettings(c)[key]) c.audio = { ...audioSettings(c), [key]: value };
-    renderAudioTimeline(layout());
-    const field = $(d.side === 'in' ? 'audioFadeIn' : 'audioFadeOut');
-    if (field) field.value = (value / fps).toFixed(2);
-    setStatus('Fade ' + d.side + ' ' + (value / fps).toFixed(2) + 's');
-  }
-  function startAudioDrag(e, id) {
-    if (e.button !== 0 || pointerBusy()) return;
-    const edge = e.target.closest('[data-audio-trim]')?.dataset.audioTrim || null;
-    if (!edge && (e.ctrlKey || e.metaKey || e.shiftKey)) {
-      e.preventDefault();
-      $('editor').focus({ preventScroll: true });
-      selectAudio(id, e);
-      return;
-    }
-    const collapseSelection = !edge && selectionIds().includes(id) && selectionIds().length > 1;
-    selectTimelineItem(id, {}, !edge);
-    hideTrimPreview();
-    e.preventDefault();
-    $('editor').focus({ preventScroll: true });
-    pause();
-    editView();
-    nudgeGroup = null;
-    inspectorTab = 'audio';
-    const c = selectedAudio(),
-      peer = edge && audioNeighbor(c, edge);
-    selectedCut = peer ? { id, edge, audio: true } : null;
-    const ids = selectionIds().slice();
-    drag = {
-      ...T.beginEdit(state, {
-        id,
-        audio: true,
-        kind: 'audio',
-        edge,
-        peer,
-        snapEnabled: state.snap,
-        snapTolerance: T.SNAP_PIXELS / ppf,
-      }),
-      ids,
-      group: ids.length > 1,
-      collapseSelection,
-      shared: !!peer,
-      startX: e.clientX,
-      scale: ppf,
-      moved: false,
-    };
-    if (drag.group) drag.snapPoints = T.snapPoints(state, ids);
-    $('timelineScroll').setPointerCapture(e.pointerId);
-    renderInspector();
-    renderTimeline();
-    buttons();
-  }
-
-  function moveAudioDrag(e) {
-    const d = drag;
-    if (d.operation === 'pending') {
-      if (Math.abs(e.clientX - d.startX) < 4) return;
-      const a = clipGesture(
-        { id: d.id, audio: true, edge: d.edge, shared: d.shared },
-        e.shiftKey || held.shift,
-        e.altKey || held.alt,
-      );
-      if (a.blocked) {
-        toast(a.blocked);
-        cancelClipDrag();
-        return;
-      }
-      d.operation = a.mode === 'roll' ? 'roll' : a.kind;
-      d.mode = a.mode;
-      d.moved = true;
-      if (a.mode === 'copy') {
-        d.kind = 'move';
-        copyDragSelection();
-        moveSelectedGroup(e);
-        return;
-      }
-      $('editor').style.setProperty('--active-edit-cursor', a.kind === 'move' ? 'grabbing' : gestureCursor(a));
-      $('editor').classList.add('editing-clip');
-    }
-    if (d.group && d.operation === 'move') {
-      moveSelectedGroup(e);
-      return;
-    }
-    if (d.group) {
-      setTimelineSelection([d.id]);
-      d.group = false;
-      renderInspector();
-    }
-    const delta = Math.round((e.clientX - d.startX) / d.scale),
-      applied = T.applyEdit(state, d, delta);
-    d.applied = applied;
-    renderTimeline();
-    updateViewer(true);
-    setStatus(
-      editActions[d.mode].name +
-        ' audio ' +
-        (applied >= 0 ? '+' : '') +
-        applied +
-        'f · video stays fixed' +
-        (applied !== delta ? ' · limit reached' : ''),
-    );
   }
   function hideTrimPreview(keepViewer = false) {
     if (!keepViewer) lastTrimEdit = null;
@@ -8908,7 +8123,7 @@ async function startEditor(isFailed) {
       return laneDraws;
     },
     get laneNodes() {
-      return laneNodes;
+      return timelineRenderer.laneNodes;
     },
     flush: flushNative,
     poll: pollNative,
