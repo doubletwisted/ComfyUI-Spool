@@ -64,6 +64,9 @@ First public release.
 - Seed modes (fixed, increment, decrement, randomize) with exact 64-bit seeds.
   The generation review shows each shot's route and seeds, and warns when
   several takes would repeat the same seed.
+- **Renders** shows one line per take with **Cancel** beside it, and **Cancel
+  all** per shot. Local takes can be cancelled from Spool, whether queued or
+  running.
 - **Execute on: Deadline** in the inspector renders a local workflow on the farm
   without adding a node to it, with the pool, group, priority and workers chosen
   per clip. Agents use the `set_execution` command.

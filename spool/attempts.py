@@ -88,12 +88,15 @@ def cancel_action(status, target, external_job=False):
 
     Unsent and local uncertain attempts have no running work to stop. A local
     uncertain attempt is absent from Comfy's queue and history, so dismissing it
-    cannot drop a result. Cloud and owned Deadline jobs are asked to stop.
+    cannot drop a result. Local work in Comfy's queue, Cloud and owned Deadline
+    jobs are asked to stop; for local work the Comfy that owns it does so.
     """
     if status in TERMINAL:
         return "refused"
     if status in (INTENT, WAITING) or (target == LOCAL and status == UNCERTAIN):
         return "cancelled"
+    if target == LOCAL and status in (DISPATCHING, QUEUED, RUNNING):
+        return "requested"
     if target == CLOUD or (target == DEADLINE and external_job):
         return "requested"
     return "refused"

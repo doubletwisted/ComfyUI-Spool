@@ -479,13 +479,20 @@ class CommandTests(unittest.TestCase):
         ]
         self.assertIsNotNone(finished)
 
-    def test_local_uncertain_attempt_is_dismissed_and_running_local_work_is_refused(self):
-        data = self.envelope("queue_experiment", {"mode": "repeat", "variants": [{"clipId": "shot"}]}, "queue", "queue")
-        job = self.execute(data)["jobs"][0]
-        self.store.transition(job["id"], "queued")
-        with self.assertRaisesRegex(ValueError, "ComfyUI's queue"):
-            self.execute(self.envelope("cancel", {"attemptId": job["id"]}, "cancel-running", "cancel"))
-        self.assertEqual(self.store.attempt(job["id"])["status"], "queued")
+    def test_local_uncertain_attempt_is_dismissed_and_queued_local_work_is_requested(self):
+        queued, collecting, job = (
+            self.execute(
+                self.envelope("queue_experiment", {"mode": "repeat", "variants": [{"clipId": "shot"}]}, name, "queue")
+            )["jobs"][-1]
+            for name in ("queue", "queue-collecting", "queue-uncertain")
+        )
+        self.assertEqual(len({queued["id"], collecting["id"], job["id"]}), 3)
+        self.store.transition(queued["id"], "queued")
+        self.execute(self.envelope("cancel", {"attemptId": queued["id"]}, "cancel-queued", "cancel"))
+        self.assertEqual(self.store.attempt(queued["id"])["status"], "cancel_requested")
+        self.store.transition(collecting["id"], "collecting")
+        with self.assertRaisesRegex(ValueError, "has finished"):
+            self.execute(self.envelope("cancel", {"attemptId": collecting["id"]}, "cancel-collecting", "cancel"))
         self.store.transition(job["id"], "uncertain", error="Absent from Comfy queue and history")
         before = self.store.active_attempts(self.project["id"])
         self.assertEqual(

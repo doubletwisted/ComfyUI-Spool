@@ -182,14 +182,20 @@ are left alone when their origin cannot be proved.
 ## Renders
 
 **Renders** in the top bar opens a panel beside the studio; you can keep editing
-while it is open. Busy indicators use steady highlights. It groups takes by shot, with each one's stage, progress and
-time. Progress updates keep the current edit and timeline controls in place.
-Expand a row for its seed, worker, output path and execution record.
+while it is open. It groups takes by shot, one line per take with its stage,
+progress and time. Progress updates keep the current edit and timeline controls
+in place. Expand a take for where it runs, the current step, its seed, output
+path and execution record.
 
-- **Cancel request** stops queued work. A local render that is already running is
-  cancelled from ComfyUI's queue; Spool records what ComfyUI reports.
-  Delayed status observations cannot undo a cancellation request. Verified late
-  results remain collectable and never change the chosen take.
+- **Cancel** on a take, then **Confirm**, stops it: a local take waiting in
+  ComfyUI's queue is removed, a running one is interrupted, and Comfy Cloud and
+  Deadline are asked to stop. **Cancel all** does the same for every take of a
+  shot. The ComfyUI that started a local take carries out its Cancel, so it
+  works from standalone Spool too.
+  Delayed status observations cannot undo a cancellation. A take that finished
+  before the request arrived is still collected, and late results never change
+  the chosen take.
+- **Dismiss** removes a local request that ComfyUI has no record of.
 - **Retry submission** appears only when Spool could not confirm a submission.
   **Find existing Deadline job** looks for a farm job that was accepted before
   the connection was lost. Neither starts a second render.

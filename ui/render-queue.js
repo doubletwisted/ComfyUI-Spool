@@ -111,6 +111,26 @@ export function createRenderQueue({
       toast(error.message);
     }
   }
+  let armed = null,
+    armedTimer = 0;
+  async function cancelRenders(ids) {
+    try {
+      for (const id of ids) {
+        const job = getState().jobs.find(j => j.id === id);
+        if (!job || G.cancelAction(job) === 'refused' || job.status === 'cancel_requested') continue;
+        await authoredCommand(
+          'cancel',
+          { attemptId: id },
+          getState().clips.find(c => c.id === job.clipId) || { id: job.clipId },
+          ['cancel'],
+        );
+      }
+      await pollNative();
+    } catch (error) {
+      toast(error.message);
+    }
+    renderQueueList();
+  }
   async function refreshQueue() {
     try {
       await request('reconcile', {});
@@ -134,7 +154,7 @@ export function createRenderQueue({
     $('clearFinishedRenders').disabled = !jobs.some(G.finishedRender);
     $('queueSummary').textContent =
       [
-        active.length ? active.length + ' active render' + (active.length === 1 ? '' : '') : '',
+        active.length ? active.length + ' active render' + (active.length === 1 ? '' : 's') : '',
         needs.length ? needs.length + ' need' + (needs.length === 1 ? 's' : '') + ' attention' : '',
       ]
         .filter(Boolean)
@@ -142,75 +162,74 @@ export function createRenderQueue({
       (past.length ? 'No active renders' : getState().jobs.length ? 'Queue is clear' : 'No renders yet');
     $('queuePending').hidden = !getQueueSubmission().pending;
     $('retryQueue').disabled = getQueueSubmission().sending;
+    const now = Date.now(),
+      cancelLabel = j => (j.status === 'uncertain' && G.cancelAction(j) === 'cancelled' ? 'Dismiss' : 'Cancel'),
+      cancellable = j => G.cancelAction(j) !== 'refused' && j.status !== 'cancel_requested',
+      isArmed = key => armed?.key === key && armed.until > now;
     const row = j => {
-      const observations = j.nodeProgress || [],
-        running = ['running', 'farm_running'].includes(j.status);
-      const farm = j.farmProgress,
-        percent = jobPercent(j);
-      const progress = Number.isFinite(percent)
-        ? '<div class="render-progress"><progress max="100" value="' +
-          esc(percent) +
-          '" aria-label="' +
-          esc(j.target === 'deadline' ? 'Deadline worker' : 'Current node') +
-          ' progress"></progress></div>'
-        : '';
+      const running = ['running', 'farm_running'].includes(j.status),
+        farm = j.farmProgress,
+        percent = jobPercent(j),
+        state = attention(j)
+          ? 'attention'
+          : j.status === 'complete'
+            ? 'ready'
+            : j.status === 'cancel_requested'
+              ? 'cancelling'
+              : running
+                ? 'running'
+                : 'waiting';
       const result = getState()
           .clips.flatMap(c => c.takes)
           .find(t => t.generated && (t.summary?.attemptId ?? t.request?.attemptId) === j.id),
-        output = result?.media?.originalFile;
-      const details =
-        '<div class="render-execution"><p>' +
-        esc(
-          j.target === 'deadline'
-            ? 'Deadline'
-            : j.target === 'cloud'
-              ? 'Comfy Cloud · Developer Platform'
-              : 'Local Comfy',
+        output = result?.media?.originalFile,
+        fact = (label, value, className = '') =>
+          '<dt>' + label + '</dt><dd' + (className ? ' class="' + className + '"' : '') + '>' + value + '</dd>';
+      const facts =
+        fact(
+          'Runs on',
+          esc(
+            j.target === 'deadline'
+              ? 'Deadline' + (farm?.worker ? ' · ' + farm.worker : '')
+              : j.target === 'cloud'
+                ? 'Comfy Cloud'
+                : 'Local ComfyUI',
+          ),
         ) +
-        (farm?.worker ? ' · ' + esc(farm.worker) : '') +
-        '</p>' +
-        (farm?.message ? '<p>' + esc(farm.message) + '</p>' : '') +
-        observations
-          .map(
-            n =>
-              '<div class="job-node">' +
-              esc(n.label) +
-              (n.max > 1 ? ' / ' + esc(n.value) + ' of ' + esc(n.max) : '') +
-              '</div>',
+        (farm?.message ? fact('Worker', esc(farm.message)) : '') +
+        (j.nodeProgress || [])
+          .map(n =>
+            fact('Step', esc(n.label) + (n.max > 1 ? ' · ' + esc(n.value) + ' of ' + esc(n.max) : ''), 'job-node'),
           )
           .join('') +
         (j.seeds?.length
-          ? '<p class="job-seeds">' +
-            j.seeds.map(b => esc(b.label) + ': ' + esc(getDecimal()(b.value))).join(' / ') +
-            '</p>'
+          ? fact(
+              j.seeds.length === 1 ? esc(j.seeds[0].label) : 'Seeds',
+              j.seeds.map(b => (j.seeds.length > 1 ? esc(b.label) + ' ' : '') + esc(getDecimal()(b.value))).join(' · '),
+              'job-seeds',
+            )
           : '') +
-        (j.error ? '<pre class="render-error">' + esc(j.error) + '</pre>' : '') +
         (output
-          ? '<p class="render-output">Saved to <a class="download-link" target="_blank" href="' +
-            esc(url(output)) +
-            '">' +
-            esc(output) +
-            '</a></p>'
+          ? fact(
+              'Saved to',
+              '<a class="download-link" target="_blank" href="' + esc(url(output)) + '">' + esc(output) + '</a>',
+              'render-output',
+            )
           : '') +
-        '<code>' +
-        esc(j.submission?.external_id || j.promptId || '') +
-        '</code><a class="download-link" target="_blank" href="/spool/api/attempts/' +
-        encodeURIComponent(j.id) +
-        '">Execution record ↗</a></div>';
+        fact(
+          'Request',
+          '<code>' +
+            esc(j.submission?.external_id || j.promptId || j.id) +
+            '</code><a class="download-link" target="_blank" href="/spool/api/attempts/' +
+            encodeURIComponent(j.id) +
+            '">Execution record ↗</a>',
+          'render-request',
+        );
       const actions =
         (j.status === 'collection_pending'
           ? '<button class="outline" data-retry-collection data-queue-focus="collect:' +
             esc(j.id) +
             '">Retry collection</button>'
-          : '') +
-        (G.cancelAction(j) !== 'refused' && j.status !== 'cancel_requested'
-          ? '<button class="outline" data-cancel-attempt="' +
-            esc(j.id) +
-            '" data-queue-focus="cancel:' +
-            esc(j.id) +
-            '">' +
-            (j.status === 'uncertain' && G.cancelAction(j) === 'cancelled' ? 'Dismiss' : 'Cancel request') +
-            '</button>'
           : '') +
         (j.target === 'deadline' && j.status === 'submission_uncertain'
           ? '<button class="outline" data-recover-submission="' +
@@ -219,28 +238,47 @@ export function createRenderQueue({
             esc(j.id) +
             '">Find existing Deadline job</button>'
           : '');
+      const label = cancelLabel(j),
+        confirm = isArmed('cancel:' + j.id);
       return (
         '<article class="queue-row" data-render="' +
         esc(j.id) +
+        '" data-state="' +
+        state +
         '"><details data-queue-detail="' +
         esc(j.id) +
-        '"><summary class="' +
-        (G.clearableRender(j) ? 'has-clear' : '') +
-        '" data-queue-focus="details:' +
+        '"><summary data-queue-focus="details:' +
         esc(j.id) +
         '" aria-label="Take ' +
         esc(j.takeNumber || '') +
         ' details"><span class="render-take">Take ' +
         esc(j.takeNumber || '—') +
         '</span><span class="render-stage" data-state="' +
-        (attention(j) ? 'attention' : j.status === 'complete' ? 'ready' : running ? 'running' : 'waiting') +
+        state +
         '">' +
-        esc(G.jobStage(j)) +
+        esc(j.status === 'cancel_requested' ? 'Cancelling' : G.jobStage(j)) +
         '</span>' +
         (Number.isFinite(percent) ? '<span class="render-percent">' + Math.round(percent) + '%</span>' : '') +
         '<span data-job-elapsed="' +
         esc(j.id) +
         '"></span>' +
+        (cancellable(j)
+          ? '<button class="render-cancel' +
+            (confirm ? ' armed' : '') +
+            '" data-cancel-attempt="' +
+            esc(j.id) +
+            '" data-queue-focus="cancel:' +
+            esc(j.id) +
+            '" title="' +
+            (label === 'Dismiss'
+              ? 'Remove this request; Comfy has no record of it'
+              : confirm
+                ? 'Click again to cancel take ' + esc(j.takeNumber || '')
+                : 'Cancel take ' + esc(j.takeNumber || '')) +
+            '">' +
+            (confirm ? 'Confirm' : label) +
+            '</button>'
+          : '') +
         (G.clearableRender(j)
           ? '<button class="render-clear" data-clear-render="' +
             esc(j.id) +
@@ -252,43 +290,66 @@ export function createRenderQueue({
             svg('close') +
             '</button>'
           : '') +
-        '</summary>' +
-        details +
+        '</summary><div class="render-details"><dl class="render-facts">' +
+        facts +
+        '</dl>' +
+        (j.error ? '<pre class="render-error">' + esc(j.error) + '</pre>' : '') +
         (actions ? '<div class="render-row-actions">' + actions + '</div>' : '') +
-        '</details>' +
-        progress +
+        '</div></details>' +
+        (Number.isFinite(percent) || running
+          ? '<div class="render-progress"><progress max="100"' +
+            (Number.isFinite(percent) ? ' value="' + esc(percent) + '"' : '') +
+            ' aria-label="' +
+            esc(j.target === 'deadline' ? 'Deadline worker' : 'Current node') +
+            ' progress"></progress></div>'
+          : '') +
         '</article>'
       );
     };
-    const grouped = items => {
+    const grouped = (items, live) => {
       const groups = new Map();
       for (const job of items) {
         if (!groups.has(job.clipId)) groups.set(job.clipId, []);
         groups.get(job.clipId).push(job);
       }
       return [...groups]
-        .map(
-          ([id, group]) =>
+        .map(([id, group]) => {
+          const stoppable = live ? group.filter(j => cancellable(j) && cancelLabel(j) === 'Cancel') : [],
+            confirm = isArmed('shot:' + id);
+          return (
             '<section class="render-shot" data-render-shot="' +
             esc(id) +
-            '"><h3 title="' +
+            '"><header><h3 title="' +
             esc(group[0].name) +
             '">' +
             esc(getState().clips.find(c => c.id === id)?.name || group[0].name) +
             '</h3>' +
+            (stoppable.length > 1
+              ? '<button class="render-cancel' +
+                (confirm ? ' armed' : '') +
+                '" data-cancel-shot="' +
+                esc(id) +
+                '" data-queue-focus="cancel-shot:' +
+                esc(id) +
+                '">' +
+                (confirm ? 'Confirm' : 'Cancel all ' + stoppable.length) +
+                '</button>'
+              : '') +
+            '</header>' +
             group.map(row).join('') +
-            '</section>',
-        )
+            '</section>'
+          );
+        })
         .join('');
     };
     const recovered = getState().recoverableResults || [];
     const html =
-      grouped(current) +
+      grouped(current, true) +
       (past.length
         ? '<details class="render-history" data-queue-detail="history"><summary data-queue-focus="history">Recent renders <span>' +
           past.length +
           '</span></summary><div>' +
-          grouped(past) +
+          grouped(past, false) +
           '</div></details>'
         : '') +
       (!jobs.length
@@ -337,8 +398,41 @@ export function createRenderQueue({
               }
             }),
         );
-      bind('data-cancel-attempt', 'cancel', 'cancel');
       bind('data-recover-submission', 'recover_submission', 'recover');
+      list.querySelectorAll('[data-cancel-attempt],[data-cancel-shot]').forEach(
+        button =>
+          (button.onclick = e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = button.dataset.cancelAttempt,
+              shot = button.dataset.cancelShot,
+              key = id ? 'cancel:' + id : 'shot:' + shot,
+              ids = id
+                ? [id]
+                : visibleJobs()
+                    .filter(
+                      j =>
+                        j.clipId === shot &&
+                        G.cancelAction(j) !== 'refused' &&
+                        j.status !== 'cancel_requested' &&
+                        !(j.status === 'uncertain' && G.cancelAction(j) === 'cancelled'),
+                    )
+                    .map(j => j.id);
+            // Dismiss drops a request Comfy has no record of; stopping work asks once more.
+            if (button.textContent !== 'Dismiss' && !(armed?.key === key && armed.until > Date.now())) {
+              armed = { key, until: Date.now() + 4000 };
+              clearTimeout(armedTimer);
+              armedTimer = setTimeout(() => {
+                armed = null;
+                renderQueueList();
+              }, 4000);
+              renderQueueList();
+              return;
+            }
+            armed = null;
+            return cancelRenders(ids);
+          }),
+      );
       list.querySelectorAll('[data-clear-render]').forEach(
         button =>
           (button.onclick = e => {

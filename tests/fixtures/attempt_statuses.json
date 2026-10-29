@@ -40,16 +40,22 @@
    "action": "cancelled"
   },
   {
+   "status": "dispatching",
+   "target": "local",
+   "externalJob": false,
+   "action": "requested"
+  },
+  {
    "status": "queued",
    "target": "local",
    "externalJob": false,
-   "action": "refused"
+   "action": "requested"
   },
   {
    "status": "running",
    "target": "local",
    "externalJob": false,
-   "action": "refused"
+   "action": "requested"
   },
   {
    "status": "collection_pending",

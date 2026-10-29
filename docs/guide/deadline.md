@@ -67,8 +67,8 @@ the clip's folder before making review media. Then:
 - Failed or suspended jobs ask for attention in **Renders** and are never
   resubmitted on their own.
 
-**Cancel request** cancels an owned job. If the connection drops after
-the stop request, use **Cancel request** again to retry unconfirmed delivery.
+**Cancel** cancels an owned job. If the connection drops after
+the stop request, use **Cancel** again to retry unconfirmed delivery.
 Spool rechecks ownership and the attempt's current status; confirmed deliveries
 are not sent again. This never submits another render. If the connection drops after
 submission, **Find existing Deadline job** searches for the tagged job instead of

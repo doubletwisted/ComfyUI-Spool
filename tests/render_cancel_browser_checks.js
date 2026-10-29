@@ -1,4 +1,4 @@
-// Synthetic jobs decide which renders offer Cancel request or Dismiss; the cancel command is intercepted.
+// Synthetic jobs decide which renders offer Cancel or Dismiss; the cancel command is intercepted.
 (async () => {
   const w = window,
     n = w.spoolNative,
@@ -66,13 +66,13 @@
     await wait(() => d.querySelector('[data-render="ui-farm-owned"]'), 'Renders list');
     const button = id => d.querySelector('[data-render="' + id + '"] [data-cancel-attempt]');
     check('A local render absent from Comfy can be dismissed', button('ui-local-uncertain')?.textContent === 'Dismiss');
-    check('A running local render is cancelled from Comfy, not Spool', !button('ui-local-running'));
-    check('A Cloud render can be asked to stop', button('ui-cloud-running')?.textContent === 'Cancel request');
+    check('A running local render can be cancelled from its row', button('ui-local-running')?.textContent === 'Cancel');
+    check('A Cloud render can be asked to stop', button('ui-cloud-running')?.textContent === 'Cancel');
     check(
       'A Deadline submission without an owned job offers recovery instead',
       !button('ui-farm-unowned') && !!d.querySelector('[data-render="ui-farm-unowned"] [data-recover-submission]'),
     );
-    check('An owned Deadline job can be asked to stop', button('ui-farm-owned')?.textContent === 'Cancel request');
+    check('An owned Deadline job can be asked to stop', button('ui-farm-owned')?.textContent === 'Cancel');
     button('ui-local-uncertain').click();
     await wait(() => commands.length === 1, 'Dismiss command');
     check(
@@ -80,6 +80,33 @@
       commands[0].action === 'cancel' &&
         commands[0].arguments.attemptId === 'ui-local-uncertain' &&
         commands[0].scope.capabilities.includes('cancel'),
+    );
+    button('ui-local-running').click();
+    check(
+      'Cancelling running work asks for confirmation first',
+      commands.length === 1 && button('ui-local-running')?.textContent === 'Confirm',
+    );
+    button('ui-local-running').click();
+    await wait(() => commands.length === 2, 'Cancel command');
+    check(
+      'Confirming sends one scoped cancel command for that take',
+      commands[1].action === 'cancel' && commands[1].arguments.attemptId === 'ui-local-running',
+    );
+    const all = d.querySelector('[data-cancel-shot]');
+    check('A shot with several running takes offers Cancel all', /^Cancel all \d+$/.test(all?.textContent || ''));
+    all.click();
+    d.querySelector('[data-cancel-shot]').click();
+    await wait(() => commands.length > 2, 'Cancel all commands');
+    await new Promise(r => setTimeout(r, 200));
+    check(
+      'Cancel all stops the running takes but never dismisses or recovers',
+      commands
+        .slice(2)
+        .every(
+          c =>
+            c.action === 'cancel' &&
+            ['ui-local-running', 'ui-cloud-running', 'ui-farm-owned'].includes(c.arguments.attemptId),
+        ),
     );
   } finally {
     w.fetch = original;

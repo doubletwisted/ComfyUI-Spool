@@ -30,6 +30,12 @@ def verify_frozen_inputs(media, request, prompt):
             check_frozen(contained(media.host_roots["input"], asset["frozen"]), asset)
 
 
+def interrupt_comfy():
+    import nodes  # Comfy's own interrupt, as its /interrupt route uses.
+
+    nodes.interrupt_processing()
+
+
 class LocalExecutor:
     def __init__(self, store, media, server, validate, schemas=None, configuration=None, progress=None):
         self.store, self.media, self.server, self.validate = store, media, server, validate
@@ -44,6 +50,7 @@ class LocalExecutor:
         self.collector = Collector(store, media)
         self.progress = progress
         self.pushed_progress = {}
+        self.interrupt = interrupt_comfy
 
     def notify_progress(self):
         """Progress is ephemeral: wake readers only when the observed values change."""
@@ -261,6 +268,24 @@ class LocalExecutor:
             )
         return False
 
+    def stop(self, store, attempt, running_ids, pending_ids):
+        """Carry out Cancel for local work this Comfy owns; True when it finished first and is collected."""
+        prompt_id = attempt["prompt_id"]
+        queue = self.server.prompt_queue
+        if prompt_id in pending_ids:
+            queue.delete_queue_item(lambda item: item[1] == prompt_id)
+        elif prompt_id in running_ids:
+            # Recheck right before interrupting so another prompt is not stopped instead.
+            if any(item[1] == prompt_id for item in queue.get_current_queue()[0]):
+                self.interrupt()
+            return False
+        else:
+            status = (queue.get_history(prompt_id=prompt_id).get(prompt_id) or {}).get("status", {})
+            if status.get("completed") and status.get("status_str") == "success":
+                return True
+        store.transition(attempt["id"], attempts.CANCELLED, expected=attempts.CANCEL_REQUESTED)
+        return False
+
     async def reconcile(self):
         if self.disabled_reason:
             return
@@ -271,6 +296,11 @@ class LocalExecutor:
                 if attempts.target_of(attempt["request"]) == attempts.DEADLINE:
                     if attempt["status"] in {attempts.INTENT, attempts.WAITING}:
                         await self.dispatch(attempt)
+                    continue
+                if attempt["status"] == attempts.CANCEL_REQUESTED and not (
+                    (store.owner(attempt["id"]) or "").startswith(self.identity)
+                    and await asyncio.to_thread(self.stop, store, attempt, running_ids, pending_ids)
+                ):
                     continue
                 if await asyncio.to_thread(self.observe, store, media, attempt, running_ids, pending_ids):
                     await self.dispatch(attempt)

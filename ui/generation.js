@@ -248,6 +248,7 @@ export function cancelAction(job) {
   if (TERMINAL.includes(job.status)) return 'refused';
   if (['intent', 'waiting_for_host'].includes(job.status) || (target === 'local' && job.status === 'uncertain'))
     return 'cancelled';
+  if (target === 'local' && ['dispatching', 'queued', 'running'].includes(job.status)) return 'requested';
   return target === 'cloud' || (target === 'deadline' && !!job.submission?.external_id) ? 'requested' : 'refused';
 }
 export const finishedRender = job => TERMINAL.includes(job.status);

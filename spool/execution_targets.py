@@ -36,9 +36,7 @@ def cancellation(attempt, target, submission=None):
         if attempt["status"] in attempts.TERMINAL:
             raise ValueError("This job has already finished")
         if target == attempts.LOCAL:
-            raise ValueError(
-                "Cancel a running local render from ComfyUI's queue; Spool records the outcome Comfy reports"
-            )
+            raise ValueError("This render has finished; Spool is collecting its result")
         raise ValueError("Claimed work needs an owned Deadline job; resolve uncertain submission first")
     status = attempts.CANCELLED if outcome == "cancelled" else attempts.CANCEL_REQUESTED
     return {"status": status, "result": {"attemptId": attempt["id"], "status": status}}
