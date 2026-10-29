@@ -1,3 +1,6 @@
+import { createWorkflowCoordinator } from './workflow-coordinator.js';
+import { createLibraryRenderer } from './library-renderer.js';
+import { createInspectorRenderer } from './inspector-renderer.js';
 import { createTimelinePointer } from './timeline-pointer.js';
 import { createTimelineRenderer } from './timeline-renderer.js';
 import { createViewer } from './viewer.js';
@@ -6,7 +9,7 @@ import { createActionMenu } from './action-menu.js';
 import { createQueueActions } from './queue-submission.js';
 import { createInputActions } from './input-actions.js';
 import { createInputReplacements } from './input-replacement.js';
-import { visibleInputs, inputFilled, mayStayEmpty } from './input-groups.js';
+import { inputFilled, mayStayEmpty } from './input-groups.js';
 import { keyText } from './keys.js';
 // Native editor runtime. Demo source is not loaded or transformed.
 let initialization;
@@ -847,167 +850,32 @@ async function startEditor(isFailed) {
       } catch (error) {}
       renderBin();
     };
-  function renderBin() {
-    applyMediaView();
-    syncImportedWorkflows();
-    workflowLibrary?.render();
-    renderFullLibrary();
-  }
-  function mediaRemoveButton(m) {
-    return (
-      '<button class="remove-media" data-remove-media="' +
-      esc(m.id) +
-      '" title="Remove from media pool" aria-label="Remove ' +
-      esc(m.name) +
-      ' from media pool">' +
-      svg('trash') +
-      '</button>'
-    );
-  }
-  function takeFacts(t) {
-    if (!t || t.placeholder) return '';
-    const m = t.media || {},
-      source = String(m.originalFile || m.name || '')
-        .split('/')
-        .at(-1);
-    const rows = [
-      [
-        'Selected take',
-        (t.original ? 'Original clip' : 'T' + String(t.number).padStart(2, '0')) + (t.generated ? ' · generated' : ''),
-      ],
-      ['Source', source],
-      ['Length', m.frames ? seconds(m.frames) + ' · ' + m.frames + ' frames' : ''],
-      ['Size', m.width && m.height ? m.width + ' × ' + m.height : ''],
-      ['Frame rate', m.fps ? String(m.fps).replace(/\/1$/, '') + ' fps' : ''],
-      ['Audio', m.kind === 'video' ? (m.audio ? 'Yes' : 'No') : ''],
-      ['Seed', t.seed != null ? decimal(t.seed) : ''],
-    ].filter(([, value]) => value);
-    return (
-      '<dl class="take-facts">' +
-      rows
-        .map(([key, value]) => '<dt>' + esc(key) + '</dt><dd title="' + esc(value) + '">' + esc(value) + '</dd>')
-        .join('') +
-      '</dl>'
-    );
-  }
-  function mediaOwners() {
-    const owners = new Map();
-    for (const c of state.clips)
-      for (const t of c.takes || [])
-        if (t.media?.id && !owners.has(t.media.id)) owners.set(t.media.id, { clip: c, take: t });
-    return owners;
-  }
-  function mediaLabel(m, owner) {
-    return owner ? owner.clip.name : m.name;
-  }
-  function mediaTake(owner) {
-    return owner ? (owner.take.original ? 'Original' : 'Take ' + owner.take.number) + ' / ' : '';
-  }
-  function mediaCard(m, owner) {
-    const label = mediaLabel(m, owner);
-    return (
-      '<div class="bin-card' +
-      (review.source?.media.id === m.id ? ' active' : '') +
-      '" draggable="true" tabindex="0" role="button" aria-label="Preview ' +
-      esc(label) +
-      '" data-media="' +
-      m.id +
-      '"><img src="' +
-      esc(url(m.poster)) +
-      '" alt=""><span class="bin-tag">' +
-      (owner && !owner.take.original ? 'T' + String(owner.take.number).padStart(2, '0') + ' · ' : '') +
-      (m.kind === 'image' ? 'Image' : m.kind === 'audio' ? 'Audio' : seconds(m.frames)) +
-      '</span><button class="add" data-add-media="' +
-      m.id +
-      '" title="Add to timeline" aria-label="Add ' +
-      esc(m.name) +
-      ' to timeline">' +
-      svg('plus') +
-      '</button>' +
-      mediaRemoveButton(m) +
-      '<div class="bin-text"><strong title="' +
-      esc(m.name) +
-      '">' +
-      esc(label) +
-      '</strong><span class="media-detail">' +
-      esc(mediaTake(owner)) +
-      esc(m.kind) +
-      (m.kind === 'image' ? '' : ' / ' + seconds(m.frames)) +
-      (m.width && m.height ? ' / ' + m.width + ' x ' + m.height : '') +
-      '</span></div></div>'
-    );
-  }
-  function projectMedia() {
-    const items = new Map((state.media || []).map(m => [m.id, m]));
-    for (const c of state.clips)
-      for (const t of T.realTakes(c)) if (!t.generated && !items.has(t.media.id)) items.set(t.media.id, t.media);
-    const hidden = new Set(state.hiddenMediaIds || []);
-    return [...items.values()].filter(m => !hidden.has(m.id));
-  }
-  function renderFullLibrary() {
-    const query = $('poolSearch').value.trim().toLowerCase(),
-      items = projectMedia().filter(
-        m => (mediaFilter === 'all' || m.kind === mediaFilter) && m.name.toLowerCase().includes(query),
-      );
-    $('binTitle').textContent = items.length + ' ' + (items.length === 1 ? 'item' : 'items');
-    const empty = query
-      ? '<div class="pool-empty"><strong>No matching media</strong><p>Try another name or clear your search.</p><button class="outline" data-clear-search>Clear search</button></div>'
-      : '<div class="pool-empty"><span class="empty-symbol">' +
-        svg(binTab === 'workflows' ? 'audio' : 'import') +
-        '</span><strong>' +
-        (binTab === 'workflows' ? 'Add your soundtrack' : 'Bring your media in') +
-        '</strong><p>' +
-        (binTab === 'workflows' ? 'Import audio or a video with sound.' : 'Video, images and audio, ready to edit.') +
-        '</p><button class="outline" data-pool-import>' +
-        svg('plus') +
-        'Import media</button><small>You can also drop files here</small></div>';
-    if (
-      draw(
-        'binGrid',
-        items.length ? (owners => items.map(m => mediaCard(m, owners.get(m.id))).join(''))(mediaOwners()) : empty,
-      )
-    ) {
-      const clear = $('binGrid').querySelector('[data-clear-search]'),
-        add = $('binGrid').querySelector('[data-pool-import]');
-      if (clear)
-        clear.onclick = () => {
-          $('poolSearch').value = '';
-          renderBin();
-          $('poolSearch').focus();
-        };
-      if (add) add.onclick = () => pickImport();
-      $('binGrid')
-        .querySelectorAll('[data-add-media]')
-        .forEach(
-          b =>
-            (b.onclick = e => {
-              e.stopPropagation();
-              addMediaClip(b.dataset.addMedia);
-            }),
-        );
-      $('binGrid')
-        .querySelectorAll('[data-media]')
-        .forEach(b => {
-          const m = projectMedia().find(m => m.id === b.dataset.media);
-          thumbnails.bind(b.querySelector('img'), m, m.frames / 2, fps);
-          b.onclick = e => {
-            if (e.target.closest('button')) return;
-            const m = projectMedia().find(m => m.id === b.dataset.media);
-            pause();
-            finishViewerPan();
-            closeTakeComparison();
-            review.openMedia(m);
-            renderBin();
-            renderTakes();
-            updateViewer(true);
-            $('binGrid')
-              .querySelector('[data-media="' + CSS.escape(m.id) + '"]')
-              ?.focus({ preventScroll: true });
-          };
-          b.ondragstart = e => e.dataTransfer.setData('application/spool', JSON.stringify({ media: b.dataset.media }));
-        });
-    }
-  }
+  const { renderBin, takeFacts, projectMedia } = createLibraryRenderer({
+    $,
+    esc,
+    svg,
+    T,
+    url,
+    thumbnails,
+    getFps: () => fps,
+    getWorkflowLibrary: () => workflowLibrary,
+    syncImportedWorkflows,
+    getState: () => state,
+    getBinTab: () => binTab,
+    review,
+    seconds,
+    draw,
+    getMediaFilter: () => mediaFilter,
+    applyMediaView,
+    getPickImport: () => pickImport,
+    getRenderTakes: () => renderTakes,
+    getCloseTakeComparison: () => closeTakeComparison,
+    getAddMediaClip: () => addMediaClip,
+    getUpdateViewer: () => updateViewer,
+    getPause: () => pause,
+    getFinishViewerPan: () => finishViewerPan,
+    getDecimal: () => decimal,
+  });
   async function browseComfyTemplates() {
     const { createTemplateBrowser } = await import('/spool/ui/template-browser.js');
     showModal(
@@ -1100,216 +968,54 @@ async function startEditor(isFailed) {
       card.click();
     }
   });
-  const preparedWorkflows = new Map();
-  const workflowLoads = new Map();
-  const unsavedRecipes = new Map();
-  const workflowSignatures = new WeakMap();
-  function workflowSourceKey(data) {
-    if (!workflowSignatures.has(data))
-      workflowSignatures.set(
-        data,
-        JSON.stringify([
-          data.workflow,
-          data.prompt,
-          data.bindings,
-          data.result,
-          data.resultOnly,
-          data.widgetBindings,
-          data.executionTarget || 'local',
-        ]),
-      );
-    return workflowSignatures.get(data);
-  }
-  function libraryWorkflow(id, builtin) {
-    const w = builtin ? workflowLibrary.template(id) : workflows[id];
-    if (!w) return {};
-    const sources = builtin
-        ? Object.values(workflows).filter(
-            w =>
-              w.data?.prompt &&
-              w.data.provenance?.builtinTemplate === id &&
-              workflowSourceKey(w.data) === workflowSourceKey(builtinCaptures[id]),
-          )
-        : [w],
-      source = sources[0];
-    const key = (builtin ? 'builtin:' : 'project:') + id;
-    let prepared = preparedWorkflows.get(key);
-    if (!prepared)
-      for (const candidate of sources.filter(w => w?.data.prompt)) {
-        const signature = workflowSourceKey(candidate.data),
-          entry = Object.entries(nativeRecipes).find(([, recipe]) => workflowSourceKey(recipe) === signature);
-        if (entry) {
-          prepared = { workflow: candidate.id, version: entry[0], definitions: productDefinitions };
-          preparedWorkflows.set(key, prepared);
-          break;
-        }
-      }
-    return { w, source, key, prepared };
-  }
-  function loadProjectWorkflow(id) {
-    const { w, source, key } = libraryWorkflow(id, false);
-    if (!w) return;
-    if (workflowLoads.has(key)) return workflowLoads.get(key);
-    const promise = (async () => {
-      if (source?.data.prompt) return { ...copy(source.data), importedWorkflowId: source.id };
-      if (!productCapabilities.connected) await connectComfy();
-      const graph = w.data?.workflow;
-      const captured = await builtinPreparer.capture(productCapabilities.configuration.comfyUrl, copy(graph));
-      return { ...captured, importedWorkflowId: id };
-    })();
-    workflowLoads.set(key, promise);
-    promise.catch(() => workflowLoads.delete(key));
-    return promise;
-  }
-  function addLibraryShot(id, index = null, clipId = null, builtin = false, placement = null) {
-    workflowAdds = workflowAdds
-      .catch(() => {})
-      .then(async () => {
-        const { w, key, prepared: existing } = libraryWorkflow(id, builtin);
-        if (!w) return;
-        let prepared = existing;
-        const target = clipId && state.clips.find(c => c.id === clipId);
-        if (clipId && !target) throw Error('This clip was removed.');
-        if (index === null) {
-          index = state.clips.length;
-          placement = { track: 1, start: total() };
-        }
-        const name = builtin ? w.family + ' · ' + w.name : w.name;
-        const profileTemplate = builtin ? w : workflowLibrary.template(w.data?.provenance?.builtinTemplate);
-        if (!prepared && builtin) {
-          const capture = copy(builtinCaptures[id]);
-          capture.bindings = builtinBindings(capture, productDefinitions);
-          const workflow = registerWorkflowData(capture, name),
-            version = crypto.randomUUID();
-          nativeRecipes[version] = capture;
-          unsavedRecipes.set(version, capture);
-          prepared = {
-            workflow: workflow.id,
-            version,
-            definitions: w.section === 'cloud' ? { ...productDefinitions, ...cloudDefinitions } : productDefinitions,
-          };
-          preparedWorkflows.set(key, prepared);
-        }
-        // The new shot and its recipe share the ordinary save queue. Neither graph
-        // capture nor NAS publication should block the edit.
-        if (
-          prepared &&
-          (profileTemplate || resultChoices(nativeRecipes[prepared.version].prompt, prepared.definitions).length === 1)
-        ) {
-          if (target)
-            edits.apply('Replace workflow', () => applyPreparedWorkflow(target, prepared.workflow, prepared.version));
-          else addImportedWorkflowClip(prepared.workflow, index, null, placement, prepared.version);
-          $('editor').focus({ preventScroll: true });
-          setStatus('Workflow added');
-          return;
-        }
-        setStatus('Preparing ' + name + '…');
-        let definitions;
-        const capture = async () => {
-          const value = prepared
-            ? {
-                ...copy(nativeRecipes[prepared.version]),
-                definitions: prepared.definitions,
-                importedWorkflowId: prepared.workflow,
-              }
-            : copy(await loadProjectWorkflow(id));
-          definitions = value.definitions || productDefinitions;
-          return value;
-        };
-        const session = await workflowSetup.start({
-          capture,
-          name,
-          index,
-          clipId,
-          automatic: true,
-          builtin: profileTemplate,
-          replaceWorkflow: !!clipId,
-          placement,
-          preparedVersion: prepared?.version,
-          definitions: productDefinitions,
-          previous: !clipId && profileTemplate ? w.data : null,
-        });
-        if (session) {
-          await session.completed;
-          const saved = state.clips.find(c => c.id === session.savedClipId);
-          if (saved?.workflowVersion)
-            preparedWorkflows.set(key, { workflow: saved.workflow, version: saved.workflowVersion, definitions });
-        }
-      })
-      .catch(error => {
-        toast(error.message);
-        setStatus('Workflow was not added');
-      });
-    return workflowAdds;
-  }
-  function addBuiltinShot(id, index = null, clipId = null, placement = null) {
-    return addLibraryShot(id, index, clipId, true, placement);
-  }
-  function showShotPicker() {
-    pause();
-    showModal(
-      'Add shot',
-      '<div class="shot-picker"><section><h3>Workflows</h3><div class="shot-workflows">' +
-        Object.entries(workflows)
-          .map(([id, w]) => '<button class="workflow-row" data-shot-workflow="' + id + '">' + esc(w.name) + '</button>')
-          .join('') +
-        '</div><button class="outline" id="shotImportWorkflow">' +
-        svg('plus') +
-        'Import workflow</button></section><section><h3>Media</h3><div class="shot-media">' +
-        projectMedia()
-          .filter(m => m.kind !== 'audio')
-          .map(
-            m =>
-              '<button class="shot-media-item" data-shot-media="' +
-              m.id +
-              '"><img src="' +
-              esc(url(m.poster)) +
-              '" alt=""><span>' +
-              esc(m.name) +
-              '</span></button>',
-          )
-          .join('') +
-        '</div><button class="outline" id="shotImportMedia">' +
-        svg('import') +
-        'Import media</button></section></div>',
-      '<button class="outline" id="shotCancel">Cancel</button>',
-    );
-    $('shotCancel').onclick = closeModal;
-    $('modal')
-      .querySelectorAll('[data-shot-media]')
-      .forEach(b => {
-        const m = projectMedia().find(m => m.id === b.dataset.shotMedia);
-        thumbnails.bind(b.querySelector('img'), m, m.frames / 2, fps);
-      });
-    $('modal')
-      .querySelectorAll('[data-shot-workflow]')
-      .forEach(
-        b =>
-          (b.onclick = () => {
-            const id = b.dataset.shotWorkflow;
-            closeModal();
-            addLibraryShot(id);
-          }),
-      );
-    $('modal')
-      .querySelectorAll('[data-shot-media]')
-      .forEach(
-        b =>
-          (b.onclick = () => {
-            const id = b.dataset.shotMedia;
-            closeModal();
-            addMediaClip(id, state.clips.length, videoTotal());
-          }),
-      );
-    $('shotImportWorkflow').onclick = () => {
-      closeModal();
-      pickImport(true, true);
-    };
-    $('shotImportMedia').onclick = () => {
-      closeModal();
-      pickImport(true);
-    };
-  }
+  const {
+    preparedWorkflows,
+    workflowLoads,
+    unsavedRecipes,
+    libraryWorkflow,
+    addLibraryShot,
+    addBuiltinShot,
+    showShotPicker,
+  } = createWorkflowCoordinator({
+    $,
+    copy,
+    esc,
+    svg,
+    productCapabilities,
+    getProductDefinitions: () => productDefinitions,
+    builtinCaptures,
+    cloudDefinitions,
+    url,
+    thumbnails,
+    getFps: () => fps,
+    workflows,
+    getWorkflowLibrary: () => workflowLibrary,
+    builtinBindings,
+    resultChoices,
+    builtinPreparer,
+    getWorkflowAdds: () => workflowAdds,
+    setWorkflowAdds: value => {
+      workflowAdds = value;
+    },
+    registerWorkflowData,
+    addImportedWorkflowClip,
+    applyPreparedWorkflow,
+    getState: () => state,
+    edits,
+    videoTotal,
+    total,
+    toast,
+    setStatus,
+    projectMedia,
+    getPickImport: () => pickImport,
+    getAddMediaClip: () => addMediaClip,
+    getPause: () => pause,
+    getShowModal: () => showModal,
+    getCloseModal: () => closeModal,
+    getNativeRecipes: () => nativeRecipes,
+    getConnectComfy: () => connectComfy,
+    getWorkflowSetup: () => workflowSetup,
+  });
   function pickImport(add = false, workflowOnly = false) {
     $('mediaFiles').accept = workflowOnly ? '.json' : '.json,video/*,image/*,audio/*';
     $('mediaFiles').onchange = e => importFiles(e.target.files, add, videoTotal());
@@ -1454,254 +1160,46 @@ async function startEditor(isFailed) {
     }
   };
   window.addEventListener('storage', seenStorage);
-  function renderInspector() {
-    inspectorNotes.render();
-    if (selectionIds().length > 1) {
-      renderSelectionInspector();
-      return;
-    }
-    $('inspector').classList.remove('multi-selected');
-    const c = selected();
-    if (!c || selectedAudio() || inspectorTab === 'audio') {
-      renderNonVideoInspector();
-      countLabel.hidden = true;
-      jobStatus.textContent = '';
-      return;
-    }
-    $('inspector').classList.remove('audio-selected');
-    $('clipName').value = c.name;
-    $('inputsInspectorTab').classList.add('active');
-    $('inputsInspectorTab').setAttribute('aria-selected', 'true');
-    $('audioInspectorTab').classList.remove('active');
-    $('audioInspectorTab').setAttribute('aria-selected', 'false');
-    renderTakes();
-    const reason = queueReason(c),
-      embedded = !c.workflow && !c.workflowVersion && !!editableGraph(c),
-      bindings = nativeRecipes[c.workflowVersion]
-        ? builtinBindings(nativeRecipes[c.workflowVersion], definitionsFor(c), c.bindings)
-        : c.bindings || [],
-      shown = new Set(visibleInputs(bindings, c.inputValues || {}, c.shotInputs || [])),
-      essential = bindings.map((b, i) => ({ b, i })).filter(({ b }) => !b.advanced && shown.has(b)),
-      pose = essential.filter(({ b }) => b.role === 'pose');
-    $('generate').hidden = false;
-    $('generate').disabled = !!reason;
-    $('generate').title = reason || 'Generate new takes with these settings';
-    $('generateLabel').textContent = 'Generate';
-    countLabel.hidden = !!reason;
-    $('nativeCount').value = c.count || 1;
-    $('nativeCount').onchange = e => {
-      const value = Number(e.target.value);
-      if (!Number.isInteger(value) || value < 1 || value > 16) {
-        e.target.value = c.count || 1;
-        return;
-      }
-      edits.apply(
-        'Change take count',
-        () => {
-          c.count = value;
-        },
-        'none',
-      );
-    };
-    renderJobStatus();
-    const setup = workflowStatus(
-      c,
-      workflows[c.workflow],
-      nativeRecipes[c.workflowVersion],
-      definitionsFor(c),
-      embedded,
-    );
-    const workflowLabel = c.generationBase
-      ? 'Workflow from take'
-      : c.workflowVersion
-        ? 'Clip workflow'
-        : embedded
-          ? 'Workflow from take'
-          : 'Choose a take with a workflow';
-    draw(
-      'inspectorContent',
-      '<div class="clip-workflow-heading' +
-        (!c.workflowVersion && !embedded && !c.workflow && !c.generationBase ? ' no-workflow' : '') +
-        '"><span>' +
-        workflowLabel +
-        '<small class="workflow-route">' +
-        (Object.values(nativeRecipes[c.workflowVersion]?.prompt || {}).some(n =>
-          ['DeadlineSubmit', 'SaveAndSubmitNode'].includes(n.class_type),
-        )
-          ? 'Deadline'
-          : c.executionTarget === 'cloud'
-            ? 'Comfy Cloud'
-            : 'Local ComfyUI') +
-        '</small></span><div class="clip-workflow-actions"><button class="outline" id="editClipWorkflow">Edit in Comfy</button><button class="outline" id="reloadTakeWorkflow" title="Restore the selected take’s saved workflow and inputs, replacing current edits">Reload workflow from take</button></div></div>' +
-        (!setup.ready
-          ? '<p class="' +
-            (setup.problem ? 'workflow-problem' : 'workflow-hint') +
-            '" role="status">' +
-            esc(setup.note) +
-            '</p>'
-          : '') +
-        (nativeRecipes[c.workflowVersion]?.executionTarget === 'cloud'
-          ? '<label class="field"><span>Execute on</span><select id="clipExecutionTarget"><option value="cloud" ' +
-            ((c.executionTarget || 'cloud') === 'cloud' ? 'selected' : '') +
-            '>Comfy Cloud · Developer Platform</option><option value="local" ' +
-            (c.executionTarget === 'local' ? 'selected' : '') +
-            '>Local ComfyUI · Partner Nodes</option></select></label>'
-          : '') +
-        '<div class="native-bindings">' +
-        essential
-          .filter(({ b }) => b.role !== 'pose')
-          .map(({ b, i }) => controlField(b, i, c))
-          .join('') +
-        '</div>' +
-        (pose.length
-          ? '<details class="native-advanced"><summary>Pose extraction</summary><div class="native-bindings">' +
-            pose.map(({ b, i }) => controlField(b, i, c)).join('') +
-            '</div></details>'
-          : '') +
-        (!c.workflowVersion ? takeFacts(take(c)) : ''),
-    );
-    $('editClipWorkflow').disabled = $('editClipWorkflow').hidden = !c.workflowVersion && !embedded && !c.workflow;
-    $('editClipWorkflow').onclick = () =>
-      c.workflow && !c.workflowVersion && !embedded
-        ? prepareWorkflow(
-            { ...workflows[c.workflow].data, importedWorkflowId: c.workflow },
-            c.name,
-            state.clips.indexOf(c),
-            c.id,
-          )
-        : openNativeWorkflow();
-    $('reloadTakeWorkflow').disabled = $('reloadTakeWorkflow').hidden = !!take(c).placeholder || !editableGraph(c);
-    $('reloadTakeWorkflow').onclick = () => chooseTake(c.id, c.takeId);
-    const executionTarget = $('clipExecutionTarget');
-    if (executionTarget)
-      executionTarget.onchange = () => {
-        edits.apply(
-          'Change execution target',
-          () => {
-            c.executionTarget = executionTarget.value;
-            c.revision++;
-          },
-          'inspector',
-        );
-      };
-    bindImageInputs(c);
-    $('inspectorContent')
-      .querySelectorAll('[data-clear-input]')
-      .forEach(
-        button =>
-          (button.onclick = e => {
-            e.preventDefault();
-            e.stopPropagation();
-            clearInput(c, Number(button.dataset.clearInput));
-          }),
-      );
-    $('inspectorContent')
-      .querySelectorAll('[data-media-input]')
-      .forEach(field => {
-        const index = Number(field.dataset.mediaInput),
-          picker = field.querySelector('input'),
-          button = field.querySelector('[data-media-upload]'),
-          timeline = field.querySelector('[data-use-timeline-video]');
-        button.onclick = () => picker.click();
-        if (timeline) timeline.onclick = () => useTimelineVideo(c.id, index);
-        const replace = async files => {
-          if (files.length !== 1) return;
-          button.disabled = true;
-          try {
-            await replaceInputMedia(c, index, files[0]);
-          } catch (error) {
-            toast(error.message);
-          } finally {
-            button.disabled = false;
-          }
-        };
-        picker.onchange = () => replace([...picker.files]);
-        field.ondragover = e => {
-          e.preventDefault();
-          e.stopPropagation();
-        };
-        field.ondrop = e => {
-          e.preventDefault();
-          e.stopPropagation();
-          void replace([...e.dataTransfer.files]);
-        };
-      });
-
-    $('inspectorContent')
-      .querySelectorAll('[data-pixel-resolution]')
-      .forEach(group => {
-        for (const field of group.querySelectorAll('select'))
-          field.onchange = () => {
-            const b = c.bindings[Number(group.dataset.pixelResolution)],
-              size = Number(group.querySelector('[data-resolution-size]').value),
-              ratio = group.querySelector('[data-resolution-ratio]').value,
-              value = b.options.find(v => {
-                const p = pixelResolution(v);
-                return p.size === size && p.ratio === ratio;
-              });
-            if (!value) return;
-            edits.apply(
-              'Change resolution and aspect ratio',
-              () => {
-                c.inputValues[b.key] = value;
-                c.revision++;
-              },
-              'none',
-            );
-          };
-      });
-
-    $('inspectorContent')
-      .querySelectorAll('[data-seed-mode]')
-      .forEach(
-        field =>
-          (field.onchange = () => {
-            edits.apply(
-              'Change seed behavior',
-              () => {
-                c.seedMode = field.value;
-                c.seedKey = field.dataset.seedMode;
-                c.revision++;
-              },
-              'inspector',
-            );
-          }),
-      );
-    $('inspectorContent')
-      .querySelectorAll('[data-native-control]')
-      .forEach(
-        field =>
-          (field.onchange = () => {
-            const b = bindings[Number(field.dataset.nativeControl)],
-              original = Object.hasOwn(c.inputValues, b.key)
-                ? c.inputValues[b.key]
-                : nativeRecipes[c.workflowVersion].prompt[b.nodeId].inputs[b.input],
-              integer = isInt(original) && b.contract?.inputType !== 'FLOAT';
-            let value = integer
-              ? { __spool_int__: field.value }
-              : typeof original === 'boolean'
-                ? field.value === 'true'
-                : typeof original === 'number'
-                  ? Number(field.value)
-                  : field.value;
-            if (integer && !/^[-]?\d+$/.test(field.value)) {
-              toast('Use an exact decimal integer');
-              return;
-            }
-            if (typeof value === 'number' && !Number.isFinite(value)) return;
-            edits.apply(
-              'Change ' + b.label,
-              () => {
-                bindWorkflowControls(c, bindings);
-                c.inputValues[b.key] = value;
-                c.revision++;
-                delete drawn.inspectorContent;
-              },
-              'none',
-            );
-          }),
-      );
-  }
+  const { renderInspector } = createInspectorRenderer({
+    $,
+    esc,
+    workflowStatus,
+    definitionsFor,
+    workflows,
+    pixelResolution,
+    builtinBindings,
+    drawn,
+    getInspectorTab: () => inspectorTab,
+    getState: () => state,
+    edits,
+    selected,
+    selectionIds,
+    take,
+    toast,
+    draw,
+    takeFacts,
+    renderNonVideoInspector,
+    renderSelectionInspector,
+    inspectorNotes,
+    getRenderTakes: () => renderTakes,
+    getChooseTake: () => chooseTake,
+    getSelectedAudio: () => selectedAudio,
+    getNativeRecipes: () => nativeRecipes,
+    getIsInt: () => isInt,
+    getRenderJobStatus: () => renderJobStatus,
+    getQueueReason: () => queueReason,
+    getBindWorkflowControls: () => bindWorkflowControls,
+    getControlField: () => controlField,
+    getBindImageInputs: () => bindImageInputs,
+    getUseTimelineVideo: () => useTimelineVideo,
+    getClearInput: () => clearInput,
+    getReplaceInputMedia: () => replaceInputMedia,
+    getCountLabel: () => countLabel,
+    getJobStatus: () => jobStatus,
+    getEditableGraph: () => editableGraph,
+    getOpenNativeWorkflow: () => openNativeWorkflow,
+    getPrepareWorkflow: () => prepareWorkflow,
+  });
   function takeMidpoint(c, t) {
     return (Math.min(c.in, t.media.frames - 1) + Math.min(c.out, t.media.frames)) / 2;
   }

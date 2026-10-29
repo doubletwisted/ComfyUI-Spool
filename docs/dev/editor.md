@@ -2,8 +2,8 @@
 
 `spool/editor.py` serves `ui/editor.html` unchanged. That document loads
 `ui/bootstrap.js`, which owns the loading/error barrier before importing the
-runtime. `ui/editor.js` owns editing state, rendering, gestures, playback,
-dialogs and the Comfy bridge in one private initialization scope.
+runtime. `ui/editor.js` composes editing state, UI actions and the Comfy bridge
+with the rendering and lifecycle owners described below.
 
 `initializeEditor` returns the same initialization promise within a document.
 The bootstrap publishes the `window.spoolNative` interface only after the
@@ -53,3 +53,8 @@ geometry-only drag repaint. `ui/timeline-pointer.js` owns pointer thresholds,
 clip/audio/fade gestures, marquee, scrub, panning, interruption cancellation and
 release order. Its adapters explicitly read current interaction state and apply
 selection, history, repaint and save actions.
+
+`ui/inspector-renderer.js` builds the selected clip inspector and attaches its
+controls. `ui/library-renderer.js` builds the media pool and its cards.
+`ui/workflow-coordinator.js` retains workflow preparation/load caches and
+coordinates workflow-library insertion and replacement.
