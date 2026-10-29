@@ -36,3 +36,7 @@ replacement and explicit input choices, backed by `ui/input-replacement.js`
 tokens. Both receive live getters and narrow actions; they never retain a
 project snapshot across a transport boundary. Lifecycle checks import these
 production modules with deferred transport and decoder dependencies.
+
+`ui/dialogs.js` owns modal replacement/close cleanup, capture cancellation,
+Escape/Tab handling and focus return. `ui/action-menu.js` owns menu DOM,
+keyboard navigation, dismissal and focus return; callers still build actions.

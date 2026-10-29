@@ -1,3 +1,5 @@
+import { createDialogs } from './dialogs.js';
+import { createActionMenu } from './action-menu.js';
 import { createQueueActions } from './queue-submission.js';
 import { createInputActions } from './input-actions.js';
 import { createInputReplacements } from './input-replacement.js';
@@ -408,9 +410,7 @@ async function startEditor(isFailed) {
     shownVideo = null,
     toastTimer,
     raf = 0,
-    previousTime = 0,
-    modalReturnFocus = null,
-    modalCleanup = null;
+    previousTime = 0;
   const review = createTakeReview(() => state.clips);
   const { createTakeSeen } = await import('/spool/ui/take-seen.js');
   const takeSeen = createTakeSeen(projectKey, state.clips, localStorage);
@@ -1042,7 +1042,7 @@ async function startEditor(isFailed) {
         }
       },
     }));
-    modalCleanup = browser.suspend;
+    dialogs.setCleanup(browser.suspend);
     $('templateCancel').onclick = closeModal;
     retryButton.onclick = () => {
       browser.reset();
@@ -4475,24 +4475,18 @@ async function startEditor(isFailed) {
           : pasteDestination,
     );
   });
-  function showModal(title, body, footer = '') {
-    modalCleanup?.();
-    modalCleanup = null;
-    $('modal').classList.remove('project-dialog', 'render-dialog', 'template-dialog', 'shortcut-dialog');
-    pause();
-    modalReturnFocus = document.activeElement;
-    $('modal').innerHTML =
-      '<div class="modal-head"><h2 id="modalTitle">' +
-      esc(title) +
-      '</h2><button class="iconbutton" id="closeModal" aria-label="Close dialog">' +
-      svg('close') +
-      '</button></div>' +
-      body +
-      (footer ? '<div class="modal-footer">' + footer + '</div>' : '');
-    $('modalOverlay').hidden = false;
-    $('closeModal').onclick = closeModal;
-    $('closeModal').focus();
-  }
+  const dialogs = createDialogs({
+    $,
+    esc,
+    svg,
+    pause,
+    cancelCapture: () => projectEdit.cancelCapture(),
+    stopDiagnostics: () => {
+      clearInterval(diagnosticsTimer);
+      diagnosticsTimer = 0;
+    },
+  });
+  const { showModal, closeModal } = dialogs;
   processingButton.onclick = () => {
     showModal(
       'Processing and diagnostics',
@@ -4773,18 +4767,6 @@ async function startEditor(isFailed) {
       if ($('frameResult') === result) result.textContent = error.message;
     }
   }
-  function closeModal() {
-    modalCleanup?.();
-    modalCleanup = null;
-    clearInterval(diagnosticsTimer);
-    diagnosticsTimer = 0;
-    projectEdit.cancelCapture();
-    $('modalOverlay').hidden = true;
-    modalReturnFocus?.focus();
-  }
-  $('modalOverlay').onclick = e => {
-    if (e.target === $('modalOverlay')) closeModal();
-  };
   function queueLabel() {
     const active = visibleJobs().filter(j => G.ACTIVE.includes(j.status)).length;
     $('queueLabel').textContent = 'Renders';
@@ -5394,29 +5376,7 @@ async function startEditor(isFailed) {
       }
       return;
     }
-    if (e.key === 'Escape' && !$('modalOverlay').hidden) {
-      e.stopPropagation();
-      closeModal();
-      return;
-    }
-    if (!$('modalOverlay').hidden) {
-      if (e.key === 'Tab') {
-        const nodes = [...$('modalOverlay').querySelectorAll('button:not(:disabled),input,a,iframe')].filter(
-          n => n.getClientRects().length,
-        );
-        if (!nodes.length) return;
-        const first = nodes[0],
-          last = nodes.at(-1);
-        if (e.shiftKey && document.activeElement === first) {
-          last.focus();
-          e.preventDefault();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          first.focus();
-          e.preventDefault();
-        }
-      }
-      return;
-    }
+    if (dialogs.keydown(e)) return;
     if (
       e.target.closest(
         'input:not([type=range]):not([type=checkbox]):not([type=radio]),textarea,select,[contenteditable]:not([contenteditable=false])',
@@ -9157,25 +9117,8 @@ async function startEditor(isFailed) {
   async function addNativeGraph(capture, name = capture.name || 'Current workflow', index = state.clips.length) {
     await captureInputs(capture, name, index);
   }
-  const clipMenu = document.createElement('div');
-  clipMenu.id = 'native-clip-menu';
-  clipMenu.setAttribute('role', 'menu');
-  clipMenu.setAttribute('aria-label', 'Clip actions');
-  clipMenu.hidden = true;
-  document.body.append(clipMenu);
-  let menuClipId = null,
-    menuOrigin = null;
-  function closeClipMenu(returnFocus = true) {
-    if (clipMenu.hidden) return;
-    clipMenu.hidden = true;
-    if (menuOrigin?.hasAttribute('aria-expanded')) menuOrigin.setAttribute('aria-expanded', 'false');
-    const origin = menuOrigin?.isConnected
-      ? menuOrigin
-      : $('clipLane').querySelector('[data-clip="' + menuClipId + '"]');
-    menuClipId = null;
-    menuOrigin = null;
-    if (returnFocus) origin?.focus({ preventScroll: true });
-  }
+  const actionMenu = createActionMenu({ $, esc, menuParent: () => (viewerExpanded ? $('viewer') : document.body) });
+  const { clipMenu, closeClipMenu, showActionMenu, placeMenu } = actionMenu;
   function unlinkClipAudio(id) {
     const c = state.clips.find(c => c.id === id);
     if (!c || !T.linkedAudio(c) || take(c).placeholder) return;
@@ -9242,8 +9185,7 @@ async function startEditor(isFailed) {
     if (!c) return;
     closeClipMenu(false);
     selectClip(id, false, {}, true);
-    menuClipId = id;
-    menuOrigin = origin;
+    actionMenu.setOrigin(origin, id);
     if (selectionIds().length > 1) {
       showActionMenu(
         'Selection actions',
@@ -9289,47 +9231,11 @@ async function startEditor(isFailed) {
     }
     showActionMenu('Clip actions', actions, x, y, origin);
   }
-  function showActionMenu(label, actions, x, y, origin) {
-    closeClipMenu(false);
-    menuOrigin = origin;
-    clipMenu.className = '';
-    clipMenu.setAttribute('aria-label', label);
-    clipMenu.innerHTML = actions
-      .map(
-        (a, i) =>
-          '<button role="menuitem" data-action="' +
-          i +
-          '" ' +
-          (a.reason ? 'disabled aria-disabled="true"' : '') +
-          '>' +
-          esc(a.label) +
-          (a.reason ? '<small>' + esc(a.reason) + '</small>' : '') +
-          '</button>',
-      )
-      .join('');
-    clipMenu.querySelectorAll('button').forEach(
-      b =>
-        (b.onclick = () => {
-          const action = actions[Number(b.dataset.action)];
-          closeClipMenu();
-          action.run();
-        }),
-    );
-    placeMenu(x, y);
-  }
-  function placeMenu(x, y) {
-    (viewerExpanded ? $('viewer') : document.body).append(clipMenu);
-    clipMenu.hidden = false;
-    const rect = clipMenu.getBoundingClientRect();
-    clipMenu.style.left = Math.max(6, Math.min(x, innerWidth - rect.width - 6)) + 'px';
-    clipMenu.style.top = Math.max(6, Math.min(y, innerHeight - rect.height - 6)) + 'px';
-    clipMenu.querySelector('button:not(:disabled)')?.focus({ preventScroll: true });
-  }
   function showViewerMenu(picture, x, y) {
     const available =
       picture && !picture.gap && !picture.take?.placeholder && ['video', 'image'].includes(picture.media.kind);
     closeClipMenu(false);
-    menuOrigin = $('viewer');
+    actionMenu.setOrigin($('viewer'));
     clipMenu.className = 'viewer-menu';
     clipMenu.setAttribute('aria-label', 'Viewer actions');
     const detail = available
@@ -9521,38 +9427,6 @@ async function startEditor(isFailed) {
         ]
       : [{ label: 'Paste image to media pool', run: () => pasteClipboardImage('media') }];
     showActionMenu('Media actions', actions, e.clientX, e.clientY, card || $('editor'));
-  });
-  const menuKey = e => {
-    if (clipMenu.hidden) return;
-    e.stopImmediatePropagation();
-    if (e.type === 'keyup') return;
-    const items = [...clipMenu.querySelectorAll('button:not(:disabled)')],
-      i = items.indexOf(document.activeElement);
-    if (e.key === 'Escape' || e.key === 'Tab') {
-      e.preventDefault();
-      closeClipMenu();
-    } else if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
-      e.preventDefault();
-      items[
-        e.key === 'Home'
-          ? 0
-          : e.key === 'End'
-            ? items.length - 1
-            : (i + (['ArrowDown', 'ArrowRight'].includes(e.key) ? 1 : -1) + items.length) % items.length
-      ]?.focus();
-    }
-  };
-  window.addEventListener('keydown', menuKey, true);
-  window.addEventListener('keyup', menuKey, true);
-  const dismissMenu = e => {
-    if (!clipMenu.contains(e.target)) closeClipMenu(false);
-  };
-  document.addEventListener('pointerdown', dismissMenu, true);
-  window.addEventListener('pagehide', () => {
-    closeClipMenu(false);
-    document.removeEventListener('pointerdown', dismissMenu, true);
-    window.removeEventListener('keydown', menuKey, true);
-    window.removeEventListener('keyup', menuKey, true);
   });
   const workflowTabDrag = B.WORKFLOW_TAB_TYPE;
   $('timelineScroll').addEventListener(

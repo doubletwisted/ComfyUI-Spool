@@ -180,6 +180,7 @@ contracts that have tests of their own:
   labels, background rules, recipe attachment on save).
 - `queue-submission.js` and `input-actions.js`: asynchronous submission and input
   replacement ownership with explicit editor adapters.
+- `dialogs.js` and `action-menu.js`: modal and menu lifetimes and focus.
 - `picture.js`: what the viewer shows at a frame or in Source, apart from playback.
 - `pointer.js`: cancels every pointer gesture when the window loses focus or the
   tab is hidden.
