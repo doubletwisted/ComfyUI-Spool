@@ -41,6 +41,8 @@ First public release.
 
 ### Generation
 
+- Shared-project local attempts are marked uncertain only by the workspace
+  that dispatched them, including after that workspace restarts.
 - Add workflows from a curated library of built-in templates, the current Comfy
   graph or a saved workflow file. Spool captures an immutable recipe and exposes
   the workflow's key inputs (prompt, seed, duration, size, sources) on the clip.

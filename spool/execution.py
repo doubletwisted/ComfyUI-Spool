@@ -6,7 +6,7 @@ import subprocess
 import time
 from . import attempts, receipts, deadline_job, farm_protocol
 from .media import check_frozen, contained
-from .ownership import ExecutorLock, ExecutorBusy
+from .ownership import ExecutorLock, ExecutorBusy, executor_identity
 from .requests import LOADERS, SAVERS, local_compatibility
 from . import requests
 from .store import uid, Conflict
@@ -36,7 +36,8 @@ class LocalExecutor:
     def __init__(self, store, media, server, validate, schemas=None, configuration=None, progress=None):
         self.store, self.media, self.server, self.validate = store, media, server, validate
         self.lock = asyncio.Lock()
-        self.session_id = uid()
+        self.identity = executor_identity(store.root)
+        self.session_id = self.identity + uid()
         self.ownership = ExecutorLock(store.root)
         self.schemas = schemas
         self.configuration = configuration or {"roots": {k: str(v) for k, v in media.host_roots.items()}}
@@ -295,7 +296,7 @@ class LocalExecutor:
             store.transition(attempt_id, attempts.QUEUED)
         elif attempt["status"] in {attempts.INTENT, attempts.WAITING}:
             return True
-        else:
+        elif (store.owner(attempt_id) or "").startswith(self.identity):
             store.transition(
                 attempt_id,
                 attempts.UNCERTAIN,

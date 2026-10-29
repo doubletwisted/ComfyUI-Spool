@@ -2,6 +2,8 @@
 
 import os
 import errno
+import hashlib
+import socket
 from pathlib import Path
 import time
 from contextlib import contextmanager
@@ -12,6 +14,12 @@ if os.name == "nt":
     import msvcrt
 else:
     import fcntl
+
+
+def executor_identity(root):
+    """A host/workspace identity that survives process restarts, without shared-project state."""
+    address = socket.gethostname().casefold() + "\n" + os.path.normcase(str(Path(root).resolve()))
+    return "workspace:" + hashlib.sha256(address.encode()).hexdigest() + ":"
 
 
 def atomic_replace(pending, target):

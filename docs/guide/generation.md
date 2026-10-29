@@ -161,6 +161,12 @@ before sending it. Results are copied into the clip's folder and checked against
 that record before they become takes. New takes never replace the take in the
 edit.
 
+For a project opened on several machines, only the workspace that sent a local
+render can mark it uncertain when it disappears from that ComfyUI's queue and
+history. Restarting that workspace keeps this responsibility. Other workspaces
+can still collect verified receipts; older claims without a workspace identity
+are left alone when their origin cannot be proved.
+
 ## Renders
 
 **Renders** in the top bar opens a panel beside the studio; you can keep editing
