@@ -157,7 +157,7 @@ def register(server, store, media, executor=None):
                 return web.json_response({"error": str(error)}, status=400)
             finally:
                 elapsed = time.perf_counter() - started
-                if elapsed >= 1:
+                if elapsed >= 3:
                     logging.warning('Spool slow request: %s %s %.0f ms', request.method, request.path, elapsed * 1000)
         return wrapped
 
