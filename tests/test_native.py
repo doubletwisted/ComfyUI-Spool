@@ -669,12 +669,32 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(self.queue.pending, [])
 
     def test_accepted_job_before_status_persistence_reconciles(self):
-        p = self.submit()
+        original = self.store.transition
+
+        def crash(identity, status, *args, **kwargs):
+            if status == "queued":
+                raise RuntimeError("Stopped before queue acknowledgment")
+            return original(identity, status, *args, **kwargs)
+
+        with patch.object(self.store, "transition", side_effect=crash), self.assertLogs(level="ERROR"):
+            p = self.submit()
         identity = p["document"]["jobs"][0]["id"]
-        self.store.transition(identity, "dispatching")
+        self.assertEqual(self.store.attempt(identity)["status"], "uncertain")
         asyncio.run(self.executor.reconcile())
         self.assertEqual(self.store.attempt(identity)["status"], "queued")
         self.assertEqual(len(self.queue.pending), 1)
+
+    def test_crash_after_claim_before_send_never_repeats_dispatch(self):
+        with (
+            patch.object(self.store, "dispatched", side_effect=RuntimeError("Stopped before send")),
+            self.assertLogs(level="ERROR"),
+        ):
+            project = self.submit()
+        identity = project["document"]["jobs"][0]["id"]
+        asyncio.run(self.executor.reconcile())
+        asyncio.run(self.executor.reconcile())
+        self.assertEqual(self.store.attempt(identity)["status"], "uncertain")
+        self.assertEqual(self.queue.pending, [])
 
     def test_linked_binding_rejected_opaque_ids_kept(self):
         invalid = copy.deepcopy(self.base)

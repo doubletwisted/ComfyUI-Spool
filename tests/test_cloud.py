@@ -458,6 +458,24 @@ class CloudSDKTests(unittest.IsolatedAsyncioTestCase):
                         await task
                 self.assertEqual(self.store.attempt(attempt["id"])["status"], "complete")
 
+    async def test_crashes_at_persist_send_and_acknowledge_do_not_resubmit(self):
+        for boundary in ("dispatched", "set_setting", "transition"):
+            with self.subTest(boundary=boundary):
+                attempt = await self.accept("crash-" + boundary)
+                before = len(self.submissions)
+                with patch.object(self.store, boundary, side_effect=asyncio.CancelledError):
+                    with self.assertRaises(asyncio.CancelledError):
+                        await self.executor.observe(attempt)
+                sent = len(self.submissions)
+                self.assertEqual(sent - before, 0 if boundary == "dispatched" else 1)
+                restarted = CloudExecutor(self.store, self.media, self.collector)
+                await restarted.observe(self.store.attempt(attempt["id"]))
+                await restarted.observe(self.store.attempt(attempt["id"]))
+                self.assertEqual(len(self.submissions), sent)
+                self.assertEqual(
+                    self.store.attempt(attempt["id"])["status"], "complete" if boundary == "transition" else "uncertain"
+                )
+
     async def test_storage_cancellation_waits_for_the_inflight_write(self):
         loop = asyncio.get_running_loop()
         entered, released = asyncio.Event(), threading.Event()

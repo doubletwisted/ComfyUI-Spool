@@ -131,6 +131,30 @@ class DeadlineJobTests(unittest.TestCase):
             if changed:
                 self.assertIn("host hook changed", self.store.attempt(attempt["id"])["error"])
 
+    def test_lost_submission_acknowledgment_does_not_resubmit(self):
+        attempt = self.farm_attempts[0]
+        server = types.SimpleNamespace(
+            trigger_on_prompt=lambda payload: payload,
+            node_replace_manager=types.SimpleNamespace(apply_replacements=lambda prompt: None),
+            prompt_queue=types.SimpleNamespace(get_current_queue=lambda: ([], [])),
+        )
+
+        async def validate(identity, prompt, targets):
+            return True, None, ["submit"] if "submit" in prompt else ["save"], {}
+
+        executor = LocalExecutor(self.store, self.media, server, validate)
+        with patch("spool.execution.deadline_job.submit", return_value="owned-job") as submit:
+            with (
+                patch.object(self.store, "acknowledge", side_effect=RuntimeError("Stopped before acknowledgment")),
+                self.assertLogs(level="ERROR"),
+            ):
+                asyncio.run(executor.dispatch(attempt))
+            # A fresh executor must not turn the uncertain submission into another job.
+            restarted = LocalExecutor(self.store, self.media, server, validate)
+            asyncio.run(restarted.dispatch(self.store.attempt(attempt["id"])))
+            self.assertEqual(submit.call_count, 1)
+        self.assertEqual(self.store.attempt(attempt["id"])["status"], "uncertain")
+
     @unittest.skipUnless(PLUGIN.is_dir(), NO_PLUGIN)
     def test_submission_uses_standard_job_files_without_plugin_spool_support(self):
         namespace = types.ModuleType("deadline_job_fixture")
