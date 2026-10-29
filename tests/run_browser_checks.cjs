@@ -21,7 +21,19 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const nextPaint = evaluate =>
   evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
 
-async function connect(url) {
+// Chrome can list a DevTools socket a moment before it accepts connections.
+async function connect(url, attempts = 5) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await open(url);
+    } catch (error) {
+      if (attempt >= attempts) throw Error('Could not connect to Chrome DevTools at ' + url, { cause: error });
+      await sleep(200 * attempt);
+    }
+  }
+}
+
+async function open(url) {
   const socket = new WebSocket(url),
     pending = new Map(),
     handlers = {};
