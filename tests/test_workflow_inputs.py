@@ -168,6 +168,26 @@ class OptionalInputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cannot remove the clip output"):
             leave_out(self.prompt(), bindings, {"save": ""}, [], "60")
 
+    def test_an_empty_guide_frame_bypasses_its_node(self):
+        guide = lambda before, image: {"class_type": "MiniMaxH3AddGuide", "inputs": {"positive": [before, 0], "image": [image, 0], "frame_idx": 24}}
+        prompt = {"ref": {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": {}}, "g1": guide("ref", "i1"), "g2": guide("g1", "i2"),
+                  "i1": {"class_type": "LoadImage", "inputs": {"image": ""}}, "i2": {"class_type": "LoadImage", "inputs": {"image": ""}},
+                  "guider": {"class_type": "BasicGuider", "inputs": {"conditioning": ["g2", 0]}},
+                  "save": {"class_type": "SaveVideo", "inputs": {"video": ["guider", 0]}}}
+        frame = lambda key, node, via: {"key": key, "nodeId": node, "input": "image", "asset": True, "optional": True, "omit": [node], "bypass": {via: "positive"}}
+        bindings = [frame("one", "i1", "g1"), frame("two", "i2", "g2")]
+        both = copy.deepcopy(prompt)
+        self.assertEqual(leave_out(both, bindings, {}, [], "save"), ["one", "two"])
+        self.assertEqual(both["guider"]["inputs"]["conditioning"], ["ref", 0])
+        self.assertFalse({"g1", "g2", "i1", "i2"} & set(both))
+        second = copy.deepcopy(prompt)
+        leave_out(second, bindings, {"two": "b.png"}, [], "save")
+        self.assertEqual((second["g2"]["inputs"]["positive"], second["guider"]["inputs"]["conditioning"]), (["ref", 0], ["g2", 0]))
+        self.assertFalse({"g1", "i1"} & set(second))
+        first = copy.deepcopy(prompt)
+        leave_out(first, bindings, {"one": "a.png"}, [], "save")
+        self.assertEqual(first["guider"]["inputs"]["conditioning"], ["g1", 0])
+
     def test_nodes_removed_in_comfy_are_ignored(self):
         bindings = [{"key": "gone", "nodeId": "99", "input": "image", "asset": True, "optional": True, "omit": ["99", "98"]}]
         prompt = self.prompt()

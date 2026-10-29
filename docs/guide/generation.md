@@ -23,9 +23,21 @@ questions. Example source images are not included: pick your own source in the
 inspector before generating.
 
 Some built-in workflows are Spool's own versions with more of their media inputs
-connected. **MiniMax H3 · Reference to Video** (Cloud) takes up to 4 reference
-images, a reference video and a reference audio clip; the inspector shows them as
-they fill (see [Optional and repeated inputs](#optional-and-repeated-inputs)).
+connected. The inspector shows them as they fill (see
+[Optional and repeated inputs](#optional-and-repeated-inputs)).
+
+| Workflow | Media inputs |
+| --- | --- |
+| MiniMax H3 · Reference to Video (Cloud) | Up to 4 reference images, a reference video and a reference audio clip |
+| MiniMax H3 Max · Reference to Video (Cloud) | Up to 2 reference images and a reference video |
+| FLUX 3 · Image to Video (Cloud) | Up to 10 keyframes |
+| MiniMax H3 · Reference to Video (local) | Up to 9 reference images, a reference video with its soundtrack, and a reference audio clip |
+| MiniMax H3 · Multi-Frame Reference (local) | A reference image and three guide frames with their times, all optional |
+| MiniMax H3 · ControlNet Union (local) | The control video, and up to 9 reference images |
+
+The local MiniMax nodes read a reference video's frames as 24 fps. **Use timeline
+video** gives them the clip at the project frame rate; choose 24 fps files
+otherwise.
 
 ### Your own workflows
 
@@ -85,7 +97,10 @@ the next, up to the workflow's limit. Inputs marked **Optional** can stay empty.
 - Workflows that refer to references by number in the prompt, such as MiniMax's
   "Image 1" or "Video 2", count them in the order the inspector shows.
 - Some workflows need at least one input from a set. MiniMax Reference to Video
-  needs a reference image or video; Generate says so until one is added.
+  needs a reference image or video, and FLUX 3 Image to Video a keyframe; Generate
+  says so until one is added.
+- An empty guide frame in Multi-Frame Reference is skipped, so the video is guided
+  only by the frames you chose.
 
 Spool leaves an empty optional input out of the request, so the node runs as if
 that input were never connected.

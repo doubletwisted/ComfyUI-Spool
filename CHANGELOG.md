@@ -46,8 +46,10 @@ First public release.
   a durable receipt; interrupted work is recovered without repeating it.
 - Seed modes (fixed, increment, decrement, randomize) with exact 64-bit seeds.
 - Spool ships its own built-in workflows with more of their media inputs
-  connected, starting with **MiniMax H3 · Reference to Video** on Comfy Cloud:
-  up to 4 reference images, a reference video and a reference audio clip.
+  connected: MiniMax H3 and H3 Max Reference to Video on Comfy Cloud (reference
+  images, video and audio), FLUX 3 Image to Video (up to 10 keyframes), and the
+  local MiniMax H3 Reference to Video, Multi-Frame Reference and ControlNet Union
+  (more reference images, reference video and audio, optional guide frames).
 - Image, video and audio inputs are compact rows with a thumbnail, the chosen
   file and their actions.
 - Optional media inputs can stay empty and are left out of the request. Repeated

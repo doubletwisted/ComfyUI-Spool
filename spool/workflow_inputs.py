@@ -71,15 +71,32 @@ def input_problem(bindings, values, settings, rules=()):
 
 
 def leave_out(prompt, bindings, values, settings, result):
-    """Remove empty optional inputs from an API prompt; returns the keys left out."""
+    """Remove empty optional inputs from an API prompt; returns the keys left out.
+
+    `omit` names nodes removed with the input. `bypass` maps a node that cannot run
+    without it to the input whose source replaces its output, as Comfy's Bypass does."""
     empty = [b for b in bindings if b.get("optional") and not filled(b, values, settings)]
     dropped = {node for b in empty for node in b.get("omit") or [b["nodeId"]] if node in prompt}
-    if result in dropped:
+    bypass = {node: name for b in empty for node, name in b.get("bypass", {}).items() if node in prompt}
+    if result in dropped or result in bypass:
         raise ValueError("An empty optional input cannot remove the clip output")
-    for node in dropped:
+
+    def source(link):
+        for _ in range(len(bypass) + 1):
+            if link[0] not in bypass:
+                return link
+            link = prompt[link[0]]["inputs"].get(bypass[link[0]])
+            if not (isinstance(link, list) and len(link) == 2):
+                raise ValueError("A bypassed node needs a connected input to pass through")
+        raise ValueError("Bypassed nodes form a loop")
+    for node in prompt.values():
+        for name, value in node["inputs"].items():
+            if isinstance(value, list) and len(value) == 2 and value[0] in bypass:
+                node["inputs"][name] = list(source(value))
+    for node in {*dropped, *bypass}:
         del prompt[node]
     for node in prompt.values():
         for name, value in list(node["inputs"].items()):
-            if isinstance(value, list) and len(value) == 2 and value[0] in dropped:
+            if isinstance(value, list) and len(value) == 2 and value[0] in dropped | set(bypass):
                 del node["inputs"][name]
     return [b["key"] for b in empty]

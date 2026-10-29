@@ -25,6 +25,9 @@ export function inputProblem(bindings,values,settings,rules=[]){
  return rules.find(rule=>!bindings.some(b=>rule.anyOf.includes(b.group)&&inputFilled(b,values,settings)))?.message||null;
 }
 
+// An input that may stay empty. A rule naming only its group keeps that group's first slot filled.
+export const mayStayEmpty=(b,bindings,rules=[])=>!!b.optional&&!rules.some(rule=>rule.anyOf.length===1&&rule.anyOf[0]===b.group&&bindings.find(other=>other.group===b.group)===b);
+
 // A group shows its filled inputs and one empty slot for the next.
 export function visibleInputs(bindings,values,settings){
  const offered=new Set();

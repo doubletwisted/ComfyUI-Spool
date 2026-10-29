@@ -96,7 +96,7 @@ Comfy Cloud and refuses to run unless `SPOOL_CLOUD_SMOKE=1`. Start its host with
 the key in `COMFY_API_KEY` (the host keeps no saved key), and set
 `SPOOL_CLOUD_SMOKE_TARGET=local` to run it as Partner Nodes on the host.
 
-`controlnet-comfy` and `reference-comfy-link` need a host started with
+`controlnet-comfy` and `builtin-comfy-link` need a host started with
 `--partner-nodes`, and
 `comfy-link-placeholder` one started with `--deadline`. The `-mac` checks
 (`take-file-actions-mac`, `clip-folder-mac`) report a Mac platform and a host
@@ -158,29 +158,55 @@ workflow. They are read as written; nothing rewrites them at runtime.
 | `prompt.json` | The same graph from ComfyUI's **Export (API)** |
 | `spool.json` | Library name, family, task and target, the result node, and the inspector's inputs in order |
 
-`spool.json` lists each input once. A single input names its `node` and `input`
-(and `label`, `role`, `unit`). A media input may be `optional`, with `alsoRemove`
-naming helper nodes that exist only to feed it, such as a resize. A `group` lists
-the loader `nodes` that fill one repeatable input in order; every slot is
-optional. `inputRules` lists groups of which at least one input must be filled,
-with the message shown beside Generate.
+`spool.json` lists each input once, in inspector order:
+
+- A control names its `node`, `input`, `label`, `role` and optional `unit`. Cloud
+  workflows read input types from the shipped Cloud definitions; local workflows
+  state `type`, and `options` for a list, because standalone Spool has no node
+  definitions.
+- A media input names its loader `node`, `label` and `slot`. With `optional` it may
+  stay empty; `alsoRemove` names helper nodes that only feed it, and `bypass` maps
+  a node that cannot run without it to the input passed on in its place, as
+  Comfy's Bypass does (Multi-Frame Reference's guide frames).
+- A `group` lists the loader `nodes` that fill one repeatable input in order. Every
+  slot is optional; a slot may be `{"node": ..., "alsoRemove": [...]}`.
+- `inputRules` lists groups of which at least one input must be filled, with the
+  message shown beside Generate.
+
+Loaders ship with an empty file name, and each loader's title is its inspector
+label, because Apply to clip labels inputs by node title.
 
 To change one, open `workflow.json` in ComfyUI on a test host, edit it, save it
 over `workflow.json`, export the API prompt over `prompt.json`, and update
-`spool.json` if node IDs or inputs changed. Loaders ship with an empty file name.
-ComfyUI must reopen the saved graph unchanged, because **Edit in Comfy** loads it
-the same way; the `reference-comfy-link` browser check opens MiniMax Reference to
-Video through Edit in Comfy and applies it back.
+`spool.json` if node IDs or inputs changed. A folder with the same ID as a curated
+Comfy template replaces that template. `tests/test_builtin_workflows.py` checks
+that the three files agree, that control types match the node definitions (Cloud
+definitions, or `tests/fixtures/local_node_definitions.json` for local nodes), and
+that every input that can be left out feeds an input its node allows to be
+missing. ComfyUI must also reopen the saved graph unchanged, because **Edit in
+Comfy** loads it the same way: the `builtin-comfy-link` browser check opens every
+Spool workflow through Edit in Comfy and applies it back.
 
-MiniMax Reference to Video connects 4 of the node's 9 reference images, 1 of its 3
-videos and 1 of its 3 audio clips. ComfyUI frontend 1.55.18 cannot reopen this node
-with more connections: Autogrow inputs inside its model selector lose or swap
-links on reload
-([ComfyUI_frontend#10136](https://github.com/Comfy-Org/ComfyUI_frontend/issues/10136)).
-Add slots when a frontend release reopens them intact.
-`tests/test_builtin_workflows.py` checks that the three files agree and that
-every slot that can be left out feeds an input its node marks optional. A folder
-with the same ID as a curated Comfy template replaces that template.
+### Slots ComfyUI can reopen
+
+ComfyUI frontend 1.55.18 loses or swaps links when it reopens nodes with many
+connected Autogrow inputs
+([ComfyUI_frontend#10136](https://github.com/Comfy-Org/ComfyUI_frontend/issues/10136)),
+so these workflows connect fewer slots than their nodes accept. The limit depends
+on the node's other inputs, not a fixed count; measure a new shape by reopening
+it in ComfyUI more than once.
+
+| Workflow | Connected | Node accepts |
+| --- | --- | --- |
+| MiniMax H3 Reference to Video (Cloud) | 4 images, 1 video, 1 audio | 9, 3, 3 |
+| MiniMax H3 Max Reference to Video (Cloud) | 2 images, 1 video | 9, 3, 3 |
+| MiniMax H3 Reference to Video (local) | 9 images, 1 video with its soundtrack, 1 audio | 9, 3, 3 |
+| MiniMax H3 ControlNet Union (local) | 9 reference images | 9 |
+| FLUX 3 Image to Video | 10 keyframes | 10 |
+
+The Max workflow feeds each reference to its generator, prompt enhancer and 2K
+regenerator. Wiring the generator alone would allow 3 images, 1 video and 1
+audio. Add slots when a frontend release reopens them intact.
 
 `ui/builtin-captures.json` holds the curated Comfy templates and is generated. To
 refresh it, run the `workflow-capture-bundle` browser check, then pass the QA

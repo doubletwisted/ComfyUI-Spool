@@ -1,0 +1,29 @@
+{
+  "family": "MiniMax H3",
+  "name": "ControlNet Union",
+  "task": "ref",
+  "target": "local",
+  "result": "707",
+  "inputs": [
+    {"node": "174", "label": "Source video", "slot": "video"},
+    {"node": "138", "input": "value", "label": "Prompt", "role": "positive", "type": "STRING"},
+    {"group": "Reference images", "label": "Reference image", "slot": "reference", "nodes": ["718", "719", "720", "721", "722", "723", "724", "725", "726"]},
+    {"node": "115", "input": "aspect_ratio", "label": "Aspect ratio", "role": "resolution", "options": ["1:1 (Square)", "2:3 (Portrait Photo)", "3:2 (Photo)", "3:4 (Portrait Standard)", "4:3 (Standard)", "9:16 (Portrait Widescreen)", "16:9 (Widescreen)", "21:9 (Ultrawide)"]},
+    {"node": "115", "input": "megapixels", "label": "Resolution (megapixels)", "role": "resolution", "type": "FLOAT"},
+    {"node": "132", "input": "value", "label": "Duration (seconds)", "role": "duration", "unit": "seconds", "type": "FLOAT"},
+    {"node": "129", "input": "noise_seed", "label": "Seed", "role": "seed", "type": "INT"},
+    {"node": "172", "input": "strength", "label": "Control strength", "role": "controlnet", "type": "FLOAT"},
+    {"node": "172", "input": "start_percent", "label": "Control start", "role": "controlnet", "type": "FLOAT"},
+    {"node": "172", "input": "end_percent", "label": "Control end", "role": "controlnet", "type": "FLOAT"},
+    {"node": "700:672", "input": "draw_body", "label": "Draw body", "role": "pose", "type": "BOOLEAN"},
+    {"node": "700:672", "input": "draw_hands", "label": "Draw hands", "role": "pose", "type": "BOOLEAN"},
+    {"node": "700:672", "input": "draw_face", "label": "Draw face", "role": "pose", "type": "BOOLEAN"},
+    {"node": "700:672", "input": "draw_feet", "label": "Draw feet", "role": "pose", "type": "BOOLEAN"},
+    {"node": "700:672", "input": "draw_head", "label": "Draw head", "role": "pose", "type": "BOOLEAN"},
+    {"node": "700:672", "input": "score_threshold", "label": "Pose confidence", "role": "pose", "type": "FLOAT"},
+    {"node": "700:672", "input": "stick_width", "label": "Skeleton line width", "role": "pose", "type": "INT"},
+    {"node": "700:672", "input": "face_point_size", "label": "Face point size", "role": "pose", "type": "INT"},
+    {"node": "700:678", "input": "threshold", "label": "Person detection threshold", "role": "pose", "type": "FLOAT"},
+    {"node": "700:678", "input": "max_detections", "label": "Maximum people", "role": "pose", "type": "INT"}
+  ]
+}

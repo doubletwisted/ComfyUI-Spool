@@ -79,21 +79,28 @@ def own_capture(template_id):
         name = LOADERS[prompt[node_id]['class_type']]
         return {'key': node_id + '/' + name, 'nodeId': node_id, 'input': name, 'label': label, 'role': 'source', 'slot': slot,
                 'asset': True, 'advanced': False, 'contract': contract(node_id, 'COMBO'), **extra}
+    def leaving(entry):
+        """What an empty media input takes out of the request: its loader, helper nodes, and bypassed nodes."""
+        node_id = entry if isinstance(entry, str) else entry['node']
+        extra = {} if isinstance(entry, str) else entry
+        return node_id, {'omit': [node_id, *extra.get('alsoRemove', [])], **({'bypass': extra['bypass']} if 'bypass' in extra else {})}
     bindings = []
     for entry in manifest['inputs']:
         if 'group' in entry:
             number = (lambda index: ' ' + str(index + 1)) if len(entry['nodes']) > 1 else (lambda index: '')
-            bindings += [media(node_id, entry['label'] + number(index), entry['slot'], optional=True, group=entry['group'], omit=[node_id])
-                         for index, node_id in enumerate(entry['nodes'])]
+            for index, slot in enumerate(entry['nodes']):
+                node_id, removal = leaving(slot)
+                bindings.append(media(node_id, entry['label'] + number(index), entry['slot'], optional=True, group=entry['group'], **removal))
         elif prompt[entry['node']]['class_type'] in LOADERS:
-            optional = {'optional': True, 'omit': [entry['node'], *entry.get('alsoRemove', [])]} if entry.get('optional') else {}
-            bindings.append(media(entry['node'], entry['label'], entry['slot'], **optional))
+            node_id, removal = leaving(entry)
+            bindings.append(media(node_id, entry['label'], entry['slot'], **({'optional': True, **removal} if entry.get('optional') else {})))
         else:
             node_id, name = entry['node'], entry['input']
+            # Cloud nodes are described by the shipped definitions; local files state types and choices.
             schema = input_schema(definitions, prompt[node_id], name) if definitions else None
-            options = schema[0] if schema and isinstance(schema[0], list) else (schema[1].get('options') if schema and len(schema) > 1 else None)
+            options = entry.get('options') or (schema[0] if schema and isinstance(schema[0], list) else (schema[1].get('options') if schema and len(schema) > 1 else None))
             value = prompt[node_id]['inputs'][name]
-            input_type = 'COMBO' if options else schema[0] if schema else {bool: 'BOOLEAN', int: 'INT', float: 'FLOAT'}.get(type(value), 'STRING')
+            input_type = 'COMBO' if options else entry.get('type') or (schema[0] if schema else {bool: 'BOOLEAN', int: 'INT', float: 'FLOAT'}.get(type(value), 'STRING'))
             bindings.append({'key': node_id + '/' + name, 'nodeId': node_id, 'input': name, 'label': entry['label'], 'role': entry.get('role', 'other'),
                              'asset': False, 'advanced': False, 'contract': contract(node_id, input_type),
                              **({'options': options} if options else {}), **({'unit': entry['unit']} if 'unit' in entry else {})})

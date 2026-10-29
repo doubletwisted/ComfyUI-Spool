@@ -172,7 +172,8 @@ async function controlnetVideoFixture(){
  return {id:project.id};
 }
 async function controlnetControlsFixture(){
- const fixture=await controlnetVideoFixture(),capture=JSON.parse(fs.readFileSync(path.join(ui,'builtin-captures.json'),'utf8')).templates.video_minimax_h3_fun_controlnet_union;
+ // Projects saved before Spool shipped its own ControlNet workflow keep the curated template's six bindings.
+ const fixture=await controlnetVideoFixture(),capture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/legacy_controlnet_capture.json'),'utf8'));
  let project=await api('projects/'+fixture.id);
  project=await api('projects/'+fixture.id+'/capture/shot',{revision:project.revision,capture});
  project.document.clips[0].shotInputs=[{key:capture.bindings.find(b=>b.slot==='video').key,source:'selected'}];
@@ -198,7 +199,7 @@ const CHECKS = {
   'workflow-drop':{fixture:async()=>api('projects',{document:{project:'Workflow drop QA',fps:24,videoTracks:2,clips:timelineClips(3).map((c,i)=>({...c,videoTrack:i===2?2:1,...(i===2?{gapBefore:48}:{})})),media:[still('drop-footage')],audioClips:[],importedWorkflows:[]}}),modes:['full'],branchTemplates:true,libraryDrop:true,file:'workflow_drop_browser_checks.js'},
   'workflow-insert':{fixture:async()=>api('projects',{document:{project:'Workflow insertion QA',fps:24,clips:[],media:[],audioClips:[],importedWorkflows:[]}}),modes:['full'],branchTemplates:true,file:'workflow_insert_browser_checks.js'},
   'reference-inputs':{fixture:async()=>api('projects',{document:{project:'Reference inputs QA',fps:24,clips:[],media:[],audioClips:[],importedWorkflows:[]}}),modes:['full'],branchTemplates:true,file:'reference_inputs_browser_checks.js'},
-  'reference-comfy-link':{fixture:async()=>api('projects',{document:{project:'Reference Comfy link QA',fps:24,clips:[],media:[],audioClips:[],importedWorkflows:[]}}),modes:['full'],branchTemplates:true,userGesture:true,file:'reference_comfy_link_browser_checks.js'},
+  'builtin-comfy-link':{fixture:async()=>api('projects',{document:{project:'Spool workflows Comfy link QA',fps:24,clips:[],media:[],audioClips:[],importedWorkflows:[]}}),modes:['full'],branchTemplates:true,userGesture:true,file:'builtin_comfy_link_browser_checks.js'},
   'arrival-focus':{fixture:workflowFixture,modes:['full'],file:'arrival_focus_browser_checks.js'},
   'idle-sync':{fixture:workflowPreviewFixture,modes:['full'],file:'idle_sync_browser_checks.js'},
   'controlnet-video':{fixture:controlnetVideoFixture,modes:['full'],branchTemplates:true,file:'controlnet_video_browser_checks.js'},
