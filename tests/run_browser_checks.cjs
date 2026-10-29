@@ -1,6 +1,6 @@
-// Dependency-free installed browser checks against the owned CPU QA host on 8195.
+// Dependency-free installed browser checks against an owned isolated CPU QA host.
 // Serves this checkout's ui/* and Spool web/* over Fetch interception, so frontend
-// edits use this branch even when another QA checkout started the shared 8195 host.
+// edits use this branch on the isolated host selected by SPOOL_BROWSER_BASE.
 //
 //   node tests/run_browser_checks.cjs CHROMIUM_EXECUTABLE EVIDENCE_DIR [check-name ...]
 //
@@ -18,6 +18,8 @@ const base = process.env.SPOOL_BROWSER_BASE || 'http://127.0.0.1:8195',
   port = Number(process.env.SPOOL_BROWSER_PORT || 9228);
 const apiBase = process.env.SPOOL_API_BASE || base;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const nextPaint = evaluate =>
+  evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
 
 async function connect(url) {
   const socket = new WebSocket(url),
@@ -1636,7 +1638,7 @@ async function runDrag(page, evaluate, spec) {
       modifiers: 0,
       windowsVirtualKeyCode: 16,
     });
-  await sleep(200);
+  await nextPaint(evaluate);
   const after = await probe();
   await evaluate(
     `window.__drag=${JSON.stringify({ samples, before, after, spec: { dx, frames: spec.frames, end: spec.end, alt: !!spec.alt } })}`,
@@ -1724,7 +1726,7 @@ async function runTimelineInteractions(page, evaluate) {
     await evaluate(
       `(()=>{const w=__timelineW,z=w.document.getElementById('zoom');z.value=${value};z.dispatchEvent(new w.Event('input',{bubbles:true}));w.document.getElementById('timelineScroll').scrollLeft=0;})()`,
     );
-    await sleep(100);
+    await nextPaint(evaluate);
   };
   const point = selector =>
     evaluate(
@@ -1742,7 +1744,7 @@ async function runTimelineInteractions(page, evaluate) {
         button,
         buttons,
       });
-      await sleep(20);
+      await nextPaint(evaluate);
     }
     if (cancel) {
       await page.send('Input.dispatchKeyEvent', {
@@ -1759,7 +1761,7 @@ async function runTimelineInteractions(page, evaluate) {
       });
     }
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...to, button, buttons: 0, clickCount: 1 });
-    await sleep(100);
+    await nextPaint(evaluate);
   };
   await zoom(400);
   const panStart = await probe(),
@@ -1803,7 +1805,7 @@ async function runTimelineInteractions(page, evaluate) {
     button: 'left',
     buttons: 1,
   });
-  for (let i = 0; i < 50 && !intercepted; i++) await sleep(20);
+  for (let i = 0; i < 50 && !intercepted; i++) await nextPaint(evaluate);
   if (!intercepted) throw Error('Native take drag did not start');
   for (const type of ['dragEnter', 'dragOver', 'drop'])
     await page.send('Input.dispatchDragEvent', { type, ...destination, data: intercepted });
@@ -1853,7 +1855,7 @@ async function runTimelineSnapping(page, evaluate) {
         button: 'left',
         buttons: 1,
       });
-      await sleep(15);
+      await nextPaint(evaluate);
     }
     await page.send('Input.dispatchMouseEvent', {
       type: 'mouseReleased',
@@ -1863,7 +1865,7 @@ async function runTimelineSnapping(page, evaluate) {
       buttons: 0,
       clickCount: 1,
     });
-    await sleep(60);
+    await nextPaint(evaluate);
   };
   const drag = async (left, offsetPixels) => {
     const from = await box('#clipLane [data-clip="moving"]'),
@@ -2489,7 +2491,9 @@ async function runLibraryDrop(page, evaluate, label) {
               'Editor initialization failed: ' +
                 (await evaluate('document.getElementById("spool-loading")?.textContent')),
             );
-          await evaluate(`window.__fixtureProjectId=${JSON.stringify(project.id)}`);
+          await evaluate(
+            `window.__fixtureProjectId=${JSON.stringify(project.id)};window.__spoolBrowserOrigin=${JSON.stringify(new URL(base).origin)}`,
+          );
           if (check.globals) await evaluate(`void Object.assign(window,${JSON.stringify(check.globals())})`);
 
           if (check.libraryNavigation) await runLibraryNavigation(page, evaluate);
@@ -2500,7 +2504,7 @@ async function runLibraryDrop(page, evaluate, label) {
               await evaluate(
                 `window.spoolNative.selectClip(${JSON.stringify(id)}${check.drag.select.indexOf(id) ? ',false,{ctrlKey:true}' : ''})`,
               );
-            await sleep(150);
+            await nextPaint(evaluate);
             await runDrag(page, evaluate, check.drag);
             await evaluate('window.__drag').then(value =>
               fs.writeFileSync(

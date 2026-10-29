@@ -26,11 +26,12 @@
       await new Promise(r => setTimeout(r, 30));
     }
   };
+  const nextPaint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const idle = () => !n.diagnostics().active.some(e => e.label === 'Reading video thumbnails');
   await wait(() => visible().length && visible().every(ready));
   const visibleReadyMs = performance.now();
   await wait(idle);
-  await new Promise(r => setTimeout(r, 150));
+  await nextPaint();
   await wait(idle);
   const first = {
     ...window.__thumbnailProfile,
@@ -71,7 +72,7 @@
   const count = window.__thumbnailProfile.encoded;
   $('timelineScroll').scrollLeft = 0;
   await wait(() => visible().every(ready));
-  await new Promise(r => setTimeout(r, 150));
+  await nextPaint();
   check('Returning to decoded frames reuses thumbnails', window.__thumbnailProfile.encoded === count);
   check('Thumbnail work preserves authored clips and take choices', JSON.stringify(n.state.clips) === initial);
   // Exercise bindings independently of the editor's render cycle with real decoders.
@@ -99,7 +100,7 @@
   const detached = image();
   thumbs.bind(detached, media, 100, 24);
   detached.remove();
-  await new Promise(r => setTimeout(r, 100));
+  await nextPaint();
   check('Disconnected pending images are not decoded', !detached.src);
   const button = d.createElement('button');
   host.append(button);

@@ -1,11 +1,12 @@
-// Run in the isolated 8195 editor with an owned metadata fixture and ?bridge=embedded-workflow-qa.
+// Run in the isolated editor with an owned metadata fixture and ?bridge=embedded-workflow-qa.
 // A render's embedded graph is media evidence: the working document only names it,
 // and the editor fetches the payload when a graph is opened.
 (async () => {
   const n = window.spoolNative,
     d = document,
     compact = new URLSearchParams(location.search).get('mode') === 'compact';
-  if (!n || n.state.project !== 'Embedded take workflow QA') throw Error('Use the owned embedded-workflow QA project');
+  if (location.origin !== window.__spoolBrowserOrigin || !n || n.state.project !== 'Embedded take workflow QA')
+    throw Error('Use the owned embedded-workflow QA project on the runner host');
   const B = await import('/spool/ui/bridge.js'),
     channel = B.openChannel('embedded-workflow-qa'),
     opened = [];

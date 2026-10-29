@@ -263,10 +263,11 @@
     if (window.spoolNative) {
       const count = popups.length,
         id = new URL(w.location.href).searchParams.get('bridge');
+      const beforeReload = comfy.document;
       comfy.location.reload();
-      await new Promise(r => setTimeout(r, 500));
       await wait(
         () =>
+          comfy.document !== beforeReload &&
           comfy.document.readyState === 'complete' &&
           comfy.comfyAPI?.app?.app?.extensionManager?.workflow?.activeWorkflow,
       );

@@ -40,7 +40,6 @@
         action();
       });
     else action();
-    await new Promise(resolve => setTimeout(resolve, 150));
     const deadline = Date.now() + 12000;
     while (n.videoSeek?.pending && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
     if (n.videoSeek?.pending) throw Error('Native decoder recovery did not settle');

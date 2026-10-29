@@ -268,3 +268,9 @@ studio tab open, change only `spool/protocol.py` on the isolated host and restar
 that host, then run `tests/stale_tab_browser_checks.js` in that tab. It checks
 save refusal, draft retention, unchanged server state and a single reload notice.
 Restore the version before running the gate or committing.
+
+Browser gesture checks wait for painted frames rather than fixed settling
+delays. Template cancellation checks release an explicit held capture and await
+its message. Host-bound checks validate the origin supplied by the runner, so
+`SPOOL_BROWSER_BASE` can select any isolated host. The generation runner also
+respects `SPOOL_BROWSER_PORT`.

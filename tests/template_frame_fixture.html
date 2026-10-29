@@ -34,7 +34,7 @@
               requestId: value.requestId,
               capture: { ...window.fixtureCapture, name: 'LTX-2.3 CPU template' },
             };
-        if (window.captureDelay) setTimeout(() => send(reply), window.captureDelay);
+        if (window.holdCapture) window.releaseCapture = () => send(reply);
         else send(reply);
       });
       send({ state: 'ready' });

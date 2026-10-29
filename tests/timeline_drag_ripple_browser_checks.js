@@ -5,7 +5,8 @@
 (async () => {
   const n = window.spoolNative,
     drag = window.__drag;
-  if (location.port !== '8195' || !n || !drag) throw Error('Use the owned timeline-drag QA project on 8195');
+  if (location.origin !== window.__spoolBrowserOrigin || !n || !drag)
+    throw Error('Use the owned timeline-drag QA project on the runner host');
   const checks = [],
     check = (label, ok) => {
       if (!ok) throw Error(label);

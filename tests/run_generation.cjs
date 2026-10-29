@@ -6,7 +6,7 @@ const fs = require('node:fs'),
   assert = require('node:assert/strict');
 const [executable, project, evidence = '.native-test/generation-browser'] = process.argv.slice(2),
   base = process.env.SPOOL_BROWSER_BASE || 'http://127.0.0.1:8195',
-  port = 9228;
+  port = Number(process.env.SPOOL_BROWSER_PORT || 9228);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function connect(url) {
   const socket = new WebSocket(url),

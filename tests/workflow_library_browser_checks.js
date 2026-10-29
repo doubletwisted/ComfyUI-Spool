@@ -81,8 +81,9 @@
         n.state.clips.length === count &&
         $('templateStatus').textContent === 'LTX-2.3 CPU template',
     );
-    first.contentWindow.captureDelay = 120;
+    first.contentWindow.holdCapture = true;
     $('templateUse').click();
+    await wait(() => typeof first.contentWindow.releaseCapture === 'function');
     $('templateCancel').click();
     check(
       'Cancel parks the browser and restores focus',
@@ -112,7 +113,17 @@
       new MessageEvent('message', { origin: location.origin, source: first.contentWindow, data: forged }),
     );
     check('Prior opening cannot authorize the reused frame', $('templateUse').disabled);
-    await new Promise(r => setTimeout(r, 180));
+    await new Promise(resolve => {
+      const delivered = event => {
+        if (event.source === first.contentWindow && event.data?.state === 'captured') {
+          window.removeEventListener('message', delivered);
+          resolve();
+        }
+      };
+      window.addEventListener('message', delivered);
+      first.contentWindow.releaseCapture();
+      first.contentWindow.holdCapture = false;
+    });
     check(
       'A real delayed capture cannot import into the next opening',
       n.revision === revision &&

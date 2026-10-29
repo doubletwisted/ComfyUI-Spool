@@ -120,10 +120,11 @@
     'Collected jobs expose stable take numbers, seed values and durable elapsed bounds',
   );
   const duration = field('queueList').querySelector('[data-job-elapsed="' + jobs[0].id + '"]').textContent;
-  await new Promise(r => setTimeout(r, 1200));
+  await n.poll();
+  await n.poll();
   check(
     field('queueList').querySelector('[data-job-elapsed="' + jobs[0].id + '"]').textContent === duration,
-    'Completed take elapsed time stops advancing',
+    'Completed take elapsed time stays fixed across polls',
   );
   check(
     field('queueList').textContent.includes('Ready') && !field('queueList').textContent.includes('frozen /'),
