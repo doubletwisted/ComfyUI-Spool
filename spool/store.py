@@ -586,6 +586,7 @@ class Store:
 
     def all_evidence(self, project_id):
         """Every stored payload for a project, for a portable local draft."""
+        media_ids = {m["id"] for m in ledger.media_records(self.projected(project_id))}
         with self.reading() as db:
             rows = db.execute(
                 "SELECT media_id, evidence FROM media_evidence WHERE project_id=?", (project_id,)
@@ -593,14 +594,21 @@ class Store:
             results = db.execute(
                 "SELECT result FROM attempts WHERE project_id=? AND status='complete'", (project_id,)
             ).fetchall()
-        evidence = {row["media_id"]: self._load(row["evidence"], media="resolve") for row in rows}
-        for row in results:
-            result = self._load(row[0], media="resolve")
-            for record in [result["primary"], *result.get("artifacts", [])]:
-                evidence[record["id"]] = {
-                    **{key: value for key, value in record.items() if key in ledger.EVIDENCE_KEYS},
-                    **evidence.get(record["id"], {}),
-                }
+            evidence = {
+                row["media_id"]: self._load(row["evidence"], db, media="resolve")
+                for row in rows
+                if row["media_id"] in media_ids
+            }
+            for row in results:
+                result = self._load(row[0], db, media="references")
+                for record in [result["primary"], *result.get("artifacts", [])]:
+                    if record["id"] not in media_ids:
+                        continue
+                    held = {key: value for key, value in record.items() if key in ledger.EVIDENCE_KEYS}
+                    evidence[record["id"]] = {
+                        **self._unpack(db, held, {}, "resolve", {}),
+                        **evidence.get(record["id"], {}),
+                    }
         return evidence
 
     def referenced_names(self):
@@ -1408,11 +1416,13 @@ class Store:
 
     def export_project(self, project_id):
         project = self.get(project_id)
+        media_ids = {m["id"] for m in ledger.media_records(project["document"])}
         versions = {c["workflowVersion"] for c in project["document"]["clips"] if c.get("workflowVersion")}
         with self.reading() as db:
             evidence = {
                 r["media_id"]: self._load(r["evidence"], db, media="resolve")
                 for r in db.execute("SELECT media_id,evidence FROM media_evidence WHERE project_id=?", (project_id,))
+                if r["media_id"] in media_ids
             }
         # A downloaded project carries its evidence so it stays portable; the
         # working document is what every other reader sees.

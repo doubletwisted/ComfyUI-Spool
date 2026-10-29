@@ -648,6 +648,52 @@ class ProjectFolderTests(unittest.TestCase):
         self.assertNotIn(attempt["take_id"], [t["id"] for t in stale["document"]["clips"][0]["takes"]])
         self.assertEqual(self.store.attempt(attempt["id"])["status"], "complete")
 
+    def test_portable_evidence_skips_deleted_generated_and_imported_takes(self):
+        tags = PngImagePlugin.PngInfo()
+        tags.add_text("workflow", json.dumps(self.capture["workflow"]))
+        tags.add_text("prompt", json.dumps(self.capture["prompt"]))
+        project = requests.accept(
+            self.store, self.media, self.project["id"], self.project["revision"], [{"clipId": "clip-a", "count": 1}]
+        )
+        attempt = self.store.attempt(project["document"]["jobs"][0]["id"])
+        Image.new("RGB", (16, 16), "blue").save(self.roots[1] / "result.png", pnginfo=tags)
+        history = {
+            "status": {"completed": True, "status_str": "success"},
+            "outputs": {"save": {"images": [{"filename": "result.png", "type": "output"}]}},
+        }
+        artifacts, primary = self.media.collect(attempt, history)
+        for artifact in artifacts:
+            artifact.update({key: self.capture[key] for key in ("workflow", "prompt")})
+        receipts.write(self.media.receipt_path(attempt).parent, attempt, artifacts, primary, history)
+        self.assertTrue(Collector(self.workspace, self.base_media).ingest(attempt))
+        project = self.store.get(project["id"])
+        folder = self.store.root / project["document"]["clips"][0]["outputFolder"]
+        for name in ("kept", "imported"):
+            path = folder / (name + ".png")
+            Image.new("RGB", (16, 16), "red").save(path, pnginfo=tags)
+            metadata = self.media.describe(path)
+            metadata.update({key: self.capture[key] for key in ("workflow", "prompt")})
+            metadata["id"] = name + "-media"
+            project["document"]["clips"][0]["takes"].append({"id": name, "media": metadata})
+        project = self.store.save(project["id"], project["revision"], project["document"])
+        deleted = set()
+        for kind, take_id, media_id in (
+            ("generated", attempt["take_id"], primary["id"]),
+            ("imported", "imported", "imported-media"),
+        ):
+            project = take_files.delete(self.store, project["id"], project["revision"], "clip-a", [take_id])["project"]
+            deleted.add(media_id)
+            for reader in ("export_project", "all_evidence"):
+                with self.subTest(kind=kind, reader=reader):
+                    value = getattr(self.store, reader)(project["id"])
+                    records = (
+                        {m["id"]: m for m in ledger.media_records(value["document"])}
+                        if reader == "export_project"
+                        else value
+                    )
+                    self.assertFalse(deleted & records.keys())
+                    self.assertEqual(records["kept-media"]["workflow"], self.capture["workflow"])
+
     def test_deadline_root_is_derived_from_project_and_verified_results_reach_clip_folder(self):
         capture = copy.deepcopy(self.capture)
         capture["prompt"]["submit"] = {

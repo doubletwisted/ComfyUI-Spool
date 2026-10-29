@@ -28,7 +28,8 @@ restores the last published snapshot and retries any required upgrade.
 **Download project file** in the top bar saves a project file; **Open project
 file** imports one. The file contains the edit, workflow versions and media
 records, with local paths but not the media itself. A rejected import leaves no
-partial project.
+partial project. Downloads and portable drafts include evidence only for media
+still in the project, so takes deleted through Spool do not block them.
 
 When opening an older project, Spool keeps its previous project file in
 `.spool/backups/project-schema<old>-<UTC timestamp>.spool` before upgrading it.
