@@ -207,6 +207,8 @@ need a local GPU, models, or a running ComfyUI.
 - `COMFY_BASE_URL` selects another Comfy Developer Platform deployment.
 - Input files are uploaded as Cloud assets. Only the chosen output's part of the
   graph is submitted.
+- Storage and checksum work run in background threads so a slow project folder
+  does not block the studio's other requests.
 - If Spool restarts, it resumes watching submitted jobs and downloads their
   results. A submission interrupted before Comfy Cloud returned a job ID is marked
   uncertain and never resubmitted on its own.

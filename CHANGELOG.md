@@ -41,6 +41,8 @@ First public release.
 
 ### Generation
 
+- Cloud storage, frozen-input checks and download checksums run off the host's
+  event loop so slow shared folders do not stall the studio.
 - An interrupted Deadline cancellation can be retried after checking job
   ownership and current status; confirmed stop requests are not repeated.
 - Stale execution observations cannot undo cancellation or terminal states.

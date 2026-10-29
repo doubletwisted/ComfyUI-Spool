@@ -83,10 +83,10 @@ def execution_prompt(prompt, output):
     return {k: v for k, v in graph.items() if k in reachable}
 
 
-async def storage_call(function, *args):
+async def storage_call(function, *args, **kwargs):
     # Cancellation must not leave a SQLite/file operation running after the
     # server releases its executor lock or closes the project workspace.
-    task = asyncio.create_task(asyncio.to_thread(function, *args))
+    task = asyncio.create_task(asyncio.to_thread(function, *args, **kwargs))
     try:
         return await asyncio.shield(task)
     except asyncio.CancelledError:
@@ -108,20 +108,22 @@ class CloudExecutor:
             await self._observe(attempt)
 
     async def _observe(self, attempt):
-        store = self.store.for_project(attempt["project_id"])
-        media = self.media.for_project(store, attempt["project_id"])
-        request = attempt["request"]
+        def context():
+            store = self.store.for_project(attempt["project_id"])
+            media = self.media.for_project(store, attempt["project_id"])
+            return store, media, store.setting("cloud:" + attempt["id"]), media.receipt_path(attempt).is_file()
+
+        store, media, state, has_receipt = await storage_call(context)
         observed = attempt["status"]
 
-        def transition(status, **kwargs):
+        async def transition(status, **kwargs):
             nonlocal observed
-            changed = store.transition(attempt["id"], status, expected=observed, **kwargs)
+            changed = await storage_call(store.transition, attempt["id"], status, expected=observed, **kwargs)
             if changed:
                 observed = status
             return changed
 
-        state = store.setting("cloud:" + attempt["id"])
-        if media.receipt_path(attempt).is_file():
+        if has_receipt:
             await storage_call(self.collector.ingest, attempt)
             return
         if attempt["status"] in attempts.TERMINAL:
@@ -129,17 +131,17 @@ class CloudExecutor:
         if not state and attempt["status"] not in (attempts.INTENT, attempts.WAITING):
             if attempt["status"] == attempts.CANCEL_REQUESTED:
                 # No job ID was recorded, so there is no Cloud job Spool could stop or collect.
-                transition(
+                await transition(
                     attempts.CANCELLED,
                     error="Cancelled before Spool recorded a Comfy Cloud job ID. If Cloud ran it, Spool will not collect the result.",
                 )
             elif attempt["status"] != attempts.UNCERTAIN:
-                transition(
+                await transition(
                     attempts.UNCERTAIN,
                     error="Cloud submission was interrupted before its job ID was recorded. No automatic resubmission.",
                 )
             return
-        key = cloud_key()
+        key = await storage_call(cloud_key)
         if not key or not available():
             return  # Accepted intents wait for a key and the SDK; their frozen inputs remain intact.
         try:
@@ -151,32 +153,18 @@ class CloudExecutor:
                 if state:
                     job = await client.jobs.get(state["jobId"])
                 elif attempt["status"] in (attempts.INTENT, attempts.WAITING):
-                    if not store.claim(attempt["id"], self.session_id):
+                    if not await storage_call(store.claim, attempt["id"], self.session_id):
                         return
                     observed = attempts.DISPATCHING
-                    workflow = client.workflows.from_json(
-                        execution_prompt(request["prompt"], request["capture"]["result"]["nodeId"])
-                    )
-                    # Submit only ancestors of the explicitly selected output.
-                    # Intermediate SaveText/SaveVideo branches must not incur
-                    # additional API generations on the Cloud deployment.
-                    for asset in request.get("assets", []):
-                        if asset["nodeId"] not in workflow.json:
-                            continue
-                        path = contained(media.host_roots["input"], asset["frozen"])
-                        check_frozen(path, asset, "A frozen Cloud input changed before submission")
-                        workflow.set_input(asset["nodeId"], asset["input"], client.assets.from_file(path))
-                    store.dispatched(
-                        attempt["id"],
-                        {"target": "cloud", "endpoint": address, "idempotencyKey": attempt["id"]},
-                        {"selectedOutput": request["capture"]["result"]},
-                    )
+                    workflow = await storage_call(self.prepare_submission, store, media, attempt, client, address)
+                    if (await storage_call(store.attempt, attempt["id"]))["status"] != attempts.DISPATCHING:
+                        return
                     # The constructor authenticates the deployment. api_key on
                     # submit authenticates its Partner Nodes through extra_data.
                     job = await client.submit(workflow, api_key=key, idempotency_key=attempt["id"])
                     state = {"jobId": job.id, "endpoint": address}
-                    store.set_setting("cloud:" + attempt["id"], state)
-                observed = store.attempt(attempt["id"])["status"]
+                    await storage_call(store.set_setting, "cloud:" + attempt["id"], state)
+                observed = (await storage_call(store.attempt, attempt["id"]))["status"]
                 if (
                     observed == "cancel_requested"
                     and job.status not in ("succeeded", "failed", "expired", "canceled")
@@ -184,18 +172,18 @@ class CloudExecutor:
                 ):
                     job = await job.cancel()
                     state["cancelSent"] = True
-                    store.set_setting("cloud:" + attempt["id"], state)
+                    await storage_call(store.set_setting, "cloud:" + attempt["id"], state)
                 if job.status == "succeeded":
-                    transition(attempts.COLLECTING)
+                    await transition(attempts.COLLECTING)
                     await self.collect(attempt, media, job, address)
                     await storage_call(self.collector.ingest, attempt)
                 elif job.status in ("failed", "expired", "canceled"):
-                    transition(
+                    await transition(
                         attempts.FAILED if job.status in ("failed", "expired") else attempts.CANCELLED,
                         error=str(job.error).replace(key, "[redacted]") if job.error else None,
                     )
                 elif observed != "cancel_requested":
-                    transition(attempts.RUNNING if job.status == "running" else attempts.QUEUED)
+                    await transition(attempts.RUNNING if job.status == "running" else attempts.QUEUED)
         except asyncio.CancelledError:
             raise
         except Exception as error:
@@ -211,7 +199,28 @@ class CloudExecutor:
             message = str(error).replace(key, "[redacted]")
             if isinstance(error, Forbidden) and "free tier" in message.lower():
                 message += " " + FREE_TIER
-            transition(status, error=message)
+            await transition(status, error=message)
+
+    def prepare_submission(self, store, media, attempt, client, address):
+        request = attempt["request"]
+        workflow = client.workflows.from_json(
+            execution_prompt(request["prompt"], request["capture"]["result"]["nodeId"])
+        )
+        # Submit only ancestors of the explicitly selected output.
+        # Intermediate SaveText/SaveVideo branches must not incur
+        # additional API generations on the Cloud deployment.
+        for asset in request.get("assets", []):
+            if asset["nodeId"] not in workflow.json:
+                continue
+            path = contained(media.host_roots["input"], asset["frozen"])
+            check_frozen(path, asset, "A frozen Cloud input changed before submission")
+            workflow.set_input(asset["nodeId"], asset["input"], client.assets.from_file(path))
+        store.dispatched(
+            attempt["id"],
+            {"target": "cloud", "endpoint": address, "idempotencyKey": attempt["id"]},
+            {"selectedOutput": request["capture"]["result"]},
+        )
+        return workflow
 
     async def collect(self, attempt, media, job, address):
         selection = attempt["request"]["capture"]["result"]
@@ -223,16 +232,22 @@ class CloudExecutor:
         if extension not in (".mp4", ".webm", ".mov", ".mkv"):
             raise ValueError("Comfy Cloud returned an unsupported video output")
         identity = uid()
-        destination = media.result_path(attempt, identity, extension, True)
-        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination = await storage_call(media.result_path, attempt, identity, extension, True)
+        await storage_call(destination.parent.mkdir, parents=True, exist_ok=True)
         pending = destination.with_suffix(extension + ".partial")
         try:
             await output.to_file(pending)
-            if pending.stat().st_size != output.size_bytes:
-                raise ValueError("Comfy Cloud video download is incomplete")
-            pending.replace(destination)
+            await storage_call(
+                self.finish_download, attempt, media, job, address, output, identity, destination, pending
+            )
         finally:
-            pending.unlink(missing_ok=True)
+            await storage_call(pending.unlink, missing_ok=True)
+
+    def finish_download(self, attempt, media, job, address, output, identity, destination, pending):
+        if pending.stat().st_size != output.size_bytes:
+            raise ValueError("Comfy Cloud video download is incomplete")
+        pending.replace(destination)
+        selection = attempt["request"]["capture"]["result"]
         with destination.open("rb") as handle:
             checksum = hashlib.file_digest(handle, "sha256").hexdigest()
         artifact = {
@@ -251,7 +266,7 @@ class CloudExecutor:
             "status": {"completed": True, "status_str": "success"},
             "cloud": {"jobId": job.id, "endpoint": address},
         }
-        await storage_call(receipts.write, directory, attempt, [artifact], artifact, history)
+        receipts.write(directory, attempt, [artifact], artifact, history)
 
     async def run_once(self):
         pending = await storage_call(

@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -13,7 +14,7 @@ from aiohttp.test_utils import TestServer, TestClient
 from PIL import Image
 
 from spool import requests, templates
-from spool.cloud import CloudExecutor, execution_prompt
+from spool.cloud import CloudExecutor, execution_prompt, storage_call
 from spool.collection import Collector
 from spool.media import Media
 from spool.store import Store, empty_project
@@ -197,7 +198,7 @@ class CloudSDKTests(unittest.IsolatedAsyncioTestCase):
             return web.Response(status=500)
         return web.Response(body=self.video, content_type="video/mp4")
 
-    async def accept(self):
+    async def accept(self, operation="sdk-operation"):
         result = await asyncio.to_thread(
             requests.accept,
             self.store,
@@ -205,10 +206,10 @@ class CloudSDKTests(unittest.IsolatedAsyncioTestCase):
             self.project["id"],
             self.project["revision"],
             [{"clipId": "shot", "count": 1}],
-            "sdk-operation",
+            operation,
             "human",
         )
-        identity = result["document"]["jobs"][0]["id"]
+        identity = result["document"]["jobs"][-1]["id"]
         return self.store.attempt(identity)
 
     async def test_sdk_upload_submit_restart_download_receipt_and_idempotent_ingestion(self):
@@ -396,6 +397,20 @@ class CloudSDKTests(unittest.IsolatedAsyncioTestCase):
         server = SimpleNamespace(routes=web.RouteTableDef(), app=web.Application())
         register(server, self.store, self.media)
         server.app.add_routes(server.routes)
+        complete = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        ingest = Collector.ingest
+
+        def observed_ingest(collector, attempt):
+            result = ingest(collector, attempt)
+            if result:
+                loop.call_soon_threadsafe(complete.set)
+            return result
+
+        with patch.object(Collector, "ingest", observed_ingest):
+            await self.check_standalone_completion(server, complete)
+
+    async def check_standalone_completion(self, server, complete):
         async with TestClient(TestServer(server.app)) as client:
             health = await (await client.get("/spool/api/health")).json()
             self.assertFalse(health["executor"])
@@ -409,13 +424,62 @@ class CloudSDKTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(response.status, 200)
             identity = (await response.json())["document"]["jobs"][0]["id"]
-            for _ in range(100):
-                if self.store.attempt(identity)["status"] == "complete":
-                    break
-                await asyncio.sleep(0.1)
+            await asyncio.wait_for(complete.wait(), 10)
             self.assertEqual(self.store.attempt(identity)["status"], "complete")
             self.assertEqual(len(self.submissions), 1)
             self.assertFalse(self.store.host()["connected"])
+
+    async def test_slow_cloud_storage_and_finalization_leave_loop_available(self):
+        for name in ("setting", "claim", "dispatched", "set_setting", "transition", "finish_download"):
+            with self.subTest(name=name):
+                attempt = await self.accept("slow-" + name)
+                loop, loop_thread = asyncio.get_running_loop(), threading.get_ident()
+                entered, release = asyncio.Event(), threading.Event()
+                target = self.executor if name == "finish_download" else self.store
+                original = getattr(target, name)
+
+                def blocked(*args, **kwargs):
+                    self.assertNotEqual(threading.get_ident(), loop_thread)
+                    loop.call_soon_threadsafe(entered.set)
+                    self.assertTrue(release.wait(5), "Test did not release Cloud storage")
+                    return original(*args, **kwargs)
+
+                async def render():
+                    await self.executor.observe(attempt)
+                    await self.executor.observe(self.store.attempt(attempt["id"]))
+
+                with patch.object(target, name, side_effect=blocked):
+                    task = asyncio.create_task(render())
+                    try:
+                        await asyncio.wait_for(entered.wait(), 5)
+                        self.assertFalse(task.done())
+                    finally:
+                        release.set()
+                        await task
+                self.assertEqual(self.store.attempt(attempt["id"])["status"], "complete")
+
+    async def test_storage_cancellation_waits_for_the_inflight_write(self):
+        loop = asyncio.get_running_loop()
+        entered, released = asyncio.Event(), threading.Event()
+        finished = threading.Event()
+
+        def write():
+            loop.call_soon_threadsafe(entered.set)
+            self.assertTrue(released.wait(5))
+            finished.set()
+
+        task = asyncio.create_task(storage_call(write))
+        await asyncio.wait_for(entered.wait(), 5)
+        task.cancel()
+        # A queued loop callback runs after cancellation has reached storage_call.
+        turn = loop.create_future()
+        loop.call_soon(turn.set_result, None)
+        await turn
+        self.assertFalse(task.done())
+        released.set()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertTrue(finished.is_set())
 
     async def test_source_checksum_change_prevents_cloud_submission(self):
         attempt = await self.accept()
