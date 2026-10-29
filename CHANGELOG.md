@@ -41,6 +41,8 @@ First public release.
 
 ### Generation
 
+- An interrupted Deadline cancellation can be retried after checking job
+  ownership and current status; confirmed stop requests are not repeated.
 - Stale execution observations cannot undo cancellation or terminal states.
   Verified late receipts can still recover a result without choosing it.
 - Local dispatch refuses host hooks that change a frozen workflow, matching

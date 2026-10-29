@@ -454,29 +454,33 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(sum(error is None for error in errors), 1)
         self.assertEqual(len(self.store.get(self.project["id"])["document"]["jobs"]), 2)
 
-    def test_owned_cancel_retry_does_not_repeat_an_uncertain_external_effect(self):
-        queued = self.execute(
-            self.envelope("queue_experiment", {"mode": "repeat", "variants": [{"clipId": "shot"}]}, "queue", "queue")
-        )
-        attempt_id = queued["jobs"][0]["id"]
-        submission = self.store.submission(attempt_id, {})
-        self.store.acknowledge(submission["id"], "owned-job")
-        self.store.transition(attempt_id, "farm_running")
-        cancel = self.envelope("cancel", {"attemptId": attempt_id}, "cancel", "cancel")
-        with patch(
-            "spool.farm.deadline_command", side_effect=[submission["id"], RuntimeError("lost response")]
-        ) as external:
+    def test_owned_cancel_retry_recovers_an_uncertain_external_effect(self):
+        attempt_id, submission, cancel = self.owned_cancel()
+        with patch("spool.farm.deadline_command", side_effect=[submission["id"], RuntimeError("lost response")]):
             with self.assertRaisesRegex(RuntimeError, "lost response"):
                 self.execute(cancel)
-            self.assertEqual(self.execute(cancel)["status"], "cancel_requested")
-            self.assertEqual(external.call_count, 2)
-        self.assertEqual(self.store.attempt(attempt_id)["status"], "cancel_requested")
         self.assertIn("lost response", self.store.attempt(attempt_id)["error"])
-        with patch("spool.farm.deadline_command") as external:
+        with patch("spool.farm.deadline_command", side_effect=[submission["id"], "Job failed"]) as external:
             replay = self.execute(cancel)
-            self.assertIn("unconfirmed", replay["note"])
-            self.assertIn("no automatic repeat", replay["note"])
+            self.assertIn("Cancellation requested", replay["note"])
+            self.assertEqual(external.call_count, 2)
+        with patch("spool.farm.deadline_command") as external:
+            self.assertEqual(self.execute(cancel), replay)
             external.assert_not_called()
+        self.assertIsNone(self.store.attempt(attempt_id)["error"])
+
+    def test_crash_after_send_before_acknowledge_allows_cancel_retry(self):
+        attempt_id, submission, cancel = self.owned_cancel()
+        with (
+            patch("spool.farm.deadline_command", side_effect=[submission["id"], "Job failed"]),
+            patch.object(self.store, "finish_cancellation", side_effect=KeyboardInterrupt),
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                self.execute(cancel)
+        with patch("spool.farm.deadline_command", side_effect=[submission["id"], "Job failed"]) as external:
+            self.execute(cancel)
+            self.assertEqual(external.call_count, 2)
+        self.assertIsNone(self.store.attempt(attempt_id)["error"])
 
     def owned_cancel(self):
         queued = self.execute(
@@ -519,7 +523,7 @@ class CommandTests(unittest.TestCase):
             self.execute(cancel)
             self.assertEqual(external.call_count, 2)
 
-    def test_concurrent_cancel_commands_send_once_per_attempt(self):
+    def test_concurrent_cancel_commands_only_repeat_unfinished_delivery(self):
         attempt_id, submission, cancel = self.owned_cancel()
         other = copy.deepcopy(cancel)
         other["operationId"] = "another-cancel"
@@ -534,17 +538,17 @@ class CommandTests(unittest.TestCase):
         with patch("spool.farm.deadline_command", side_effect=transport) as external, ThreadPoolExecutor(2) as pool:
             results = list(pool.map(self.execute, [cancel, other]))
         self.assertTrue(all(result["status"] == "cancel_requested" for result in results))
-        self.assertEqual(sum(call.args[0][0] == "-FailJob" for call in external.call_args_list), 1)
+        self.assertIn(sum(call.args[0][0] == "-FailJob" for call in external.call_args_list), (1, 2))
         with self.store.connect() as db:
-            self.assertEqual(db.execute("SELECT count(*) FROM effects").fetchone()[0], 1)
+            self.assertIn(db.execute("SELECT count(*) FROM effects").fetchone()[0], (1, 2))
         with patch("spool.farm.deadline_command") as external:
             self.execute(cancel)
             self.execute(other)
             external.assert_not_called()
         self.assertEqual(self.store.attempt(attempt_id)["status"], "cancel_requested")
 
-    def test_replay_of_claimed_cancellation_after_restart_never_sends(self):
-        attempt_id, _, cancel = self.owned_cancel()
+    def test_replay_of_claimed_cancellation_after_restart_resends(self):
+        attempt_id, submission, cancel = self.owned_cancel()
         # Simulate termination after the durable transaction and before transport.
         with patch(
             "spool.farm.deadline_command", side_effect=[self.store.submission(attempt_id, {})["id"], KeyboardInterrupt]
@@ -552,22 +556,22 @@ class CommandTests(unittest.TestCase):
             with self.assertRaises(KeyboardInterrupt):
                 self.execute(cancel)
         self.store = type(self.store)(self.store.root)
-        with patch("spool.farm.deadline_command") as external:
+        with patch("spool.farm.deadline_command", side_effect=[submission["id"], "Job failed"]) as external:
             result = self.execute(cancel)
-            self.assertIn("unconfirmed", result["note"])
-            external.assert_not_called()
-        self.assertIn("unconfirmed", self.store.attempt(attempt_id)["error"])
+            self.assertIn("Cancellation requested", result["note"])
+            self.assertEqual(external.call_count, 2)
+        self.assertIsNone(self.store.attempt(attempt_id)["error"])
 
-    def test_new_command_cannot_repeat_a_claim_after_a_stale_status_observation(self):
+    def test_new_command_retries_unfinished_delivery_after_stale_observation(self):
         attempt_id, submission, cancel = self.owned_cancel()
         with patch("spool.farm.deadline_command", side_effect=[submission["id"], RuntimeError("lost response")]):
             with self.assertRaises(RuntimeError):
                 self.execute(cancel)
         self.assertFalse(self.store.transition(attempt_id, "farm_running"))
         cancel["operationId"] = "cancel-again"
-        with patch("spool.farm.deadline_command", return_value=submission["id"]) as external:
-            self.assertIn("unconfirmed", self.execute(cancel)["note"])
-            external.assert_not_called()
+        with patch("spool.farm.deadline_command", side_effect=[submission["id"], "Job failed"]) as external:
+            self.assertIn("Cancellation requested", self.execute(cancel)["note"])
+            self.assertEqual(external.call_count, 2)
         self.assertEqual(self.store.attempt(attempt_id)["status"], "cancel_requested")
 
     def test_completed_during_cancel_lookup_is_not_failed(self):

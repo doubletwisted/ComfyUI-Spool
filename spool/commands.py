@@ -306,14 +306,13 @@ def execute(store, media, project_id, data):
     scope_check(project_id, scope, ACTION_CAPABILITIES[action], [clip_id] if clip_id else [])
     adopted = None
     cancellation = None
-    send_cancellation = False
-    if action == "cancel" and store.operation(identity, project_id, data) is None:
+    if action == "cancel":
+        store.operation(identity, project_id, data)  # Validate replays before any external lookup.
         attempt = store.attempt(arguments["attemptId"])
         if attempt["project_id"] != project_id or attempt["clip_id"] not in scope.get("clipIds", []):
             raise ValueError("Attempt is outside the cancellation scope")
         if (
-            attempt["status"]
-            not in ("intent", "waiting_for_host", "cancel_requested", "complete", "failed", "cancelled")
+            attempt["status"] not in ("intent", "waiting_for_host", "complete", "failed", "cancelled")
             and attempts.target_of(attempt["request"]) != attempts.CLOUD
         ):
             submission = store.submission_for(attempt["id"])
@@ -321,8 +320,10 @@ def execute(store, media, project_id, data):
             if attempts.target_of(attempt["request"], submission) == attempts.DEADLINE:
                 if not submission or not submission["external_id"]:
                     raise ValueError("Claimed work needs an owned Deadline job; resolve uncertain submission first")
+                with store.connect() as db:
+                    done = store.cancellation_done(db, attempt["id"])
                 try:
-                    owner = farm.job_value(submission["external_id"], "SpoolSubmissionId")
+                    owner = submission["id"] if done else farm.job_value(submission["external_id"], "SpoolSubmissionId")
                 except (OSError, RuntimeError, subprocess.SubprocessError) as error:
                     raise ValueError(
                         "Cancellation was not sent; retry Cancel request after the Deadline lookup recovers: "
@@ -332,7 +333,8 @@ def execute(store, media, project_id, data):
                     raise ValueError(
                         "Cancellation refused: external job ownership did not match; no cancellation was sent"
                     )
-                cancellation = (submission["id"], submission["external_id"])
+                if not done:
+                    cancellation = (submission["id"], submission["external_id"])
     if action == "recover_submission":
         attempt = store.attempt(arguments["attemptId"])
         if attempt["project_id"] != project_id or attempt["clip_id"] not in scope.get("clipIds", []):
@@ -352,7 +354,6 @@ def execute(store, media, project_id, data):
             adopted = found[0]
 
     def apply(db, document):
-        nonlocal send_cancellation
         clips = [*document["clips"], *document.get("audioClips", [])] if action in note_actions else document["clips"]
         clip = next((c for c in clips if c["id"] == clip_id), None)
         if clip_id and not clip:
@@ -436,20 +437,16 @@ def execute(store, media, project_id, data):
             if target == attempts.CLOUD:
                 store.transition(attempt["id"], attempts.CANCEL_REQUESTED, db=db, expected=attempt["status"])
                 return {"attemptId": attempt["id"], "status": "cancel_requested", "target": "cloud"}, False
-            note = "Cancellation delivery is unconfirmed; refresh job status before any further action. No automatic repeat."
-            claimed = store.cancellation_claimed(db, attempt["id"])
-            if attempt["status"] != "cancel_requested" and not claimed:
+            note = "Cancellation delivery is unconfirmed; retry Cancel request to confirm delivery."
+            if not store.cancellation_done(db, attempt["id"]):
                 if cancellation != (submission["id"], submission["external_id"]):
                     raise Conflict("Deadline job changed during cancellation ownership lookup; retry Cancel request")
                 store.claim_cancellation(db, identity)
                 store.transition(
                     attempt["id"], attempts.CANCEL_REQUESTED, error=note, db=db, expected=attempt["status"]
                 )
-                send_cancellation = True
-            elif claimed and attempt["status"] != "cancel_requested":
-                store.transition(
-                    attempt["id"], attempts.CANCEL_REQUESTED, error=note, db=db, expected=attempt["status"]
-                )
+            else:
+                note = "Cancellation requested; late results remain collectable"
             return {
                 "attemptId": attempt["id"],
                 "status": "cancel_requested",
@@ -471,7 +468,7 @@ def execute(store, media, project_id, data):
         return {"clipId": clip_id, "action": action}, True
 
     result = store.command(identity, project_id, revision, data, apply)
-    if send_cancellation:
+    if action == "cancel" and cancellation and store.start_cancellation(identity, result["attemptId"], *cancellation):
         try:
             farm.fail_job(result["jobId"])
         except (OSError, RuntimeError, subprocess.SubprocessError) as error:

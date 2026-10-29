@@ -553,18 +553,35 @@ class Store:
             ]
         return experiments, feedback
 
-    def cancellation_claimed(self, db, attempt_id):
-        """Whether a cancel command already started sending to this attempt's job."""
+    def cancellation_done(self, db, attempt_id):
+        """Whether a cancel command confirmed delivery to this attempt's job."""
         return (
             db.execute(
-                "SELECT 1 FROM effects JOIN command_results ON command_results.id=effects.operation_id WHERE json_extract(command_results.result,'$.attemptId')=?",
+                "SELECT 1 FROM effects JOIN command_results ON command_results.id=effects.operation_id WHERE json_extract(command_results.result,'$.attemptId')=? AND effects.state IN ('done','sent')",
                 (attempt_id,),
             ).fetchone()
             is not None
         )
 
     def claim_cancellation(self, db, operation_id):
-        db.execute("INSERT INTO effects VALUES(?,'started')", (operation_id,))
+        db.execute("INSERT OR IGNORE INTO effects VALUES(?,'started')", (operation_id,))
+
+    def start_cancellation(self, operation_id, attempt_id, submission_id, job_id):
+        """Retry an unfinished delivery only while cancellation still applies."""
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            attempt = db.execute("SELECT status FROM attempts WHERE id=?", (attempt_id,)).fetchone()
+            submission = self.submission_for(attempt_id, db)
+            if (
+                not attempt
+                or attempt[0] != attempts.CANCEL_REQUESTED
+                or not submission
+                or (submission["id"], submission["external_id"]) != (submission_id, job_id)
+                or self.cancellation_done(db, attempt_id)
+            ):
+                return False
+            self.claim_cancellation(db, operation_id)
+            return True
 
     def deleted_take_ids(self, project_id):
         with self.connect() as db:
@@ -996,11 +1013,11 @@ class Store:
             )
             note = "Cancellation requested; late results remain collectable"
             if error is not None:
-                note = "Cancellation delivery is unconfirmed: " + error + ". Refresh job status; no automatic repeat."
+                note = "Cancellation delivery is unconfirmed: " + error + ". Retry Cancel request to confirm delivery."
             result["note"] = note
             db.execute(
                 "UPDATE effects SET state=? WHERE operation_id=?",
-                ("uncertain" if error is not None else "sent", operation_id),
+                ("uncertain" if error is not None else "done", operation_id),
             )
             db.execute("UPDATE command_results SET result=? WHERE id=?", (encode(result), operation_id))
             db.execute(
