@@ -1,5 +1,4 @@
 // Viewer playback preparation: sizing, in-flight sharing, failure and retry.
-import assert from 'node:assert/strict';
 import { createPreviews, QUALITY } from '../ui/preview.js';
 
 const checks = [];

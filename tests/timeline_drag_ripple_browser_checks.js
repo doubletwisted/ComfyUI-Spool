@@ -4,7 +4,6 @@
 // the minimum clip length, so positions are compared against where the gesture started.
 (async () => {
   const n = window.spoolNative,
-    d = document,
     drag = window.__drag;
   if (location.port !== '8195' || !n || !drag) throw Error('Use the owned timeline-drag QA project on 8195');
   const checks = [],

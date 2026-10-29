@@ -161,7 +161,7 @@ export function createHistory({ limit = LIMIT, budget = BUDGET } = {}) {
   }
 
   function load(text) {
-    let parsed = null;
+    let parsed;
     try {
       parsed = JSON.parse(text);
     } catch (error) {

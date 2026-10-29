@@ -2538,7 +2538,7 @@ async function runLibraryDrop(page, evaluate, label) {
             diagnostic: diagnostic?.result?.value,
           });
           fs.writeFileSync(path.join(evidence, 'summary.json'), JSON.stringify(summary, null, 2));
-          throw Error(label + ': ' + error.message);
+          throw Error(label + ': ' + error.message, { cause: error });
         } finally {
           page.close();
           await browser.send('Target.closeTarget', { targetId: target.targetId });

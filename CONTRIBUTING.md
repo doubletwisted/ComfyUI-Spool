@@ -45,7 +45,8 @@ saw. State what you could not check.
 - Generation never chooses a take. Only the user changes the edit.
 - Formats shared by Python and JavaScript change on both sides, with their
   fixtures ([architecture.md](docs/dev/architecture.md#contracts-shared-across-languages)).
-- Match the surrounding code: its naming, comment density and idiom.
+- Match the surrounding code: its naming, comment density and idiom. The gate
+  enforces formatting; do not reformat code your change does not touch.
 - Add user-facing changes to [CHANGELOG.md](CHANGELOG.md).
 
 Contributions are licensed under the project's [GPL-3.0](LICENSE).

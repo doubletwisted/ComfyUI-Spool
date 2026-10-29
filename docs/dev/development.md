@@ -28,7 +28,19 @@ python -m pip install -r ComfyUI/custom_nodes/Spool/requirements.txt
 
 The checks need Python 3.11+ (3.12 is used in development) with aiohttp and
 Pillow, Node 24, and `ffmpeg` and `ffprobe` on PATH. Browser checks also need
-Chrome or Edge.
+Chrome or Edge. Install the formatter and linters once per checkout or worktree:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+npm ci
+```
+
+These are development tools only: installing or running Spool needs no Node
+packages. To tell `git blame` to skip the commit that formatted the codebase:
+
+```powershell
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
 
 ## The gate
 
@@ -38,9 +50,12 @@ Run before every commit:
 python tests/run_architecture_checks.py
 ```
 
-It runs the Python tests, the JavaScript module checks and the contract checks
-that pin shared Python/JavaScript formats (see the table in the architecture
-doc). It needs no ComfyUI host. The Deadline contract tests also run the real
+It checks formatting (ruff for Python, Prettier for JavaScript, HTML and CSS)
+and lint (ruff and ESLint), then runs every `tests/test_*.py` and
+`tests/*_checks.mjs` and the contract checks that pin shared Python/JavaScript
+formats (see the table in the architecture doc). It needs no ComfyUI host.
+`npm run format` and `python -m ruff format .` fix formatting; the gate only
+reports it. The Deadline contract tests also run the real
 [ComfyUI-Deadline-Plugin](https://github.com/doubletwisted/ComfyUI-Deadline-Plugin)
 when it is checked out beside the Spool folder, and are skipped otherwise.
 

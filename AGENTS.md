@@ -26,7 +26,9 @@ elsewhere. Before calling a change done, say which of these applied:
 
 ## Verifying
 
-- Run `python tests/run_architecture_checks.py` before every commit.
+- Run `python tests/run_architecture_checks.py` before every commit. A new
+  checkout or worktree needs `npm ci` and `python -m pip install -r requirements-dev.txt`
+  first; `npm run format` and `python -m ruff format .` fix what it reports.
 - Run browser and live checks against an isolated host (`tests/run_host.py`).
   Paid checks run only when asked. See [docs/dev/development.md](docs/dev/development.md).
 - Report mocked results separately from live evidence.

@@ -1,7 +1,6 @@
 // Undo/redo ownership: entry shape, take archive, bounding, persistence, reload.
 // node tests/history_checks.mjs [REAL_PROJECT_DOCUMENT_JSON]
 import fs from 'node:fs';
-import assert from 'node:assert/strict';
 import { createHistory, sameStacks, LIMIT, BUDGET } from '../ui/history.js';
 
 const checks = [];

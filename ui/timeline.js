@@ -242,7 +242,7 @@ export function freeAudioStart(doc, desired, length, ignore, track = 'music', la
 function applyAudioEdit(doc, d, delta) {
   const c = (doc.audioClips || []).find(c => c.id === d.id),
     o = d.original;
-  let applied = delta;
+  let applied;
   if (d.operation === 'move') {
     let start = o.start + delta;
     if (d.snapEnabled) start = snap(d.snapPoints, start, d.snapTolerance);

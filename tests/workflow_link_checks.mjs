@@ -89,7 +89,7 @@ const opening = links.open({ link: { ...link, clipId: 'pending' } }),
   same = links.open({ link: { ...link, clipId: 'pending' } });
 await assert.rejects(links.open({ link: { ...link, clipId: 'different' } }), /Finish opening/);
 await assert.rejects(links.capture(data), /Finish opening/);
-finish();
+globalThis.finish();
 await Promise.all([opening, same]);
 check('Concurrent repeated open shares one operation and blocks unrelated graph actions', loads === 5);
 check(

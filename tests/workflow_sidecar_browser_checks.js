@@ -1,7 +1,6 @@
 (async () => {
   const w = window,
     n = w.spoolNative,
-    d = w.document,
     checks = [],
     check = (label, value) => {
       if (!value) throw Error(label);

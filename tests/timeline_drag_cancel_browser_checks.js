@@ -2,7 +2,6 @@
 // the pointer was holding.
 (async () => {
   const n = window.spoolNative,
-    d = document,
     drag = window.__drag;
   if (location.port !== '8195' || !n || !drag) throw Error('Use the owned timeline-drag QA project on 8195');
   const checks = [],

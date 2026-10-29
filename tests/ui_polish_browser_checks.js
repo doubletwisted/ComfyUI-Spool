@@ -14,11 +14,9 @@
       await new Promise(r => setTimeout(r, 30));
     }
   };
-  const c = () => n.state.clips.find(c => c.id === 'shot');
   n.selectClip('shot');
   await n.flush();
-  const original = { workflow: c().workflow, version: c().workflowVersion, take: c().takeId, in: c().in, out: c().out },
-    revision = n.revision;
+  const revision = n.revision;
   check('Both inspector modes show one workflow action', !!$('editClipWorkflow') && !$('clipWorkflow'));
   check(
     'Saved recipe can be edited without a readiness banner',

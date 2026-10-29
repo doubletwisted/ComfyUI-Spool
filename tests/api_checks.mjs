@@ -1,6 +1,5 @@
 // The studio's HTTP client: labels, background rules, recipe attachment, errors.
 // node tests/api_checks.mjs
-import assert from 'node:assert/strict';
 import { createApi, requestLabel } from '../ui/api.js';
 
 const checks = [];

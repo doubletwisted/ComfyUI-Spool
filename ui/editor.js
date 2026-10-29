@@ -479,7 +479,6 @@ async function startEditor(isFailed) {
     const b = trackHeightBounds(key);
     return Math.min(b.max, Math.max(b.min, trackHeights[key] ?? defaultTrackHeight(key)));
   };
-  const videoLaneHeight = track => trackHeight('video:' + track);
   const trackVariable = (kind, track, part) => '--' + kind + '-' + part + '-' + track;
   function trackAt(e) {
     const kind = e.target?.closest?.('#audioLane') ? 'source' : 'video',
@@ -2700,9 +2699,6 @@ async function startEditor(isFailed) {
       provenance: { ...captured.provenance, ...setup.provenance },
     };
   }
-  function addClip(workflow, index = state.clips.length) {
-    if (workflows[workflow]?.imported) return addLibraryShot(workflow, index);
-  }
   async function addMediaClip(id, index = state.clips.length, start = Math.round(state.frame)) {
     if (T.videoTracks(state) > 1) state.frame = start;
     const m = projectMedia().find(x => x.id === id);
@@ -2711,7 +2707,7 @@ async function startEditor(isFailed) {
       addAudioClip(m, start);
       return;
     }
-    let data = null;
+    let data;
     try {
       data = await mediaWorkflowData(m);
     } catch (error) {
@@ -7761,7 +7757,6 @@ async function startEditor(isFailed) {
     $('retryQueue').disabled = queueSubmission.sending;
     const row = j => {
       const observations = j.nodeProgress || [],
-        node = observations.filter(n => n.max > 1).at(-1) || observations.at(-1),
         running = ['running', 'farm_running'].includes(j.status);
       const farm = j.farmProgress,
         percent = jobPercent(j);
