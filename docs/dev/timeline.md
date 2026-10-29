@@ -12,8 +12,10 @@ initial geometry; they do not accumulate deltas. Soundtrack snapping receives
 the enabled flag and tolerance in frames from the adapter's captured pixel scale.
 Clip reorder uses `moveClip` with the insertion index after excluding that clip.
 
-The editor owns pointer thresholds, selection, playback, preview, history,
-rendering, saving and messages. It snapshots before mutations and preserves
+The studio owners keep pointer thresholds (`timeline-pointer.js`), selection
+(`clip-selection.js`), playback (`viewer.js`), trim preview (`trim-preview.js`)
+and rendering (`timeline-renderer.js`, `audio-editor.js`) outside this module.
+The composition runtime connects history, saving and messages. It snapshots before mutations and preserves
 asynchronous take arrivals when restoring snapshots. The timeline module never
 changes selection or chooses an arriving take.
 
@@ -26,7 +28,8 @@ end is retained when possible. Repeated moves do not accumulate offsets, and
 current clip objects retain asynchronous take arrivals. `snapPoints` accepts one
 ID or an array of IDs to exclude the whole moving selection.
 
-Selection, its range anchor and marquee geometry belong to `ui/editor.js`.
+Selection and its range anchor are composed through `ui/clip-selection.js`;
+`ui/timeline-pointer.js` owns marquee geometry.
 Selected IDs persist only in session view state, never in the shared document.
 Batch mutations use one history snapshot. Edge, slip and slide gestures collapse
 to one primary clip, preserving the existing editing rules below.

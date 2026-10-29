@@ -61,7 +61,7 @@ export function createClient(channel, { timeoutMs = 10000 } = {}) {
     clearTimeout(request.timer);
     pending.delete(data.requestId);
     if (!data.error && request.action === ACTIONS.ping && data.result?.bridgeVersion !== BRIDGE_VERSION) {
-      const error = Error('Spool was updated. Reload the ComfyUI page.');
+      const error = /** @type {Error & {code?: string}} */ (Error('Spool was updated. Reload the ComfyUI page.'));
       error.code = 'bridge_outdated';
       request.reject(error);
     } else data.error ? request.reject(Error(data.error)) : request.resolve(data.result);
@@ -73,7 +73,9 @@ export function createClient(channel, { timeoutMs = 10000 } = {}) {
       const requestId = crypto.randomUUID(),
         timer = setTimeout(() => {
           pending.delete(requestId);
-          const error = Error('Comfy did not reply. Its workflow may still be loading. Try again.');
+          const error = /** @type {Error & {code?: string}} */ (
+            Error('Comfy did not reply. Its workflow may still be loading. Try again.')
+          );
           error.code = 'SPOOL_BRIDGE_TIMEOUT';
           reject(error);
         }, options.timeoutMs ?? timeoutMs);

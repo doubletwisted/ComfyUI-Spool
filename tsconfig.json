@@ -28,6 +28,24 @@
     "ui/inspector-renderer.js",
     "ui/library-renderer.js",
     "ui/workflow-coordinator.js",
-    "ui/edit-actions.js"
+    "ui/edit-actions.js",
+    "ui/workflow-registry.js",
+    "ui/track-layout.js",
+    "ui/clip-selection.js",
+    "ui/clip-badges.js",
+    "ui/take-renderer.js",
+    "ui/take-actions.js",
+    "ui/clip-tools.js",
+    "ui/timeline-drops.js",
+    "ui/media-import.js",
+    "ui/exports.js",
+    "ui/project-dialogs.js",
+    "ui/layout-controls.js",
+    "ui/audio-editor.js",
+    "ui/trim-preview.js",
+    "ui/comfy-connection.js",
+    "ui/render-queue.js",
+    "ui/workflow-controls.js",
+    "ui/workflow-dialogs.js"
   ]
 }

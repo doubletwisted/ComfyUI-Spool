@@ -45,8 +45,8 @@ keyboard navigation, dismissal and focus return; callers still build actions.
 video pool and eviction, bounded seeking, image decoding, preview preparation,
 and audio players/mixing. Current document and pixel scale come from getters;
 repaint/save/trim adapters keep the original operation order. Preview quality
-and preparation policy are unchanged. Take-review transitions and viewer
-zoom/gestures still belong to the composition runtime.
+and preparation policy are unchanged. `take-actions.js` owns take-review
+transitions; `layout-controls.js` owns viewer zoom and pan controls.
 
 `ui/timeline-renderer.js` retains clip-lane nodes, markup memoization and the
 geometry-only drag repaint. `ui/timeline-pointer.js` owns pointer thresholds,
@@ -70,3 +70,14 @@ blanket `any` annotations or `@ts-nocheck` exclusions are used.
 replacements: undo/redo restoration, deletion and prepared-workflow assignment.
 Lifecycle checks now import every handler they exercise, with no source slicing
 or VM evaluation.
+
+The remaining feature bodies are owned by `take-renderer.js`, `take-actions.js`,
+`audio-editor.js`, `clip-selection.js`, `clip-tools.js`, `clip-badges.js`,
+`track-layout.js`, `timeline-drops.js`, `trim-preview.js`, `layout-controls.js`,
+`media-import.js`, `exports.js`, `project-dialogs.js`, `render-queue.js`,
+`comfy-connection.js`, `workflow-registry.js`, `workflow-controls.js` and
+`workflow-dialogs.js`. The editor composes their live getters/actions, startup
+barrier, listeners and project/view adapters. Hoisted forwarding functions keep
+registered handler identities and parameter/default behavior stable; internal
+helpers are private to their owner. Async adapters return the owner's promise
+directly, without adding an extra await or settlement step.

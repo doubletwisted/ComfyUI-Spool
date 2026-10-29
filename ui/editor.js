@@ -1,3 +1,21 @@
+import { createWorkflowDialogs } from './workflow-dialogs.js';
+import { createWorkflowControls } from './workflow-controls.js';
+import { createRenderQueue } from './render-queue.js';
+import { createComfyConnection } from './comfy-connection.js';
+import { createTrimPreview } from './trim-preview.js';
+import { createAudioEditor } from './audio-editor.js';
+import { createLayoutControls } from './layout-controls.js';
+import { createProjectDialogs } from './project-dialogs.js';
+import { createExports } from './exports.js';
+import { createMediaImport } from './media-import.js';
+import { createTimelineDrops } from './timeline-drops.js';
+import { createClipTools } from './clip-tools.js';
+import { createTakeActions } from './take-actions.js';
+import { createTakeRenderer } from './take-renderer.js';
+import { createClipBadges } from './clip-badges.js';
+import { createClipSelection } from './clip-selection.js';
+import { createTrackLayout } from './track-layout.js';
+import { createWorkflowRegistry } from './workflow-registry.js';
 import { createWorkflowAssignment, createHistoryActions, createRemovalActions } from './edit-actions.js';
 import { createWorkflowCoordinator } from './workflow-coordinator.js';
 import { createLibraryRenderer } from './library-renderer.js';
@@ -10,7 +28,6 @@ import { createActionMenu } from './action-menu.js';
 import { createQueueActions } from './queue-submission.js';
 import { createInputActions } from './input-actions.js';
 import { createInputReplacements } from './input-replacement.js';
-import { inputFilled, mayStayEmpty } from './input-groups.js';
 import { keyText } from './keys.js';
 // Native editor runtime. Demo source is not loaded or transformed.
 let initialization;
@@ -230,70 +247,31 @@ async function startEditor(isFailed) {
         ICONS.nodes +
         '</g></svg>',
     );
-  function isWorkflowDocument(value) {
-    return (
-      !!value &&
-      typeof value === 'object' &&
-      !Array.isArray(value) &&
-      (Array.isArray(value.nodes)
-        ? value.nodes.every(n => n && n.id !== undefined && typeof n.type === 'string')
-        : Object.keys(value).length > 0 &&
-          Object.values(value).every(
-            n =>
-              n &&
-              typeof n.class_type === 'string' &&
-              n.inputs &&
-              typeof n.inputs === 'object' &&
-              !Array.isArray(n.inputs),
-          ))
-    );
-  }
-  function decodeWorkflowValue(value) {
-    for (let i = 0; i < 3 && typeof value === 'string'; i++) value = JSON.parse(value.trim());
-    return value;
-  }
+  const workflowRegistryOwner = createWorkflowRegistry({
+    copy,
+    url,
+    getFps: () => fps,
+    workflows,
+    importedWorkflowPoster,
+    getApplyPreparedWorkflow: () => applyPreparedWorkflow,
+    getState: () => state,
+    getEdits: () => edits,
+    getActiveVideoTrack: () => activeVideoTrack,
+    getRowFor: () => rowFor,
+    setStatus,
+    editView,
+    getPause: () => pause,
+    clearHeld,
+  });
+
   function readWorkflowData(value) {
-    value = decodeWorkflowValue(value);
-    if (isWorkflowDocument(value))
-      return { workflow: copy(value), prompt: Array.isArray(value.nodes) ? null : copy(value) };
-    if (value && typeof value === 'object') {
-      const graph = decodeWorkflowValue(value.workflow ?? value.prompt);
-      if (isWorkflowDocument(graph)) {
-        let prompt = null;
-        try {
-          prompt = decodeWorkflowValue(value.prompt ?? null);
-        } catch (error) {}
-        return { workflow: copy(graph), prompt: isWorkflowDocument(prompt) ? copy(prompt) : null };
-      }
-    }
-    throw Error('This JSON is not a ComfyUI workflow. Use Open project for Spool projects.');
+    return workflowRegistryOwner.readWorkflowData(value);
   }
   function syncImportedWorkflows() {
-    for (const [id, w] of Object.entries(workflows)) if (w.imported) delete workflows[id];
-    for (const saved of state.importedWorkflows || [])
-      workflows[saved.id] = {
-        ...saved,
-        imported: true,
-        short: 'WF',
-        poster: url(saved.poster || importedWorkflowPoster),
-        sources: [],
-        prompt: '',
-        media: null,
-      };
+    return workflowRegistryOwner.syncImportedWorkflows();
   }
   function registerWorkflowData(data, name, poster) {
-    const key = JSON.stringify(data),
-      existing = (state.importedWorkflows || []).find(w => JSON.stringify(w.data) === key);
-    if (existing) return existing;
-    const w = {
-      id: 'workflow-' + crypto.randomUUID(),
-      name: name.replace(/\.(json|png|webp|jpe?g|mp4|mov|mkv|webm|gif)$/i, ''),
-      data: copy(data),
-      poster: poster || importedWorkflowPoster,
-    };
-    (state.importedWorkflows ??= []).push(w);
-    syncImportedWorkflows();
-    return w;
+    return workflowRegistryOwner.registerWorkflowData(data, name, poster);
   }
   function addImportedWorkflowClip(
     workflow,
@@ -302,66 +280,7 @@ async function startEditor(isFailed) {
     placement = null,
     workflowVersion = null,
   ) {
-    const w = workflows[workflow];
-    if (!w?.imported) return;
-    edits.apply('Add ' + w.name, () => {
-      pause();
-      editView();
-      clearHeld();
-      const duration = w.data?.bindings?.find(b => b.role === 'duration'),
-        seconds = duration?.unit === 'seconds' ? Number(w.data.prompt[duration.nodeId].inputs[duration.input]) : 5;
-      const asset = m
-        ? copy(m)
-        : {
-            id: 'empty-' + crypto.randomUUID(),
-            name: 'Not generated',
-            kind: 'image',
-            file: 'assets/black.png',
-            poster: importedWorkflowPoster,
-            frames: Math.max(1, Math.round((seconds || 5) * fps)),
-            audio: false,
-          };
-      const t = {
-        id: 'take-' + crypto.randomUUID(),
-        number: m ? 1 : 0,
-        seed: null,
-        revision: 1,
-        media: asset,
-        sample: false,
-        placeholder: !m,
-        workflowSnapshot: copy(w.data),
-      };
-      const c = {
-        id: 'clip-' + crypto.randomUUID(),
-        name: m ? m.name.replace(/\.[^.]+$/, '') : w.name,
-        workflow: w.id,
-        ...(w.data.executionTarget ? { executionTarget: w.data.executionTarget } : {}),
-        prompt: '',
-        sources: [],
-        seed: 0,
-        duration: asset.frames / fps,
-        count: 1,
-        strength: 0.75,
-        revision: 1,
-        takes: [t],
-        takeId: t.id,
-        in: 0,
-        out: asset.frames,
-      };
-      if (workflowVersion) applyPreparedWorkflow(c, workflow, workflowVersion);
-      T.insertClip(
-        state,
-        c,
-        index,
-        placement
-          ? { ...placement, ripple: true }
-          : { track: activeVideoTrack, start: T.videoTracks(state) > 1 ? Math.round(state.frame) : null },
-      );
-      state.selected = c.id;
-      state.selectedAudio = null;
-      state.frame = rowFor(c.id).start;
-    });
-    setStatus(m ? 'Video and workflow added to the edit' : 'Workflow added · no generated take yet');
+    return workflowRegistryOwner.addImportedWorkflowClip(workflow, index, m, placement, workflowVersion);
   }
   const { applyPreparedWorkflow } = createWorkflowAssignment({
     inputReplacements,
@@ -473,145 +392,77 @@ async function startEditor(isFailed) {
     return Math.min(b.max, Math.max(b.min, trackHeights[key] ?? defaultTrackHeight(key)));
   };
   const trackVariable = (kind, track, part) => '--' + kind + '-' + part + '-' + track;
+  const trackLayoutOwner = createTrackLayout({
+    $,
+    getState: () => state,
+    trackHeightsKey,
+    trackHeights,
+    trackHeightBounds,
+    trackHeight,
+    trackVariable,
+    draw,
+  });
   function trackAt(e) {
-    const kind = e.target?.closest?.('#audioLane') ? 'source' : 'video',
-      rect = $(kind === 'source' ? 'audioLane' : 'clipLane').getBoundingClientRect(),
-      y = e.clientY - rect.top;
-    let end = 0;
-    for (let track = T.videoTracks(state); track > 0; track--) {
-      if (kind === 'source' && T.sourceTrackHidden(state, track)) continue;
-      end += trackHeight(kind + ':' + track);
-      if (y < end) return track;
-    }
-    return 1;
+    return trackLayoutOwner.trackAt(e);
   }
   function trackResizeHandle(key, label) {
-    return (
-      '<div class="track-resize" data-track-resize="' +
-      key +
-      '" role="separator" aria-orientation="horizontal" aria-label="Resize ' +
-      label +
-      '" tabindex="0" title="Drag to resize ' +
-      label +
-      '; double-click to reset"></div>'
-    );
+    return trackLayoutOwner.trackResizeHandle(key, label);
   }
   function setStyle(node, key, value) {
-    if (node.style.getPropertyValue(key) !== value) node.style.setProperty(key, value);
+    return trackLayoutOwner.setStyle(node, key, value);
   }
   function applyTrackHeights() {
-    const editor = $('editor'),
-      count = T.videoTracks(state);
-    for (const kind of ['video', 'source']) {
-      let top = 0;
-      for (let track = count; track > 0; track--) {
-        const height = kind === 'source' && T.sourceTrackHidden(state, track) ? 0 : trackHeight(kind + ':' + track);
-        setStyle(editor, trackVariable(kind, track, 'top'), top + 'px');
-        setStyle(editor, trackVariable(kind, track, 'height'), height + 'px');
-        top += height;
-      }
-      $(kind === 'video' ? 'clipLane' : 'audioLane').style.height = top + 'px';
-    }
-    $('musicLane').hidden = $('musicTrackHeader').hidden = !!state.audioTracks?.musicHidden;
-    setStyle(editor, '--music-height', trackHeight('music') + 'px');
-    $('musicLane').style.height = trackHeight('music') + 'px';
-    for (const handle of $('trackHeaders').querySelectorAll('[data-track-resize]')) {
-      const key = handle.dataset.trackResize,
-        b = trackHeightBounds(key);
-      handle.setAttribute('aria-valuemin', b.min);
-      handle.setAttribute('aria-valuemax', b.max);
-      handle.setAttribute('aria-valuenow', Math.round(trackHeight(key)));
-      handle.setAttribute('aria-valuetext', Math.round(trackHeight(key)) + ' pixels');
-    }
-    $('trackHeaders').style.transform = 'translateY(-' + $('timelineScroll').scrollTop + 'px)';
+    return trackLayoutOwner.applyTrackHeights();
   }
   function storeTrackHeights() {
-    try {
-      localStorage.setItem(trackHeightsKey, JSON.stringify(trackHeights));
-    } catch (error) {}
+    return trackLayoutOwner.storeTrackHeights();
   }
   function renderAudioTrackHeaders(count) {
-    const header = $('sourceTrackHeader'),
-      key = 'source:' + count;
-    header.hidden = T.sourceTrackHidden(state, count);
-    header.style.height = 'var(--source-height-' + count + ')';
-    header.querySelector('.track-title b').textContent = count > 1 ? 'A1 / V' + count : 'A1';
-    header.title = 'Clip audio from V' + count + '. M/S controls affect all A1 clip audio.';
-    if (header.querySelector('[data-track-resize]')?.dataset.trackResize !== key) {
-      header.querySelector('[data-track-resize]')?.remove();
-      header.insertAdjacentHTML('beforeend', trackResizeHandle(key, 'A1 clip audio from V' + count));
-    }
-    draw(
-      'sourceExtraTrackLabels',
-      Array.from({ length: count - 1 }, (_, i) => {
-        const track = count - i - 1;
-        if (T.sourceTrackHidden(state, track)) return '';
-        return (
-          '<div class="track-label audio source-track-label" style="height:var(--source-height-' +
-          track +
-          ')"><span class="track-title"><b>A1 / V' +
-          track +
-          '</b><small>Clip audio</small></span>' +
-          trackResizeHandle('source:' + track, 'A1 clip audio from V' + track) +
-          '</div>'
-        );
-      }).join(''),
-    );
-    const music = $('musicTrackHeader');
-    music.style.height = 'var(--music-height)';
-    if (!music.querySelector('[data-track-resize]'))
-      music.insertAdjacentHTML('beforeend', trackResizeHandle('music', 'A2 soundtrack'));
+    return trackLayoutOwner.renderAudioTrackHeaders(count);
   }
+  const clipSelectionOwner = createClipSelection({
+    $,
+    getInspectorTab: () => inspectorTab,
+    writeInspectorTab: value => (inspectorTab = value),
+    getSelectedCut: () => selectedCut,
+    writeSelectedCut: value => (selectedCut = value),
+    getNudgeGroup: () => nudgeGroup,
+    writeNudgeGroup: value => (nudgeGroup = value),
+    getState: () => state,
+    review,
+    getSelectionAnchor: () => selectionAnchor,
+    writeSelectionAnchor: value => (selectionAnchor = value),
+    getActiveVideoTrack: () => activeVideoTrack,
+    writeActiveVideoTrack: value => (activeVideoTrack = value),
+    getSelectedVideos: () => selectedVideos,
+    getRowFor: () => rowFor,
+    buttons,
+    getRenderBin: () => renderBin,
+    getRenderInspector: () => renderInspector,
+    editView,
+    getRenderTimeline: () => renderTimeline,
+    getUpdateViewer: () => updateViewer,
+    getPause: () => pause,
+    saveView,
+    selectedAudio,
+    hideTrimPreview,
+    queueReason,
+  });
   function selectionIds() {
-    const available = new Set([...state.clips, ...(state.audioClips || [])].map(c => c.id));
-    if (state.selectedAudio && !available.has(state.selectedAudio)) state.selectedAudio = null;
-    const active = state.selectedAudio || state.selected;
-    if (!Array.isArray(state.selection) || (active && !state.selection.includes(active)))
-      state.selection = active && available.has(active) ? [active] : [];
-    state.selection = state.selection.filter(id => available.has(id));
-    return state.selection;
+    return clipSelectionOwner.selectionIds();
   }
   function setTimelineSelection(ids, primary = ids.at(-1)) {
-    const available = new Set([...state.clips, ...(state.audioClips || [])].map(c => c.id));
-    state.selection = [...new Set(ids)].filter(id => available.has(id));
-    if (!state.selection.includes(primary)) primary = state.selection.at(-1);
-    const audio = (state.audioClips || []).find(c => c.id === primary);
-    state.selectedAudio = audio?.id || null;
-    if (!audio) state.selected = primary || null;
+    return clipSelectionOwner.setTimelineSelection(ids, primary);
   }
   function selectTimelineItem(id, modifiers = {}, preserve = false) {
-    const current = selectionIds().slice(),
-      toggle = modifiers?.ctrlKey || modifiers?.metaKey;
-    if (modifiers?.shiftKey) {
-      const audio = (state.audioClips || []).find(c => c.id === id),
-        lane = audio
-          ? (state.audioClips || [])
-              .filter(
-                c =>
-                  T.audioTrack(c) === T.audioTrack(audio) &&
-                  (T.audioTrack(c) !== 'source' || T.sourceLane(c) === T.sourceLane(audio)),
-              )
-              .sort((a, b) => a.start - b.start)
-          : T.trackClips(state, T.videoTrack(state.clips.find(c => c.id === id)));
-      const a = lane.findIndex(c => c.id === (selectionAnchor || state.selectedAudio || state.selected)),
-        b = lane.findIndex(c => c.id === id),
-        range = a < 0 ? [id] : lane.slice(Math.min(a, b), Math.max(a, b) + 1).map(c => c.id);
-      setTimelineSelection(toggle ? [...current, ...range] : range, id);
-    } else if (toggle) {
-      setTimelineSelection(current.includes(id) ? current.filter(x => x !== id) : [...current, id], id);
-      selectionAnchor = id;
-    } else {
-      setTimelineSelection(preserve && current.includes(id) ? current : [id], id);
-      if (!preserve || !current.includes(id) || !selectionAnchor) selectionAnchor = id;
-    }
+    return clipSelectionOwner.selectTimelineItem(id, modifiers, preserve);
   }
   const selectedVideos = () => {
     const ids = new Set(selectionIds());
     return state.clips.filter(c => ids.has(c.id));
   };
   function selectionQueueReason() {
-    const clips = selectedVideos();
-    return !clips.length ? 'Select a video clip.' : clips.map(queueReason).find(Boolean) || null;
+    return clipSelectionOwner.selectionQueueReason();
   }
   const take = T.takeOf;
   const videoTotal = () => T.videoTotal(state);
@@ -816,20 +667,52 @@ async function startEditor(isFailed) {
   try {
     mediaView = sessionStorage.getItem(VIEW_KEY + ':media-view') === 'list' ? 'list' : 'grid';
   } catch (error) {}
+  const layoutControlsOwner = createLayoutControls({
+    $,
+    VIEW_KEY,
+    getTimelineDrag: () => timelineDrag,
+    writeTimelineDrag: value => (timelineDrag = value),
+    getState: () => state,
+    getBinTab: () => binTab,
+    writeBinTab: value => (binTab = value),
+    getPpf: () => ppf,
+    getDrag: () => drag,
+    review,
+    viewState,
+    trackHeights,
+    getTrackResize: () => trackResize,
+    writeTrackResize: value => (trackResize = value),
+    applyTrackHeights,
+    storeTrackHeights,
+    clamp,
+    getMediaView: () => mediaView,
+    getRenderBin: () => renderBin,
+    getRenderTimeline: () => renderTimeline,
+    getPointerBusy: () => pointerBusy,
+    getViewer: () => viewer,
+    getViewerData: () => viewerData,
+    getUpdateViewer: () => updateViewer,
+    getMediaCollapsedKey: () => mediaCollapsedKey,
+    getMediaRail: () => mediaRail,
+    getViewerExpanded: () => viewerExpanded,
+    writeViewerExpanded: value => (viewerExpanded = value),
+    getFullscreenPending: () => fullscreenPending,
+    writeFullscreenPending: value => (fullscreenPending = value),
+    getViewerZoom: () => viewerZoom,
+    getViewerPan: () => viewerPan,
+    writeViewerPan: value => (viewerPan = value),
+    getViewSaveTimer: () => viewSaveTimer,
+    writeViewSaveTimer: value => (viewSaveTimer = value),
+    getInspectorFull: () => inspectorFull,
+    getInspectorHeightButton: () => inspectorHeightButton,
+    getPanelWidths: () => panelWidths,
+    getPanelDrag: () => panelDrag,
+    writePanelDrag: value => (panelDrag = value),
+    getPanelKey: () => panelKey,
+    getTimelineHeightKey: () => timelineHeightKey,
+  });
   function applyMediaView() {
-    $('mediaPanel').dataset.tab = binTab;
-    for (const button of $('mediaPanel').querySelectorAll('[data-bin-tab]')) {
-      const active = button.dataset.binTab === binTab;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-selected', active);
-    }
-    const active = binTab === 'media';
-    $('binGrid').classList.toggle('media-list', active && mediaView === 'list');
-    for (const view of ['grid', 'list']) {
-      $('mediaView' + view).setAttribute('aria-pressed', mediaView === view);
-      $('mediaView' + view).classList.toggle('active', mediaView === view);
-    }
-    $('mediaViewControls').hidden = !active;
+    return layoutControlsOwner.applyMediaView();
   }
   for (const view of ['grid', 'list'])
     $('mediaView' + view).onclick = () => {
@@ -865,73 +748,56 @@ async function startEditor(isFailed) {
     getFinishViewerPan: () => finishViewerPan,
     getDecimal: () => decimal,
   });
-  async function browseComfyTemplates() {
-    const { createTemplateBrowser } = await import('/spool/ui/template-browser.js');
-    showModal(
-      'Workflow templates',
-      '<div id="templateMount" class="template-mount"><div class="template-loading">Loading Comfy templates...</div></div>',
-      '<span id="templateStatus" role="status">Connecting to Comfy...</span><button class="outline" id="templateRetry" hidden>Retry</button><button class="outline" id="templateCancel">Cancel</button><button class="primary" id="templateUse" disabled>Use workflow</button>',
-    );
-    $('modal').classList.add('template-dialog');
-    const mount = $('templateMount'),
-      status = $('templateStatus'),
-      retryButton = $('templateRetry');
-    const browser = (templateBrowser ??= createTemplateBrowser({
-      overlay: $('modalOverlay'),
-      onCancel: closeModal,
-      onUse: async capture => {
-        closeModal();
-        try {
-          await captureInputs(capture, capture.name || 'Comfy template');
-        } catch (error) {
-          toast(error.message);
-        }
-      },
-    }));
-    dialogs.setCleanup(browser.suspend);
-    $('templateCancel').onclick = closeModal;
-    retryButton.onclick = () => {
-      browser.reset();
-      void browseComfyTemplates();
-    };
-    try {
-      await flushNative();
-      if (!browser.canReuse(productCapabilities.configuration?.comfyUrl)) {
-        await connectComfy();
-        const { definitions, ...metadata } = await request('capabilities?types=');
-        Object.assign(productCapabilities, metadata);
-      }
-      if (mount.isConnected && !$('modalOverlay').hidden)
-        browser.open(productCapabilities.configuration.comfyUrl, {
-          mount,
-          status,
-          useButton: $('templateUse'),
-          retryButton,
-        });
-    } catch (error) {
-      if (mount.isConnected) {
-        status.textContent = error.message;
-        retryButton.hidden = false;
-      }
-    }
+  const mediaImportOwner = createMediaImport({
+    $,
+    copy,
+    esc,
+    diagnostics,
+    api,
+    request,
+    productCapabilities,
+    projectKey,
+    getFps: () => fps,
+    writeFps: value => (fps = value),
+    getTemplateBrowser: () => templateBrowser,
+    writeTemplateBrowser: value => (templateBrowser = value),
+    readWorkflowData,
+    registerWorkflowData,
+    getState: () => state,
+    getBinTab: () => binTab,
+    writeBinTab: value => (binTab = value),
+    review,
+    edits,
+    projectData,
+    getActiveVideoTrack: () => activeVideoTrack,
+    take,
+    videoTotal,
+    rowFor,
+    editingSignature,
+    save,
+    toast,
+    setStatus,
+    render,
+    projectMedia,
+    editView,
+    addMediaClip,
+    getPause: () => pause,
+    getDialogs: () => dialogs,
+    getShowModal: () => showModal,
+    getCloseModal: () => closeModal,
+    setBinTab,
+    addAudioClip,
+    clearHeld,
+    flushNative,
+    connectComfy,
+    importWorkflowFile,
+    captureInputs,
+  });
+  function browseComfyTemplates() {
+    return mediaImportOwner.browseComfyTemplates();
   }
   function removeMedia(id) {
-    const items = projectMedia(),
-      index = items.findIndex(m => m.id === id);
-    if (index < 0) return;
-    edits.apply('Remove ' + items[index].name + ' from media pool', () => {
-      state.hiddenMediaIds = [...new Set([...(state.hiddenMediaIds || []), id])];
-      if (review.source?.media.id === id) {
-        pause();
-        editView();
-        review.clear();
-      }
-    });
-    setStatus('Removed from media pool');
-    const next = projectMedia()[Math.min(index, projectMedia().length - 1)];
-    ($('binGrid').querySelector('[data-media="' + CSS.escape(next?.id || '') + '"]') || $('editor')).focus({
-      preventScroll: true,
-    });
+    return mediaImportOwner.removeMedia(id);
   }
   $('binGrid').addEventListener(
     'click',
@@ -1006,66 +872,35 @@ async function startEditor(isFailed) {
     getWorkflowSetup: () => workflowSetup,
   });
   function pickImport(add = false, workflowOnly = false) {
-    $('mediaFiles').accept = workflowOnly ? '.json' : '.json,video/*,image/*,audio/*';
-    $('mediaFiles').onchange = e => importFiles(e.target.files, add, videoTotal());
-    $('mediaFiles').click();
+    return mediaImportOwner.pickImport(add, workflowOnly);
   }
   const takeName = t =>
     t.placeholder ? 'Not generated' : t.original ? 'Original clip' : 'Take ' + String(t.number).padStart(2, '0');
   const pendingJobs = c => visibleJobs().filter(j => j.clipId === c.id && G.PENDING.includes(j.status));
+  const clipBadgesOwner = createClipBadges({
+    $,
+    svg,
+    drawn,
+    getInspectorTab: () => inspectorTab,
+    getState: () => state,
+    takeSeen,
+    selectionIds,
+    selectedVideos,
+    selectionQueueReason,
+    buttons,
+    draw,
+    getClipNotes: () => clipNotes,
+    renderTakes,
+    selectedAudio,
+    renderAudioInspector,
+    getCountLabel: () => countLabel,
+    getJobStatus: () => jobStatus,
+  });
   function renderNonVideoInspector() {
-    const audio = selectedAudio();
-    $('inputsInspectorTab').classList.toggle('active', inspectorTab === 'inputs' && !audio);
-    $('audioInspectorTab').classList.toggle('active', inspectorTab === 'audio' || !!audio);
-    $('inputsInspectorTab').setAttribute('aria-selected', inspectorTab === 'inputs' && !audio);
-    $('audioInspectorTab').setAttribute('aria-selected', inspectorTab === 'audio' || !!audio);
-    $('generate').hidden = !!audio;
-    $('inspector').classList.toggle('audio-selected', !!audio);
-    if (inspectorTab === 'audio' || audio) {
-      renderAudioInspector();
-      renderTakes();
-      return;
-    }
-
-    $('clipName').value = 'No clip selected';
-    draw(
-      'inspectorContent',
-      '<div class="selection-empty"><span class="empty-symbol">' +
-        svg('cursor') +
-        '</span><strong>Select a clip</strong><p>Choose a timeline clip to adjust its workflow, inputs and sound.</p><small>' +
-        keyText('Ctrl-click to select more than one') +
-        '</small></div>',
-    );
-    renderTakes();
+    return clipBadgesOwner.renderNonVideoInspector();
   }
   function renderSelectionInspector() {
-    const ids = selectionIds(),
-      videos = selectedVideos(),
-      audio = ids.length - videos.length;
-    $('inspector').classList.remove('audio-selected');
-    $('inspector').classList.add('multi-selected');
-    $('clipName').value = ids.length + ' clips selected';
-    countLabel.hidden = true;
-    jobStatus.textContent = '';
-    $('generate').hidden = !videos.length;
-    $('generateLabel').textContent = 'Generate ' + videos.length + ' clips';
-    $('generate').title = selectionQueueReason() || 'Generate takes for the selected clips';
-    draw(
-      'inspectorContent',
-      '<div class="group-label">Selection</div><p class="audio-summary">' +
-        videos.length +
-        ' video ' +
-        (videos.length === 1 ? 'clip' : 'clips') +
-        ' / ' +
-        audio +
-        ' audio ' +
-        (audio === 1 ? 'clip' : 'clips') +
-        '</p><p class="audio-note">Drag a selected clip to move the selection together. ' +
-        keyText('Ctrl') +
-        '-click toggles clips; Shift-click selects a range on one track.</p>',
-    );
-    renderTakes();
-    buttons();
+    return clipBadgesOwner.renderSelectionInspector();
   }
   const { clipNotes, createNotes } = await import('/spool/ui/notes.js');
   const inspectorNotes = createNotes($('clipNotesSection'), {
@@ -1077,70 +912,15 @@ async function startEditor(isFailed) {
     },
     notify: toast,
   });
-  function clipAttentionCounts(c, video) {
-    return [clipNotes(c).filter(n => n.status === 'open').length, video ? takeSeen.unseen(c).length : 0];
-  }
+
   function clipAttention(c, video = true) {
-    const [notes, fresh] = clipAttentionCounts(c, video);
-    return (
-      '<span class="clip-attention" data-counts="' +
-      notes +
-      ':' +
-      fresh +
-      '"' +
-      (!notes && !fresh ? ' hidden' : '') +
-      '>' +
-      (notes
-        ? '<span class="clip-attention-badge notes" data-open-notes="' +
-          notes +
-          '" title="' +
-          notes +
-          ' open ' +
-          (notes === 1 ? 'note' : 'notes') +
-          '" aria-label="' +
-          notes +
-          ' open ' +
-          (notes === 1 ? 'note' : 'notes') +
-          '">' +
-          svg('clipboard') +
-          notes +
-          '</span>'
-        : '') +
-      (fresh
-        ? '<span class="clip-attention-badge takes" data-unseen-takes="' +
-          fresh +
-          '" title="' +
-          fresh +
-          ' unseen ' +
-          (fresh === 1 ? 'take' : 'takes') +
-          '" aria-label="' +
-          fresh +
-          ' unseen ' +
-          (fresh === 1 ? 'take' : 'takes') +
-          '">' +
-          'New' +
-          (fresh > 1 ? ' <span class="new-take-count">' + fresh + '</span>' : '') +
-          '</span>'
-        : '') +
-      '</span>'
-    );
+    return clipBadgesOwner.clipAttention(c, video);
   }
   function renderClipAttention() {
-    for (const node of $('timelineContent').querySelectorAll('[data-clip],[data-audio]')) {
-      const video = !!node.dataset.clip,
-        c = (video ? state.clips : state.audioClips || []).find(
-          c => c.id === (node.dataset.clip || node.dataset.audio),
-        ),
-        badge = node.querySelector('.clip-attention');
-      if (c && badge && badge.dataset.counts !== clipAttentionCounts(c, video).join(':')) {
-        badge.outerHTML = clipAttention(c, video);
-        // A direct badge patch changes the lane DOM outside draw()'s cached string.
-        drawn[node.parentElement.id] = null;
-      }
-    }
+    return clipBadgesOwner.renderClipAttention();
   }
   function markTakesSeen(ids) {
-    if (takeSeen.mark(ids)) renderClipAttention();
+    return clipBadgesOwner.markTakesSeen(ids);
   }
   const seenStorage = e => {
     if (e.key === takeSeen.key && takeSeen.refresh()) {
@@ -1189,253 +969,56 @@ async function startEditor(isFailed) {
     getOpenNativeWorkflow: () => openNativeWorkflow,
     getPrepareWorkflow: () => prepareWorkflow,
   });
-  function takeMidpoint(c, t) {
-    return (Math.min(c.in, t.media.frames - 1) + Math.min(c.out, t.media.frames)) / 2;
-  }
-  function scrubTake(button, t, frame) {
-    takeHoverLabel.textContent = 'Hover · ' + takeName(t) + ' · ' + tc(Math.floor(frame));
-    thumbnails.scrub(button, t.media, frame, fps);
-  }
+  const takeRendererOwner = createTakeRenderer({
+    $,
+    esc,
+    projectKey,
+    url,
+    thumbnails,
+    takeHoverLabel,
+    getFps: () => fps,
+    getState: () => state,
+    review,
+    takeSeen,
+    selected,
+    clamp,
+    seconds,
+    tc,
+    draw,
+    takeName,
+    pendingJobs,
+    getTakeBatchKey: () => takeBatchKey,
+    updateTakeSelection,
+    viewTake,
+    chooseTake,
+    getDraggedTake: () => draggedTake,
+    writeDraggedTake: value => (draggedTake = value),
+    getTakeDropPreview: () => takeDropPreview,
+    getRenderPlaceholderState: () => renderPlaceholderState,
+    getPlay: () => play,
+    selectedAudio,
+    getDecimal: () => decimal,
+  });
+
   // Consecutive takes generated from the same inputs form one batch; seeds may differ within it.
   function takeBatchInputs(t) {
-    const seeds = new Set(
-      (t.summary?.bindings || t.request?.capture?.bindings || []).filter(b => b.role === 'seed').map(b => b.key),
-    );
-    return Object.entries(t.summary?.inputValues || t.request?.inputValues || {})
-      .filter(([key]) => !seeds.has(key))
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return takeRendererOwner.takeBatchInputs(t);
   }
   const takeBatchKey = t =>
     t.generated
-      ? 'generated:' +
-        (t.summary?.workflowVersion ?? t.request?.workflowVersion ?? '') +
-        ':' +
-        JSON.stringify(takeBatchInputs(t))
+      ? 'generated:' + (t.request?.workflowVersion ?? '') + ':' + JSON.stringify(takeBatchInputs(t))
       : t.original
         ? 'original'
         : 'imported';
-  function takeBatchLabel(takes, previous) {
-    const t = takes[0],
-      count = takes.length + ' ' + (takes.length === 1 ? 'take' : 'takes');
-    if (!t.generated) return [t.original ? 'Original' : 'Imported', count];
-    const job = state.jobs.find(j => j.id === (t.summary?.attemptId ?? t.request?.attemptId)),
-      time = job?.createdAt
-        ? new Date(job.createdAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        : '';
-    let summary = 'Generated';
-    if (previous) {
-      const labels = new Map(
-          (t.summary?.bindings || t.request?.capture?.bindings || []).map(b => [b.key, b.label || b.key]),
-        ),
-        now = new Map(takeBatchInputs(t)),
-        before = new Map(takeBatchInputs(previous));
-      const changed = [...new Set([...now.keys(), ...before.keys()])]
-        .filter(key => JSON.stringify(now.get(key)) !== JSON.stringify(before.get(key)))
-        .map(key => labels.get(key) || key);
-      summary =
-        (t.summary?.workflowVersion ?? t.request?.workflowVersion) !==
-        (previous.summary?.workflowVersion ?? previous.request?.workflowVersion)
-          ? 'Workflow changed'
-          : changed.length
-            ? changed.slice(0, 2).join(', ') + (changed.length > 2 ? ' +' + (changed.length - 2) : '') + ' changed'
-            : 'Same inputs';
-    }
-    return [summary, [time, count].filter(Boolean).join(' · ')];
-  }
-  function groupTakeCards(real, cards) {
-    const groups = [];
-    real.forEach((t, index) => {
-      const key = takeBatchKey(t);
-      if (groups.at(-1)?.key === key) groups.at(-1).indexes.push(index);
-      else groups.push({ key, indexes: [index] });
-    });
-    if (groups.length < 2) return cards.join('');
-    let previous = null;
-    return groups
-      .map(({ indexes }) => {
-        const takes = indexes.map(i => real[i]),
-          [summary, meta] = takeBatchLabel(takes, previous);
-        if (takes[0].generated) previous = takes[0];
-        return (
-          '<div class="take-group"><span>' +
-          esc(summary) +
-          '</span><span>' +
-          esc(meta) +
-          '</span></div>' +
-          indexes.map(i => cards[i]).join('')
-        );
-      })
-      .join('');
-  }
+
   function jobPercent(j) {
-    const observations = j.nodeProgress || [],
-      node = observations.filter(n => n.max > 1).at(-1) || observations.at(-1),
-      running = ['running', 'farm_running'].includes(j.status);
-    return running
-      ? j.target === 'deadline'
-        ? j.farmProgress?.percent
-        : node?.max > 1
-          ? (100 * node.value) / node.max
-          : null
-      : null;
+    return takeRendererOwner.jobPercent(j);
   }
   function renderPendingTakes(c) {
-    const jobs = c && !selectedAudio() ? pendingJobs(c) : [];
-    $('takes').classList.toggle('has-pending', jobs.length > 0);
-    draw(
-      'takePending',
-      jobs
-        .map(j => {
-          const percent = jobPercent(j),
-            known = Number.isFinite(percent);
-          return (
-            '<div class="take-pending-row" data-pending-job="' +
-            esc(j.id) +
-            '"><span class="take-pending-thumb">' +
-            (known ? Math.round(percent) + '%' : '…') +
-            '</span><span class="take-pending-info"><strong>' +
-            (j.takeNumber ? 'Take ' + String(j.takeNumber).padStart(2, '0') : 'New take') +
-            '</strong><small>' +
-            esc(G.jobStage(j)) +
-            ' · <span data-job-elapsed="' +
-            esc(j.id) +
-            '">' +
-            esc(G.jobElapsed(j)) +
-            '</span></small>' +
-            (known ? '<span class="take-pending-bar"><i style="width:' + percent.toFixed(1) + '%"></i></span>' : '') +
-            '</span></div>'
-          );
-        })
-        .join(''),
-    );
+    return takeRendererOwner.renderPendingTakes(c);
   }
   function renderTakes() {
-    renderPlaceholderState();
-    const c = selected(),
-      real = T.realTakes(c),
-      list = $('takeList');
-    updateTakeSelection();
-    renderPendingTakes(c);
-    $('takes').classList.toggle('has-real-takes', real.length > 0 && !selectedAudio());
-    $('takes').classList.toggle('has-clip', !!c && !selectedAudio());
-    $('takeCount').textContent = real.length;
-    $('takesClip').textContent = c?.name || '';
-    document.querySelector('.takes-keys').hidden = !!selectedAudio();
-    $('takeCount').parentElement.firstChild.nodeValue = selectedAudio() ? 'Audio' : 'Takes';
-    if (selectedAudio()) {
-      thumbnails.stopScrub();
-      $('takeCount').textContent = '';
-      $('takesClip').textContent = selectedAudio().name;
-      draw(
-        'takeList',
-        '<div class="takes-empty">Audio selected - adjust level and fades in Audio; Source reviews the full file.</div>',
-      );
-      return;
-    }
-
-    if (!real.length) {
-      thumbnails.stopScrub();
-      draw(
-        'takeList',
-        c ? '<div class="takes-empty">Copy videos or images into this clip’s folder to add takes.</div>' : '',
-      );
-      return;
-    }
-    const viewing = review.mode === 'source' && review.source?.clipId === c.id ? review.source.takeId : null,
-      unseen = new Set(takeSeen.unseen(c).map(t => t.id));
-    if (
-      draw(
-        'takeList',
-        groupTakeCards(
-          real,
-          real.map(t => {
-            const chosen = t.id === c.takeId,
-              setupChosen = chosen && c.generationBase?.takeId === t.id,
-              preview = t.id === viewing,
-              title = t.original ? 'Original' : String(t.number).padStart(2, '0');
-            const fresh = unseen.has(t.id)
-              ? '<span class="take-badge new" title="Not yet reviewed in Source or Compare">New</span>'
-              : '';
-            const body =
-              '<div class="take-heading"><strong>' +
-              title +
-              '</strong>' +
-              (chosen || preview
-                ? '<span class="take-badge ' +
-                  (chosen ? 'used' : 'preview') +
-                  '">' +
-                  (chosen ? 'In edit' : 'Preview') +
-                  '</span>'
-                : '') +
-              fresh +
-              '</div><button class="take-thumb" data-view="' +
-              t.id +
-              '" aria-label="Preview ' +
-              esc(title) +
-              '"><img src="' +
-              esc(url(t.media.poster)) +
-              '" alt=""></button><div class="take-details"><span class="take-duration" title="Full take duration">' +
-              seconds(t.media.frames) +
-              '</span>' +
-              (t.seed != null
-                ? '<span class="take-seed" title="Seed ' +
-                  esc(decimal(t.seed)) +
-                  '">Seed ' +
-                  esc(decimal(t.seed)) +
-                  '</span>'
-                : '') +
-              (!setupChosen ? '<button class="use-take" data-use="' + t.id + '">Use take</button>' : '') +
-              '</div>';
-            return (
-              '<article class="take-card' +
-              (chosen ? ' chosen' : '') +
-              (preview ? ' viewing' : '') +
-              '" data-take="' +
-              esc(t.id) +
-              '" tabindex="0" aria-label="Take ' +
-              esc(title) +
-              '"><input type="checkbox" class="take-select" data-select-take="' +
-              esc(t.id) +
-              '" aria-label="Select take ' +
-              esc(title) +
-              '">' +
-              body +
-              '</article>'
-            );
-          }),
-        ),
-      )
-    ) {
-      thumbnails.stopScrub();
-      list.querySelectorAll('[data-view]').forEach(b => {
-        const img = b.querySelector('img'),
-          t = c.takes.find(t => t.id === b.dataset.view),
-          middle = takeMidpoint(c, t);
-        thumbnails.bind(img, t.media, middle, fps);
-        b.draggable = true;
-        img.draggable = false;
-        b.ondragstart = e => {
-          thumbnails.stopScrub();
-          draggedTake = { projectId: projectKey, clipId: c.id, takeId: t.id, frames: t.media.frames };
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('application/spool-take', JSON.stringify(draggedTake));
-        };
-        b.ondragend = () => {
-          draggedTake = null;
-          takeDropPreview.hidden = true;
-        };
-        b.onclick = () =>
-          review.mode === 'source' && review.source?.takeId === b.dataset.view ? play() : viewTake(b.dataset.view);
-        b.onpointerenter = b.onpointermove = e => {
-          const r = b.getBoundingClientRect(),
-            end = t.media.frames;
-          scrubTake(b, t, Math.min(end - 1, Math.floor(clamp((e.clientX - r.left) / r.width, 0, 1) * end)));
-        };
-        b.onpointerleave = () => thumbnails.stopScrub(b);
-      });
-      list.querySelectorAll('[data-use]').forEach(b => (b.onclick = () => chooseTake(c.id, b.dataset.use)));
-    }
-    updateTakeSelection();
+    return takeRendererOwner.renderTakes();
   }
   const takeSelectionTools = document.createElement('div');
   takeSelectionTools.className = 'take-selection-tools';
@@ -1479,96 +1062,70 @@ async function startEditor(isFailed) {
       updateTakeSelection();
     }
   };
+  const takeActionsOwner = createTakeActions({
+    $,
+    request,
+    productCapabilities,
+    projectKey,
+    thumbnails,
+    getSelectedCut: () => selectedCut,
+    writeSelectedCut: value => (selectedCut = value),
+    getNudgeGroup: () => nudgeGroup,
+    writeNudgeGroup: value => (nudgeGroup = value),
+    getState: () => state,
+    review,
+    history,
+    edits,
+    getSelectedTakeClip: () => selectedTakeClip,
+    writeSelectedTakeClip: value => (selectedTakeClip = value),
+    getSelectedTakeIds: () => selectedTakeIds,
+    writeSelectedTakeIds: value => (selectedTakeIds = value),
+    getTakeSelectionAnchor: () => takeSelectionAnchor,
+    writeTakeSelectionAnchor: value => (takeSelectionAnchor = value),
+    selected,
+    take,
+    rowFor,
+    clamp,
+    saveHistory,
+    toast,
+    setStatus,
+    render,
+    takeName,
+    markTakesSeen,
+    renderInspector,
+    renderTakes,
+    takeSelectionTools,
+    takeTools,
+    clipFolderButton,
+    getOpeningClipFolder: () => openingClipFolder,
+    getRenderTimeline: () => renderTimeline,
+    chooseTake,
+    getViewer: () => viewer,
+    getUpdateViewer: () => updateViewer,
+    getPause: () => pause,
+    getPlay: () => play,
+    getShowModal: () => showModal,
+    getCloseModal: () => closeModal,
+    getViewerExpanded: () => viewerExpanded,
+    saveView,
+    finishViewerPan,
+    selectedAudio,
+    hideTrimPreview,
+    clearHeld,
+    getProjectEdit: () => projectEdit,
+    getShowActionMenu: () => showActionMenu,
+  });
   function takeSelection(c = selected()) {
-    if (c?.id !== selectedTakeClip) {
-      selectedTakeClip = c?.id || null;
-      selectedTakeIds = [];
-      takeSelectionAnchor = null;
-    }
-    const available = new Set(T.realTakes(c).map(t => t.id));
-    selectedTakeIds = selectedTakeIds.filter(id => available.has(id));
-    if (!available.has(takeSelectionAnchor)) takeSelectionAnchor = null;
-    return selectedTakeIds;
+    return takeActionsOwner.takeSelection(c);
   }
   function updateTakeSelection() {
-    if (!$('takeSelectionCount')) return;
-    const c = selected(),
-      takes = T.realTakes(c),
-      ids = takeSelection(c);
-    takeTools.hidden = takeSelectionTools.hidden = !!selectedAudio() || !takes.length;
-    clipFolderButton.hidden = !c || !!selectedAudio();
-    clipFolderButton.disabled = openingClipFolder || !productCapabilities.clipFolderReveal;
-    clipFolderButton.title = productCapabilities.clipFolderReveal
-      ? 'Open in ' +
-        (productCapabilities.fileManager || 'Explorer') +
-        '. Copy completed videos or images here; they appear as new takes after a short scan.'
-      : 'Opening clip folders needs a desktop file manager on the Spool host';
-    $('takeSelectionCount').textContent = ids.length + ' selected';
-    $('takeSelectionCount').hidden = !ids.length;
-    $('selectAllTakes').textContent = ids.length === takes.length ? 'Clear' : 'Select all';
-    $('archiveTakes').disabled = !ids.length || !takes.some(t => t.id !== c?.takeId);
-    $('deleteTakesFromDisk').disabled = $('archiveTakes').disabled;
-    $('archiveTakes').hidden = $('deleteTakesFromDisk').hidden = !ids.length;
-    $('deleteTakesFromDisk').title = 'Permanently delete media and its workflow JSON; cannot be undone';
-    for (const card of $('takeList').querySelectorAll('[data-take]')) {
-      const checked = ids.includes(card.dataset.take);
-      card.classList.toggle('take-selected', checked);
-      card.querySelector('[data-select-take]').checked = checked;
-    }
+    return takeActionsOwner.updateTakeSelection();
   }
   function selectTake(id, e = {}) {
-    const takes = T.realTakes(selected()),
-      ids = takeSelection().slice();
-    if (e.shiftKey && takeSelectionAnchor) {
-      const a = takes.findIndex(t => t.id === takeSelectionAnchor),
-        b = takes.findIndex(t => t.id === id),
-        range = takes.slice(Math.min(a, b), Math.max(a, b) + 1).map(t => t.id);
-      selectedTakeIds = e.ctrlKey || e.metaKey ? [...new Set([...ids, ...range])] : range;
-    } else {
-      selectedTakeIds =
-        e.toggle || e.ctrlKey || e.metaKey
-          ? ids.includes(id)
-            ? ids.filter(value => value !== id)
-            : [...ids, id]
-          : [id];
-      takeSelectionAnchor = id;
-    }
-    updateTakeSelection();
-    saveView();
+    return takeActionsOwner.selectTake(id, e);
   }
   function archiveTakes(others = false) {
-    const c = selected(),
-      selectedIds = takeSelection(c).slice();
-    if (!c || !selectedIds.length) return;
-    const ids = T.realTakes(c)
-      .filter(t => t.id !== c.takeId && (others ? !selectedIds.includes(t.id) : selectedIds.includes(t.id)))
-      .map(t => t.id);
-    if (!ids.length) {
-      toast('The take in the edit is kept. Choose another take before deleting it.');
-      return;
-    }
-    edits.apply('Delete ' + ids.length + ' ' + (ids.length === 1 ? 'take' : 'takes'), () => {
-      T.hideTakes(c, ids);
-      thumbnails.stopScrub();
-      if (
-        (review.source?.clipId === c.id && ids.includes(review.source.takeId)) ||
-        (review.audition?.clipId === c.id && ids.includes(review.audition.takeId)) ||
-        (review.comparison?.clipId === c.id && review.comparison.ids.some(id => ids.includes(id)))
-      ) {
-        pause();
-        editView();
-        review.clear();
-      }
-    });
-    $('editor').focus({ preventScroll: true });
-    toast(
-      ids.length +
-        ' ' +
-        (ids.length === 1 ? 'take' : 'takes') +
-        ' removed. Files are kept; ' +
-        keyText('Ctrl') +
-        '+Z restores the takes.',
-    );
+    return takeActionsOwner.archiveTakes(others);
   }
   $('selectAllTakes').onclick = () => {
     const takes = T.realTakes(selected()),
@@ -1579,76 +1136,11 @@ async function startEditor(isFailed) {
     saveView();
   };
   function openTakeActions(action, origin) {
-    const c = selected(),
-      selection = takeSelection(c),
-      verb = action === 'archive' ? 'Delete' : 'Permanently delete',
-      r = origin.getBoundingClientRect();
-    showActionMenu(
-      action === 'archive' ? 'Delete takes' : 'Permanently delete files',
-      [false, true].map(others => {
-        const ids = T.realTakes(c)
-          .filter(t => t.id !== c.takeId && (others ? !selection.includes(t.id) : selection.includes(t.id)))
-          .map(t => t.id);
-        return {
-          label: verb + (others ? ' others' : ' selected'),
-          reason: !selection.length ? 'Select takes first' : !ids.length ? 'The take in the edit is kept' : null,
-          run: () => (action === 'archive' ? archiveTakes(others) : deleteTakes(others)),
-        };
-      }),
-      r.left,
-      r.bottom + 4,
-      origin,
-    );
-    origin.setAttribute('aria-expanded', 'true');
+    return takeActionsOwner.openTakeActions(action, origin);
   }
   $('archiveTakes').onclick = () => openTakeActions('archive', $('archiveTakes'));
   $('deleteTakesFromDisk').onclick = () => openTakeActions('delete', $('deleteTakesFromDisk'));
-  async function deleteTakes(others = false) {
-    const c = selected(),
-      selection = takeSelection(c),
-      ids = T.realTakes(c)
-        .filter(t => t.id !== c.takeId && (others ? !selection.includes(t.id) : selection.includes(t.id)))
-        .map(t => t.id);
-    if (!selection.length || !ids.length) return;
-    const clipId = c.id;
-    showModal(
-      'Delete ' + ids.length + ' ' + (ids.length === 1 ? 'take' : 'takes') + ' from disk?',
-      '<p>The media files and matching workflow JSON will be permanently deleted. This cannot be undone.</p><p>The take in the edit is kept. Files used by other takes, clips or generation inputs are protected.</p><p id="takeDeleteError" role="status"></p>',
-      '<button class="outline" id="takeDeleteCancel">Cancel</button><button class="primary" id="takeDeleteConfirm">Delete from disk</button>',
-    );
-    $('takeDeleteCancel').onclick = closeModal;
-    $('takeDeleteConfirm').onclick = async () => {
-      const button = $('takeDeleteConfirm');
-      button.disabled = true;
-      button.textContent = 'Deleting…';
-      try {
-        thumbnails.stopScrub();
-        pause();
-        editView();
-        review.clear();
-        viewer.clearVideos();
-        const { value } = await projectEdit.change(revision =>
-          request('projects/' + projectKey + '/delete-takes/' + clipId, { revision, takeIds: ids }),
-        );
-        history.clear();
-        selectedTakeIds = [];
-        closeModal();
-        render();
-        saveHistory();
-        saveView();
-        toast(
-          value.pendingFiles
-            ? 'Takes deleted; ' + value.pendingFiles + ' files await release by another application.'
-            : ids.length + ' ' + (ids.length === 1 ? 'take' : 'takes') + ' deleted from disk.',
-        );
-      } catch (error) {
-        $('takeDeleteError').textContent = error.message;
-        button.disabled = false;
-        button.textContent = 'Delete from disk';
-        render();
-      }
-    };
-  }
+
   $('takeList').addEventListener(
     'click',
     e => {
@@ -1701,140 +1193,44 @@ async function startEditor(isFailed) {
     { passive: false },
   );
   function comparisonTakes() {
-    return review.takes;
+    return takeActionsOwner.comparisonTakes();
   }
   function sourceLength() {
-    return review.length;
+    return takeActionsOwner.sourceLength();
   }
   function comparisonVideos() {
-    return comparisonTakes() ? Array.from($('takeCompare').querySelectorAll('video:not([hidden])')) : [];
+    return takeActionsOwner.comparisonVideos();
   }
   function closeTakeComparison() {
-    review.closeComparison();
-    $('takeCompare').hidden = true;
-    $('editor').classList.remove('compare-active');
-    for (const v of $('takeCompare').querySelectorAll('video')) {
-      v.pause();
-      v.hidden = true;
-    }
+    return takeActionsOwner.closeTakeComparison();
   }
   function toggleTakeComparison() {
-    pause();
-    finishViewerPan();
-    hideTrimPreview();
-    if (comparisonTakes()) {
-      closeTakeComparison();
-      renderTakes();
-      updateViewer(true);
-      return;
-    }
-    const c = selected();
-    if (T.realTakes(c).length < 2 || selectedAudio()) return;
-    selectedCut = null;
-    nudgeGroup = null;
-    clearHeld();
-    state.selectedAudio = null;
-    review.compare(c.id);
-    markTakesSeen(review.comparison.ids);
-    renderTakes();
-    renderTimeline();
-    updateViewer(true);
-    $('editor').focus({ preventScroll: true });
+    return takeActionsOwner.toggleTakeComparison();
   }
   function selectComparisonPane(index) {
-    if (!review.selectPane(index)) return;
-    renderTakes();
-    updateViewer();
-    (viewerExpanded ? $('viewer') : $('editor')).focus({ preventScroll: true });
+    return takeActionsOwner.selectComparisonPane(index);
   }
   function editView() {
-    finishViewerPan();
-    closeTakeComparison();
-    review.edit();
+    return takeActionsOwner.editView();
   }
   function viewTake(id, c = selected()) {
-    thumbnails.stopScrub();
-    finishViewerPan();
-    hideTrimPreview();
-    state.selectedAudio = null;
-    const t = T.realTakes(c).find(t => t.id === id);
-    if (!t) return;
-    if (!(review.mode === 'source' && review.source?.clipId === c.id)) pause();
-    if (!(review.comparison?.clipId === c.id && review.mode === 'source')) closeTakeComparison();
-    review.reviewTake(c.id, id);
-    markTakesSeen([id]);
-    renderTakes();
-    renderTimeline();
-    updateViewer(true);
-    setStatus(
-      c.name + ' - ' + takeName(t) + (t.id === c.takeId ? ' - in the edit' : ' - review only, the edit is unchanged'),
-    );
+    return takeActionsOwner.viewTake(id, c);
   }
 
   function flipTake(step) {
-    if (selectedAudio()) return;
-    const c = (review.mode === 'source' && state.clips.find(c => c.id === review.source?.clipId)) || selected(),
-      real = T.realTakes(c);
-    if (!real.length) return;
-    const index = real.findIndex(t => t.id === review.source?.takeId);
-    viewTake(real[clamp(index < 0 ? 0 : index + step, 0, real.length - 1)].id, c);
+    return takeActionsOwner.flipTake(step);
   }
   function setViewMode(mode) {
-    finishViewerPan();
-    hideTrimPreview();
-    if (mode === 'source' && selectedAudio()) {
-      const c = selectedAudio();
-      review.rememberMedia(c.media, review.source?.media.file === c.media.file ? review.frame : c.in);
-    }
-    if (mode === review.mode) return;
-    if (mode === 'source') {
-      const c = selected();
-      if (c && (!review.source || (review.source.clipId && review.source.clipId !== c.id))) {
-        viewTake(take(c).id, c);
-        return;
-      }
-      if (!review.source) return;
-    }
-    pause();
-    closeTakeComparison();
-    review.setMode(mode);
-    renderTakes();
-    renderTimeline();
-    updateViewer(true);
+    return takeActionsOwner.setViewMode(mode);
   }
   function tryInEdit() {
-    const c = state.clips.find(c => c.id === review.source?.clipId),
-      row = c && rowFor(c.id);
-    if (!row) return;
-    pause();
-    closeTakeComparison();
-    review.tryInEdit();
-    state.selected = c.id;
-    state.frame = Math.max(0, row.start - 36);
-    renderInspector();
-    renderTimeline();
-    updateViewer(true);
-    play();
-    setStatus(
-      review.audition
-        ? 'Trying ' +
-            takeName(c.takes.find(t => t.id === review.audition.takeId)) +
-            ' in the edit · Enter uses it, Esc cancels'
-        : c.name + ' in the edit',
-    );
+    return takeActionsOwner.tryInEdit();
   }
   function cancelAudition() {
-    if (!review.audition) return;
-    pause();
-    review.cancelTrial();
-    renderTakes();
-    renderTimeline();
-    updateViewer(true);
-    setStatus('Showing the saved edit');
+    return takeActionsOwner.cancelAudition();
   }
   function useViewerTake() {
-    const target = review.candidate;
-    if (target?.takeId) chooseTake(target.clipId, target.takeId);
+    return takeActionsOwner.useViewerTake();
   }
   const timelineRenderer = createTimelineRenderer({
     $,
@@ -1887,117 +1283,72 @@ async function startEditor(isFailed) {
   });
   const { renderTimeline } = timelineRenderer;
   function selectClip(id, seekTo = false, modifiers = {}, preserve = false) {
-    const clip = state.clips.find(c => c.id === id);
-    if (clip) activeVideoTrack = T.videoTrack(clip);
-    selectedCut = null;
-    nudgeGroup = null;
-    hideTrimPreview();
-    pause();
-    editView();
-    selectTimelineItem(id, modifiers, preserve);
-    if (seekTo) {
-      const row = rowFor(id);
-      if (row) state.frame = row.start;
-    }
-    renderBin();
-    renderInspector();
-    renderTimeline();
-    updateViewer(true);
-    buttons();
-    $('editor').focus({ preventScroll: true });
-    saveView();
+    return clipSelectionOwner.selectClip(id, seekTo, modifiers, preserve);
   }
-  async function chooseTake(clipId, id) {
-    const c = state.clips.find(c => c.id === clipId),
-      t = c && T.realTakes(c).find(t => t.id === id);
-    if (!t) return;
-    try {
-      await workflowSetup.start({
-        clipId,
-        takeId: id,
-        name: t.media.name || takeName(t),
-        index: state.clips.indexOf(c),
-        automatic: true,
-        definitions: productDefinitions,
-        capture: () => takeWorkflowCapture(clipId, id, t.media.name || takeName(t)),
-      });
-    } catch (error) {
-      toast(error.message);
-    }
+  const clipToolsOwner = createClipTools({
+    $,
+    copy,
+    esc,
+    svg,
+    request,
+    productCapabilities,
+    getProductDefinitions: () => productDefinitions,
+    projectKey,
+    getFps: () => fps,
+    registerWorkflowData,
+    addImportedWorkflowClip,
+    getInspectorTab: () => inspectorTab,
+    writeInspectorTab: value => (inspectorTab = value),
+    getState: () => state,
+    getDrag: () => drag,
+    review,
+    edits,
+    selected,
+    getActiveVideoTrack: () => activeVideoTrack,
+    selectionIds,
+    setTimelineSelection,
+    selectedVideos,
+    take,
+    tc,
+    toast,
+    setStatus,
+    projectMedia,
+    takeName,
+    editView,
+    selectClip,
+    getRemove: () => remove,
+    getPause: () => pause,
+    detectClipCuts,
+    exportViewerFrame,
+    getViewerExpanded: () => viewerExpanded,
+    toggleViewerFullscreen,
+    resetViewerZoom,
+    selectedAudio,
+    addAudioClip,
+    splitAudio,
+    getBridge: () => bridge,
+    host,
+    mediaWorkflowData,
+    editableGraph,
+    openNativeWorkflow,
+    getWorkflowSetup: () => workflowSetup,
+    getActionMenu: () => actionMenu,
+    getClipMenu: () => clipMenu,
+    getCloseClipMenu: () => closeClipMenu,
+    getShowActionMenu: () => showActionMenu,
+    getPlaceMenu: () => placeMenu,
+  });
+  function chooseTake(clipId, id) {
+    return clipToolsOwner.chooseTake(clipId, id);
   }
-  async function takeWorkflowCapture(clipId, takeId, name) {
-    const setup = await request(
-      'projects/' + projectKey + '/take-workflow/' + encodeURIComponent(clipId) + '/' + encodeURIComponent(takeId),
-    );
-    if (!setup?.sidecar?.needsSerialization) return setup;
-    const captured = await host('prepare', { workflow: setup.workflow, name });
-    return {
-      ...captured,
-      preferWorkflow: true,
-      sidecar: setup.sidecar,
-      provenance: { ...captured.provenance, ...setup.provenance },
-    };
+  function takeWorkflowCapture(clipId, takeId, name) {
+    return clipToolsOwner.takeWorkflowCapture(clipId, takeId, name);
   }
-  async function addMediaClip(id, index = state.clips.length, start = Math.round(state.frame)) {
-    if (T.videoTracks(state) > 1) state.frame = start;
-    const m = projectMedia().find(x => x.id === id);
-    if (!m) return;
-    if (m.kind === 'audio') {
-      addAudioClip(m, start);
-      return;
-    }
-    let data;
-    try {
-      data = await mediaWorkflowData(m);
-    } catch (error) {
-      toast(error.message);
-      return;
-    }
-    if (data) {
-      const w = registerWorkflowData(data, m.name, m.poster);
-      addImportedWorkflowClip(w.id, index, m);
-      return;
-    }
-    edits.apply('Add footage', () => {
-      const t = { id: 'take-' + crypto.randomUUID(), number: 1, revision: 1, media: copy(m), sample: false },
-        c = {
-          id: 'clip-' + crypto.randomUUID(),
-          name: m.name,
-          workflow: null,
-          sources: [],
-          prompt: '',
-          seed: 0,
-          duration: m.frames / fps,
-          count: 1,
-          revision: 1,
-          takes: [t],
-          takeId: t.id,
-          in: 0,
-          out: m.frames,
-        };
-      T.insertClip(state, c, index, {
-        track: activeVideoTrack,
-        start: T.videoTracks(state) > 1 ? Math.round(state.frame) : null,
-      });
-      state.selected = c.id;
-      state.selectedAudio = null;
-      editView();
-    });
+  function addMediaClip(id, index = state.clips.length, start = Math.round(state.frame)) {
+    return clipToolsOwner.addMediaClip(id, index, start);
   }
   function duplicate() {
-    const ids = selectionIds().slice();
-    if (!ids.length) return;
-    const videos = state.clips.filter(c => ids.includes(c.id)),
-      audio = (state.audioClips || []).filter(c => ids.includes(c.id));
-    edits.apply('Duplicate ' + ids.length + ' ' + (ids.length === 1 ? 'clip' : 'clips'), () => {
-      pause();
-      editView();
-      const copies = [];
-      for (const c of videos) copies.push(T.duplicateClip(state, c.id, 'clip-' + crypto.randomUUID()).id);
-      for (const c of audio) copies.push(T.duplicateAudio(state, c.id, 'audio-' + crypto.randomUUID()).id);
-      setTimelineSelection(copies);
-    });
-    toast(ids.length === 1 ? 'Clip duplicated' : ids.length + ' clips duplicated');
+    return clipToolsOwner.duplicate();
   }
   const { remove } = createRemovalActions({
     getState: () => state,
@@ -2012,23 +1363,7 @@ async function startEditor(isFailed) {
     setStatus,
   });
   function split() {
-    if (selectionIds().length > 1) return;
-    if (selectedAudio()) {
-      splitAudio();
-      return;
-    }
-    pause();
-    editView();
-    const row = T.splitTarget(state, state.frame, selected()?.id);
-    if (!row) {
-      toast('Place the playhead inside a clip, at least 6 frames from either edge.');
-      return;
-    }
-    edits.apply('Split at playhead', () => {
-      const { clip: d } = T.splitClip(state, state.frame, 'clip-' + crypto.randomUUID(), row.clip.id);
-      state.selected = d.id;
-    });
-    setStatus('Split at ' + tc(state.frame));
+    return clipToolsOwner.split();
   }
   const { timelineFrame, snapFrame, startClipDrag, cancelClipDrag, pointerBusy, startFadeDrag, startAudioDrag } =
     createTimelinePointer({
@@ -2122,145 +1457,68 @@ async function startEditor(isFailed) {
   libraryDropPreview.innerHTML =
     '<div class="library-drop-ghost"></div><div class="library-drop-marker"></div><div class="library-drop-label" role="status"></div>';
   $('timelineContent').append(libraryDropPreview);
+  const timelineDropsOwner = createTimelineDrops({
+    $,
+    copy,
+    request,
+    getProductDefinitions: () => productDefinitions,
+    projectKey,
+    getFps: () => fps,
+    getState: () => state,
+    writeState: value => (state = value),
+    getPpf: () => ppf,
+    history,
+    getSelectedTakeIds: () => selectedTakeIds,
+    writeSelectedTakeIds: value => (selectedTakeIds = value),
+    projectData,
+    getActiveVideoTrack: () => activeVideoTrack,
+    writeActiveVideoTrack: value => (activeVideoTrack = value),
+    trackHeight,
+    trackAt,
+    setTimelineSelection,
+    layout,
+    rowFor,
+    tc,
+    saveHistory,
+    editingSignature,
+    save,
+    toast,
+    preserveTakes,
+    render,
+    projectMedia,
+    libraryWorkflow,
+    markTakesSeen,
+    closeTakeComparison,
+    editView,
+    takeWorkflowCapture,
+    timelineFrame,
+    getDraggedTake: () => draggedTake,
+    writeDraggedTake: value => (draggedTake = value),
+    takeDropPreview,
+    getLibraryDrag: () => libraryDrag,
+    getLibraryDragPoint: () => libraryDragPoint,
+    writeLibraryDragPoint: value => (libraryDragPoint = value),
+    getLibraryScrollRAF: () => libraryScrollRAF,
+    writeLibraryScrollRAF: value => (libraryScrollRAF = value),
+    libraryDropPreview,
+    getExternalDropDepth: () => externalDropDepth,
+    writeExternalDropDepth: value => (externalDropDepth = value),
+    getPause: () => pause,
+    saveView,
+    getProjectEdit: () => projectEdit,
+    flushNative,
+  });
   function clearLibraryDrop() {
-    libraryDropPreview.hidden = true;
-    libraryDragPoint = null;
-    cancelAnimationFrame(libraryScrollRAF);
-    libraryScrollRAF = 0;
+    return timelineDropsOwner.clearLibraryDrop();
   }
   function libraryDrop(e, item) {
-    const track = trackAt(e),
-      frame = Math.max(0, Math.round(timelineFrame(e))),
-      workflow = !!(item.workflow || item.builtin),
-      media = item.media && projectMedia().find(m => m.id === item.media);
-    if (!workflow && !media) return null;
-    const { w, source } = workflow ? libraryWorkflow(item.builtin || item.workflow, !!item.builtin) : {},
-      duration = source?.data.bindings?.find(b => b.role === 'duration'),
-      seconds = duration?.unit === 'seconds' ? Number(source.data.prompt[duration.nodeId].inputs[duration.input]) : 5;
-    const frames = workflow ? Math.max(1, Math.round((seconds || 5) * fps)) : media.frames,
-      label = workflow ? (item.builtin ? w?.family + ' · ' + w?.name : w?.name) : media.name;
-    const audio = !workflow && (media.kind === 'audio' || !!e.target.closest('#audioLane,#musicLane'));
-    let clipId = null,
-      start = frame;
-    if (workflow) {
-      const hit = e.target.closest('[data-clip]'),
-        rect = hit?.getBoundingClientRect(),
-        margin = rect ? Math.min(8, rect.width / 4) : 0;
-      clipId = hit && e.clientX > rect.left + margin && e.clientX < rect.right - margin ? hit.dataset.clip : null;
-      if (hit && !clipId) {
-        const cut = rowFor(hit.dataset.clip);
-        start = e.clientX < rect.left + rect.width / 2 ? cut.start : cut.end;
-      } else if (!hit && state.snap) {
-        const points = layout()
-            .filter(r => T.videoTrack(r.clip) === track)
-            .flatMap(r => [r.start, r.end]),
-          nearest = points.sort((a, b) => Math.abs(a - frame) - Math.abs(b - frame))[0];
-        if (Math.abs(nearest - frame) * ppf <= T.SNAP_PIXELS) start = nearest;
-      }
-    } else if (!audio) {
-      // Ask the same placement algorithm used by footage insertion where it fits.
-      const geometry = {
-          ...state,
-          clips: state.clips.map(c => ({
-            id: c.id,
-            in: c.in,
-            out: c.out,
-            gapBefore: c.gapBefore,
-            videoTrack: c.videoTrack,
-          })),
-        },
-        probe = { id: 'drop-preview', in: 0, out: frames };
-      T.insertClip(geometry, probe, T.dropIndex(state, frame), {
-        track,
-        start: T.videoTracks(state) > 1 ? frame : null,
-      });
-      start = T.rowFor(geometry, probe.id).start;
-    }
-    return {
-      track,
-      clipId,
-      placement: { track, start: Math.max(0, start) },
-      frames,
-      label,
-      index: T.dropIndex(state, start),
-      mode: clipId ? 'replace' : 'insert',
-      lane: audio ? (e.target.closest('#audioLane') ? 'audioLane' : 'musicLane') : 'clipLane',
-    };
+    return timelineDropsOwner.libraryDrop(e, item);
   }
   function paintLibraryDrop(e) {
-    const drop = libraryDrag && libraryDrop(e, libraryDrag);
-    if (!drop) {
-      libraryDropPreview.hidden = true;
-      return;
-    }
-    const row = drop.clipId && rowFor(drop.clipId),
-      start = row ? row.start : drop.placement.start,
-      frames = row ? row.end - row.start : drop.frames;
-    const lane = $(drop.lane),
-      top =
-        lane.offsetTop +
-        (drop.lane === 'musicLane'
-          ? 0
-          : parseFloat(
-              $('editor').style.getPropertyValue(
-                '--' + (drop.lane === 'audioLane' ? 'source' : 'video') + '-top-' + drop.track,
-              ),
-            ) || 0),
-      height =
-        drop.lane === 'musicLane'
-          ? trackHeight('music')
-          : trackHeight((drop.lane === 'audioLane' ? 'source:' : 'video:') + drop.track);
-    const left = start * ppf,
-      width = Math.max(14, frames * ppf),
-      ghost = libraryDropPreview.querySelector('.library-drop-ghost'),
-      marker = libraryDropPreview.querySelector('.library-drop-marker'),
-      label = libraryDropPreview.querySelector('.library-drop-label'),
-      sc = $('timelineScroll');
-    libraryDropPreview.dataset.mode = drop.mode;
-    Object.assign(ghost.style, {
-      left: left + 'px',
-      width: width + 'px',
-      top: top + 5 + 'px',
-      height: height - 10 + 'px',
-    });
-    Object.assign(marker.style, { left: left + 'px', top: top + 'px', height: height + 'px' });
-    marker.hidden = drop.mode === 'replace';
-    label.textContent =
-      (drop.mode === 'replace'
-        ? 'Replace workflow'
-        : 'Insert on ' + (drop.lane === 'clipLane' ? 'V' + drop.track : drop.lane === 'audioLane' ? 'A1' : 'A2')) +
-      ' · ' +
-      (drop.label || 'Workflow') +
-      ' · ' +
-      tc(start);
-    Object.assign(label.style, {
-      left: Math.max(sc.scrollLeft + 4, Math.min(left + 8, sc.scrollLeft + sc.clientWidth - 260)) + 'px',
-      top: Math.max(0, top - 25) + 'px',
-      maxWidth: Math.max(80, sc.clientWidth - 16) + 'px',
-    });
-    libraryDropPreview.hidden = false;
+    return timelineDropsOwner.paintLibraryDrop(e);
   }
   function scrollLibraryDrop() {
-    libraryScrollRAF = 0;
-    if (!libraryDragPoint || !libraryDrag) return;
-    const sc = $('timelineScroll'),
-      rect = sc.getBoundingClientRect(),
-      x = libraryDragPoint.clientX,
-      edge = 48;
-    const speed =
-      x > rect.right - edge
-        ? Math.min(18, (x - rect.right + edge) / 3)
-        : x < rect.left + edge
-          ? -Math.min(18, (rect.left + edge - x) / 3)
-          : 0;
-    if (speed) {
-      const before = sc.scrollLeft;
-      sc.scrollLeft = Math.max(0, Math.min($('timelineContent').clientWidth - sc.clientWidth, before + speed));
-      if (sc.scrollLeft !== before) {
-        paintLibraryDrop({ ...libraryDragPoint, target: document.elementFromPoint(x, libraryDragPoint.clientY) || sc });
-        libraryScrollRAF = requestAnimationFrame(scrollLibraryDrop);
-      }
-    }
+    return timelineDropsOwner.scrollLibraryDrop();
   }
   $('editor').addEventListener('dragstart', e => {
     try {
@@ -2353,92 +1611,14 @@ async function startEditor(isFailed) {
       toast('Drop a workflow or a media file onto the timeline.');
     }
   };
-  async function moveTakeToTimeline(clipId, takeId, start, track) {
-    const source = state.clips.find(c => c.id === clipId),
-      candidate = T.realTakes(source).find(t => t.id === takeId);
-    if (!candidate) return;
-    let before,
-      mutated = false;
-    const inert = $('editor').inert;
-    $('editor').inert = true;
-    try {
-      await flushNative();
-      before = copy(state);
-      const signature = editingSignature(projectData()),
-        fallback = source.takeId === takeId ? T.realTakes(source).find(t => t.id !== takeId) : null;
-      const captureFor = id => takeWorkflowCapture(clipId, id, source.name);
-      const [capture, fallbackCapture, P] = await Promise.all([
-        captureFor(takeId),
-        fallback ? captureFor(fallback.id) : null,
-        import('/spool/ui/profile.js'),
-      ]);
-      if (editingSignature(projectData()) !== signature)
-        throw Error('The clip changed while its take was being prepared. Drop it again.');
-      pause();
-      editView();
-      const moved = T.moveTake(state, clipId, takeId, start, track, () => 'clip-' + crypto.randomUUID());
-      if (!moved) throw Error('This take is no longer available.');
-      mutated = true;
-      setTimelineSelection([moved.id]);
-      activeVideoTrack = track;
-      state.frame = rowFor(moved.id).start;
-      save();
-      await flushNative();
-      const adopt = async (id, take, capture) => {
-        const current = state.clips.find(c => c.id === id);
-        if (!current) return;
-        if (capture?.prompt) {
-          const choices = P.resultChoices(capture.prompt, productDefinitions),
-            result =
-              choices.find(r => r.nodeId === capture.result?.nodeId && r.group === capture.result?.group) ||
-              (choices.length === 1 ? choices[0] : null);
-          if (result) {
-            capture.result = { nodeId: result.nodeId, group: result.group, index: result.index };
-            capture.bindings = P.keyInputs(capture.prompt, productDefinitions, result)
-              .filter(b => !b.ambiguous)
-              .map(({ value, ...b }) => ({ ...b, key: crypto.randomUUID() }));
-            await projectEdit.change(revision =>
-              request('projects/' + projectKey + '/capture/' + id, { revision, capture, resetInputs: true }),
-            );
-          }
-        }
-        const c = state.clips.find(c => c.id === id);
-        c.generationBase = capture?.provenance?.takeBase || { takeId: take.id, source: 'No executable metadata' };
-        save();
-        await flushNative();
-      };
-      await adopt(moved.id, candidate, capture);
-      if (fallback) await adopt(clipId, fallback, fallbackCapture);
-      history.record(before, 'Move take to timeline');
-      markTakesSeen([takeId]);
-      selectedTakeIds = [];
-      closeTakeComparison();
-      render();
-      saveHistory();
-      saveView();
-      toast('Take moved to its own clip');
-    } catch (error) {
-      if (mutated) {
-        state = preserveTakes(before);
-        render();
-        save();
-        try {
-          await flushNative();
-        } catch {}
-      }
-      toast(error.message);
-    } finally {
-      $('editor').inert = inert;
-      takeDropPreview.hidden = true;
-      draggedTake = null;
-    }
+  function moveTakeToTimeline(clipId, takeId, start, track) {
+    return timelineDropsOwner.moveTakeToTimeline(clipId, takeId, start, track);
   }
   let externalDropDepth = 0;
   const externalFileDrag = e =>
     Array.from(e.dataTransfer?.types || []).includes('Files') || !!e.dataTransfer?.files?.length;
   function clearExternalDrop() {
-    externalDropDepth = 0;
-    $('externalDropHint').hidden = true;
+    return timelineDropsOwner.clearExternalDrop();
   }
   $('editor').addEventListener(
     'dragenter',
@@ -2496,26 +1676,51 @@ async function startEditor(isFailed) {
   );
   window.addEventListener('dragend', clearExternalDrop);
   interruptions.on(clearExternalDrop);
+  const audioEditorOwner = createAudioEditor({
+    $,
+    copy,
+    esc,
+    svg,
+    url,
+    getFps: () => fps,
+    defaultAudioTracks,
+    getInspectorTab: () => inspectorTab,
+    writeInspectorTab: value => (inspectorTab = value),
+    getState: () => state,
+    getPpf: () => ppf,
+    review,
+    history,
+    edits,
+    selected,
+    getActiveVideoTrack: () => activeVideoTrack,
+    take,
+    layout,
+    clamp,
+    seconds,
+    tc,
+    save,
+    toast,
+    buttons,
+    draw,
+    syncTimelineSelection,
+    takeName,
+    clipAttention,
+    renderInspector,
+    editView,
+    startClipDrag,
+    startFadeDrag,
+    startAudioDrag,
+    getViewer: () => viewer,
+    getPause: () => pause,
+    getSyncAudio: () => syncAudio,
+    selectedAudio,
+    getAudioSettings: () => audioSettings,
+    getTrackAudible: () => trackAudible,
+    selectAudio,
+    refreshGestureHints,
+  });
   function audioButtons() {
-    for (const id of ['monitorMute']) {
-      $(id).innerHTML = svg(state.muted ? 'mute' : 'volume') + '<span>Monitor</span>';
-      $(id).classList.toggle('active', state.muted);
-      $(id).setAttribute('aria-pressed', state.muted);
-      $(id).setAttribute('aria-label', state.muted ? 'Unmute monitor' : 'Mute monitor');
-      $(id).title = (state.muted ? 'Unmute' : 'Mute') + ' monitor (export mix unchanged)';
-    }
-    const tracks = state.audioTracks || defaultAudioTracks;
-    for (const [id, key] of [
-      ['trackMute', 'sourceMuted'],
-      ['trackSolo', 'sourceSolo'],
-      ['musicMute', 'musicMuted'],
-      ['musicSolo', 'musicSolo'],
-    ]) {
-      $(id).classList.toggle('active', !!tracks[key]);
-      $(id).setAttribute('aria-pressed', !!tracks[key]);
-    }
-    viewer.updateMonitor();
-    syncAudio();
+    return audioEditorOwner.audioButtons();
   }
 
   const viewer = createViewer({
@@ -2583,27 +1788,8 @@ async function startEditor(isFailed) {
     setPreviewQuality,
     previews,
   } = viewer;
-  async function uploadFile(file) {
-    return diagnostics.run(
-      'Importing ' + file.name,
-      async () => {
-        const m = await api.upload(
-          'upload?projectId=' + encodeURIComponent(projectKey) + '&fps=' + fps,
-          file,
-          file.name,
-          { fallback: 'Import failed' },
-        );
-        if (m.workflow) {
-          m.workflowData = m.workflowData || readWorkflowData({ workflow: m.workflow, prompt: m.prompt });
-          registerWorkflowData(m.workflowData, m.name, m.poster);
-        }
-        state.media.push(m);
-        return m;
-      },
-      { detail: Math.round(file.size / 1024) + ' KB' },
-    );
-  }
-  async function importFiles(
+
+  function importFiles(
     files,
     add = false,
     start = Math.round(state.frame),
@@ -2612,139 +1798,13 @@ async function startEditor(isFailed) {
     audioTrack = 'music',
     audioLane = activeVideoTrack,
   ) {
-    let imported = 0,
-      failed = 0;
-    for (const file of files) {
-      try {
-        if (!/\.json$/i.test(file.name)) {
-          const m = await uploadFile(file);
-          if (!add) save();
-          if (add) {
-            if (audioOnly) {
-              if (!m.audio) throw Error(m.name + ' has no audio stream');
-              addAudioClip(m, start, audioTrack, audioLane);
-            } else await addMediaClip(m.id, index, start);
-            if (!audioOnly && m.kind !== 'audio') {
-              index++;
-              if (T.videoTracks(state) > 1 && state.selected) {
-                const placed = rowFor(state.selected);
-                if (placed) start = placed.end;
-              }
-            } else start += m.frames;
-          }
-          imported++;
-          continue;
-        }
-        if (add) {
-          const session = await captureInputs(
-            async () => {
-              const w = await importWorkflowFile(file);
-              return { ...copy(w.data), importedWorkflowId: w.id };
-            },
-            file.name,
-            index,
-          );
-          if (session && (await session.completed)) index++;
-        } else {
-          await flushNative();
-          await importWorkflowFile(file);
-        }
-        imported++;
-      } catch (error) {
-        toast(error.message);
-        failed++;
-      }
-    }
-    binTab = !audioOnly && [...files].some(file => /\.json$/i.test(file.name)) ? 'workflows' : 'media';
-    $('mediaFiles').value = '';
-    $('audioFiles').value = '';
-    render();
-    save();
-    return { imported, failed };
+    return mediaImportOwner.importFiles(files, add, start, index, audioOnly, audioTrack, audioLane);
   }
-  async function pasteImages(images, destination) {
-    if (!images.length) {
-      toast('No image in the clipboard. Copy an image, then paste again.');
-      return;
-    }
-    pause();
-    setStatus('Pasting image...');
-    const frame = Math.round(state.frame),
-      index = T.dropIndex(state, frame),
-      files = [];
-    try {
-      for (let i = 0; i < images.length; i++) {
-        let blob = images[i],
-          extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[blob.type];
-        if (!extension) {
-          const bitmap = await createImageBitmap(blob),
-            canvas = document.createElement('canvas');
-          canvas.width = bitmap.width;
-          canvas.height = bitmap.height;
-          canvas.getContext('2d').drawImage(bitmap, 0, 0);
-          bitmap.close();
-          blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-          if (!blob) throw Error('The clipboard image could not be read.');
-          extension = 'png';
-        }
-        files.push(
-          new File(
-            [blob],
-            'Pasted image ' +
-              new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-') +
-              (images.length > 1 ? ' ' + (i + 1) : '') +
-              '.' +
-              extension,
-            { type: blob.type },
-          ),
-        );
-      }
-      const result = await importFiles(files, destination === 'timeline', frame, index);
-      setBinTab('media');
-      if (result.imported) {
-        await flushNative();
-        const message =
-          result.imported +
-          (result.imported === 1 ? ' image' : ' images') +
-          ' pasted to ' +
-          (destination === 'timeline' ? 'timeline' : 'media pool');
-        setStatus(message);
-        if (!result.failed) toast(message);
-      }
-    } catch (error) {
-      toast(error.message);
-    }
+  function pasteImages(images, destination) {
+    return mediaImportOwner.pasteImages(images, destination);
   }
-  async function pasteClipboardImage(destination) {
-    if (!navigator.clipboard?.read) {
-      toast(
-        'Click the ' +
-          (destination === 'timeline' ? 'timeline' : 'media pool') +
-          ' and press ' +
-          keyText('Ctrl') +
-          '+V to paste an image.',
-      );
-      return;
-    }
-    try {
-      const items = await diagnostics.run('Reading clipboard', () => navigator.clipboard.read()),
-        images = [];
-      for (const item of items) {
-        const type = item.types.includes('image/png')
-          ? 'image/png'
-          : item.types.find(type => type.startsWith('image/'));
-        if (type) images.push(await diagnostics.run('Reading clipboard image', () => item.getType(type)));
-      }
-      await pasteImages(images, destination);
-    } catch (error) {
-      toast(
-        'Clipboard access was blocked. Click the ' +
-          (destination === 'timeline' ? 'timeline' : 'media pool') +
-          ' and press ' +
-          keyText('Ctrl') +
-          '+V.',
-      );
-    }
+  function pasteClipboardImage(destination) {
+    return mediaImportOwner.pasteClipboardImage(destination);
   }
   let pasteDestination = 'timeline';
   const textPasteTarget = target =>
@@ -2835,253 +1895,130 @@ async function startEditor(isFailed) {
     };
   };
   function importFootageDialog() {
-    showModal(
-      'Import video',
-      '<p>Spool reads the file where it is and makes review copies. Each detected shot becomes a clip whose first take is the original footage.</p><label class="field"><span>Video file path</span><input id="footagePath" placeholder="Full path to the video file" spellcheck="false"></label><label class="export-audio"><input type="checkbox" id="footageCuts" checked> Split at detected cuts</label><div id="footageResult"></div>',
-      '<button class="outline" id="footageCancel">Cancel</button><button class="primary" id="footageImport">Import</button>',
-    );
-    $('footagePath').focus();
-    $('footageCancel').onclick = closeModal;
-    $('footagePath').onkeydown = e => {
-      if (e.key === 'Enter') $('footageImport').click();
-    };
-    $('footageImport').onclick = async () => {
-      const path = $('footagePath')
-        .value.trim()
-        .replace(/^"(.*)"$/, '$1');
-      if (!path) return;
-      const button = $('footageImport');
-      button.disabled = true;
-      button.textContent = 'Importing…';
-      $('footageResult').textContent = 'Making review copies and finding cuts…';
-      try {
-        const count = await importFootage(path, $('footageCuts').checked);
-        closeModal();
-        toast(count + (count === 1 ? ' clip' : ' clips') + ' added from ' + path.split(/[\\/]/).pop());
-      } catch (error) {
-        if ($('footageResult')) {
-          $('footageResult').textContent = error.message;
-          button.disabled = false;
-          button.textContent = 'Import';
-        }
-      }
-    };
+    return mediaImportOwner.importFootageDialog();
   }
-  async function importFootage(path, detectCuts) {
-    const empty = !state.clips.length && !(state.audioClips || []).length;
-    const result = await api.call('import-footage?projectId=' + encodeURIComponent(projectKey), {
-      method: 'POST',
-      body: { path, detectCuts, fps: empty && !state.fpsExplicit ? null : fps },
-      fallback: 'Import failed',
-    });
-    return edits.apply('Import ' + result.source.name, () => {
-      pause();
-      editView();
-      clearHeld();
-      if (empty) fps = state.fps = result.fps;
-      for (const m of [result.source, result.audio])
-        if (m) {
-          state.media.push(m);
-        }
-      const clips = result.shots.map(m => {
-        const t = {
-          id: 'take-' + crypto.randomUUID(),
-          number: 0,
-          original: true,
-          revision: 1,
-          media: m,
-          sample: false,
-        };
-        return {
-          id: 'clip-' + crypto.randomUUID(),
-          name: m.name,
-          workflow: null,
-          sources: [],
-          prompt: '',
-          seed: 0,
-          duration: m.frames / fps,
-          count: 1,
-          revision: 1,
-          takes: [t],
-          takeId: t.id,
-          in: 0,
-          out: m.frames,
-        };
-      });
-      if (T.videoTracks(state) > 1)
-        state.frame = T.trackClips(state, activeVideoTrack).reduce((n, c) => n + (c.gapBefore || 0) + c.out - c.in, 0);
-      for (const c of clips) {
-        T.insertClip(state, c, state.clips.length, {
-          track: activeVideoTrack,
-          start: T.videoTracks(state) > 1 ? Math.round(state.frame) : null,
-        });
-        state.frame = rowFor(c.id).end;
-      }
-      const start = rowFor(clips[0].id).start;
-      if (result.audio) T.addAudioClip(state, result.audio, start, 'audio-' + crypto.randomUUID()).audio.gainDb = 0;
-      state.selected = clips[0].id;
-      state.selectedAudio = null;
-      state.frame = start;
-      return clips.length;
-    });
-  }
+
+  const projectDialogsOwner = createProjectDialogs({
+    $,
+    copy,
+    esc,
+    svg,
+    request,
+    BOOT,
+    productCapabilities,
+    projectKey,
+    getFps: () => fps,
+    getWorkflowLibrary: () => workflowLibrary,
+    getTemplateBrowser: () => templateBrowser,
+    builtinPreparer,
+    getState: () => state,
+    history,
+    edits,
+    projectData,
+    selected,
+    take,
+    toast,
+    preparedWorkflows,
+    workflowLoads,
+    importFiles,
+    showModal,
+    closeModal,
+    importFootageDialog,
+    detectClipCuts,
+    getResolution: () => resolution,
+    getNativeRecipes: () => nativeRecipes,
+    getBridge: () => bridge,
+    withBridge,
+    getProjectEdit: () => projectEdit,
+    flushNative,
+    getFocusViewId: () => focusViewId,
+    getComfyConnection: () => comfyConnection,
+    writeComfyConnection: value => (comfyConnection = value),
+    renderConnection,
+    ensureComfy,
+    getExperimentRetry: () => experimentRetry,
+    submitExperiment,
+    getAddGraphButton: () => addGraphButton,
+  });
   function projectSettings() {
-    const size = resolution(),
-      occupied = state.clips.length || state.media.length || (state.audioClips || []).length;
-    showModal(
-      'Project settings',
-      '<label class="field"><span>Project name</span><input id="settingsName" value="' +
-        esc(state.project) +
-        '"></label><label class="field"><span>Project brief</span><textarea id="settingsBrief">' +
-        esc(state.brief || '') +
-        '</textarea></label><label class="field"><span>Resolution preset</span><select id="settingsPreset"><option value="custom">Custom</option><option value="960,540">960 × 540</option><option value="1280,720">HD · 1280 × 720</option><option value="1920,1080">Full HD · 1920 × 1080</option><option value="3840,2160">4K UHD · 3840 × 2160</option><option value="1080,1920">Portrait · 1080 × 1920</option></select></label><div class="two-fields"><label class="field"><span>Width</span><input type="number" min="2" step="2" id="settingsWidth" value="' +
-        size.width +
-        '"></label><label class="field"><span>Height</span><input type="number" min="2" step="2" id="settingsHeight" value="' +
-        size.height +
-        '"></label></div><label class="field"><span>Frame rate</span><input type="number" min="1" step="any" id="settingsFps" value="' +
-        fps +
-        '" ' +
-        (occupied ? 'readonly' : '') +
-        '></label><p class="small">Resolution sets the timeline and export size. Preview Full uses this size; 1/2 and 1/4 reduce playback resolution. Export uses original footage. Workflow generation size is controlled by each workflow.</p><p class="small">' +
-        (occupied
-          ? 'Frame rate is fixed after media is added to preserve edit timing.'
-          : 'The first video sets the frame rate unless you choose one here.') +
-        '</p><p id="settingsError"></p>',
-      '<button class="outline" id="settingsCancel">Cancel</button><button class="primary" id="settingsSave">Save settings</button>',
-    );
-    $('settingsPreset').value = [...$('settingsPreset').options].some(o => o.value === size.width + ',' + size.height)
-      ? size.width + ',' + size.height
-      : 'custom';
-    $('settingsPreset').onchange = () => {
-      const value = $('settingsPreset').value;
-      if (value !== 'custom') {
-        const [w, h] = value.split(',');
-        $('settingsWidth').value = w;
-        $('settingsHeight').value = h;
-      }
-    };
-    for (const id of ['settingsWidth', 'settingsHeight']) $(id).oninput = () => ($('settingsPreset').value = 'custom');
-    $('settingsCancel').onclick = closeModal;
-    $('settingsSave').onclick = () => {
-      const width = Number($('settingsWidth').value),
-        height = Number($('settingsHeight').value),
-        rate = Number($('settingsFps').value);
-      if (
-        !Number.isInteger(width) ||
-        !Number.isInteger(height) ||
-        width < 2 ||
-        height < 2 ||
-        width % 2 ||
-        height % 2 ||
-        !Number.isFinite(rate) ||
-        rate <= 0
-      ) {
-        $('settingsError').textContent = 'Enter positive even dimensions and a positive frame rate.';
-        return;
-      }
-      edits.apply('Project settings', () => {
-        state.brief = $('settingsBrief').value;
-        state.project = $('settingsName').value.trim() || 'Untitled project';
-        state.resolution = { width, height };
-        if (!occupied && rate !== fps) {
-          state.fps = rate;
-          state.fpsExplicit = true;
-        }
-        closeModal();
-      });
-      toast('Project settings saved');
-    };
+    return projectDialogsOwner.projectSettings();
   }
-  async function detectClipCuts(id) {
-    const c = state.clips.find(c => c.id === id);
-    if (!c) return;
-    const chosen = take(c),
-      before = editingSignature(projectData());
-    showModal(
-      'Detect cuts',
-      '<p>Find hard cuts inside <b>' +
-        esc(c.name) +
-        '</b> using its selected take and current trim. Review the result before splitting. Audio on A2 stays in place.</p><p id="cutsResult">Detecting cuts…</p>',
-      '<button class="outline" id="cutsCancel">Cancel</button><button class="primary" id="cutsApply" disabled>Split at cuts</button>',
-    );
-    const button = $('cutsApply'),
-      result = $('cutsResult');
-    $('cutsCancel').onclick = closeModal;
-    try {
-      await flushNative();
-      const { cuts } = await request(
-        'projects/' + projectKey + '/detect-cuts',
-        { clipId: id, takeId: chosen.id },
-        'POST',
-      );
-      if ($('cutsResult') !== result) return;
-      result.textContent = cuts.length
-        ? cuts.length + ' cuts found · ' + (cuts.length + 1) + ' clips. You can undo the split.'
-        : 'No hard cuts found in this clip.';
-      button.disabled = !cuts.length;
-      button.onclick = () => {
-        if (editingSignature(projectData()) !== before) {
-          result.textContent = 'The edit changed. Close this dialog and detect again.';
-          button.disabled = true;
-          return;
-        }
-        const start = rowFor(id).start,
-          name = c.name.replace(/\.(mp4|mov|webm|mkv|m4v)$/i, '');
-        edits.apply('Detect cuts', () => {
-          editView();
-          const shots = [c];
-          for (const cut of cuts) {
-            const { clip } = T.splitClip(state, start + cut, 'clip-' + crypto.randomUUID(), shots.at(-1).id);
-            if (clip) shots.push(clip);
-          }
-          shots.forEach((shot, index) => (shot.name = name + '_' + String(index + 1).padStart(2, '0')));
-          state.selected = id;
-          state.selectedAudio = null;
-          state.frame = start;
-          closeModal();
-        });
-        toast('Clip split at ' + cuts.length + ' cuts');
-      };
-    } catch (error) {
-      if ($('cutsResult') === result) result.textContent = error.message;
-    }
+  function detectClipCuts(id) {
+    return mediaImportOwner.detectClipCuts(id);
   }
-  async function exportViewerFrame(data) {
-    if (viewerExpanded) toggleViewerFullscreen();
-    showModal(
-      'Export frame',
-      '<p>Export this frame as a PNG at the footage’s original resolution.</p><p id="frameResult">Exporting frame…</p>',
-    );
-    const result = $('frameResult');
-    try {
-      await flushNative();
-      const frame = await request(
-        'projects/' + projectKey + '/frame',
-        { mediaId: data.media.id, frame: Math.floor(data.frame) },
-        'POST',
-      );
-      if ($('frameResult') !== result) return;
-      result.innerHTML =
-        '<a class="download-link" href="' +
-        esc(frame.url) +
-        '" download="' +
-        esc(frame.filename) +
-        '">Download PNG</a>';
-      const a = document.createElement('a');
-      a.href = frame.url;
-      a.download = frame.filename;
-      a.click();
-    } catch (error) {
-      if ($('frameResult') === result) result.textContent = error.message;
-    }
+  const exportsOwner = createExports({
+    $,
+    esc,
+    api,
+    request,
+    projectKey,
+    url,
+    getFps: () => fps,
+    getExportRangeDrag: () => exportRangeDrag,
+    writeExportRangeDrag: value => (exportRangeDrag = value),
+    getState: () => state,
+    getPpf: () => ppf,
+    edits,
+    selectionIds,
+    take,
+    total,
+    layout,
+    clamp,
+    tc,
+    toast,
+    setStatus,
+    showModal,
+    closeModal,
+    getResolution: () => resolution,
+    getExportRangeBar: () => exportRangeBar,
+    getRangeSettings: () => rangeSettings,
+    getExportData: () => exportData,
+    getExportFormat: () => exportFormat,
+    writeExportFormat: value => (exportFormat = value),
+    getViewerExpanded: () => viewerExpanded,
+    toggleViewerFullscreen,
+    flushNative,
+    downloadValue,
+  });
+  function exportViewerFrame(data) {
+    return exportsOwner.exportViewerFrame(data);
   }
+  const renderQueueOwner = createRenderQueue({
+    $,
+    esc,
+    svg,
+    request,
+    workflowStatus,
+    productCapabilities,
+    getProductDefinitions: () => productDefinitions,
+    cloudDefinitions,
+    definitionsFor,
+    projectKey,
+    url,
+    workflows,
+    getState: () => state,
+    selected,
+    selectionIds,
+    save,
+    toast,
+    jobPercent,
+    showModal,
+    closeModal,
+    selectedAudio,
+    getNativeRecipes: () => nativeRecipes,
+    getDecimal: () => decimal,
+    getProjectEdit: () => projectEdit,
+    flushNative,
+    pollNative,
+    getQueueClips: () => queueClips,
+    getQueueSubmission: () => queueSubmission,
+    getExperimentRetryKey: () => experimentRetryKey,
+    getExperimentRetry: () => experimentRetry,
+    writeExperimentRetry: value => (experimentRetry = value),
+    getJobStatus: () => jobStatus,
+  });
   function queueLabel() {
-    const active = visibleJobs().filter(j => G.ACTIVE.includes(j.status)).length;
-    $('queueLabel').textContent = 'Renders';
-    const badge = $('renderCount');
-    if (badge) badge.textContent = active || '';
-    $('showQueue').setAttribute('aria-label', active ? 'Renders: ' + active + ' active requests' : 'Renders');
-    $('showQueue').classList.toggle('busy', !!active);
+    return renderQueueOwner.queueLabel();
   }
   const resolution = () => state.resolution || { width: 960, height: 540 };
   const exportRangeBar = document.createElement('div');
@@ -3103,51 +2040,16 @@ async function startEditor(isFailed) {
   $('gestureHelp').after(rangeSettings);
   rangeSettings.onclick = () => exportVideo();
   function renderExportRange(range = T.exportRange(state)) {
-    exportRangeBar.hidden = !range.end;
-    exportRangeBar.style.left = range.start * ppf + 'px';
-    exportRangeBar.style.width = (range.end - range.start) * ppf + 'px';
-    for (const b of exportRangeBar.children) {
-      const edge = b.dataset.exportEdge;
-      b.title = 'Export ' + edge + ' · ' + tc(range[edge]) + ' · drag or use arrow keys';
-      b.setAttribute('aria-valuemin', edge === 'start' ? 0 : range.start + 1);
-      b.setAttribute('aria-valuemax', edge === 'start' ? range.end - 1 : total());
-      b.setAttribute('aria-valuenow', range[edge]);
-      b.setAttribute('aria-valuetext', tc(range[edge]));
-    }
-    rangeSettings.title =
-      'Export ' +
-      tc(range.start) +
-      ' – ' +
-      tc(range.end) +
-      ' · ' +
-      tc(range.end - range.start) +
-      ' · I: start / O: end';
+    return exportsOwner.renderExportRange(range);
   }
   function setExportRange(range) {
-    if (
-      (!range && !state.exportRange) ||
-      (range && state.exportRange && range.start === state.exportRange.start && range.end === state.exportRange.end)
-    )
-      return;
-    edits.apply(
-      'Set export range',
-      () => {
-        if (range) state.exportRange = range;
-        else delete state.exportRange;
-      },
-      'range',
-    );
+    return exportsOwner.setExportRange(range);
   }
   function setExportEdge(edge, frame) {
-    const range = T.exportRange(state);
-    if (!range.end) return;
-    range[edge] = clamp(frame, edge === 'start' ? 0 : range.start + 1, edge === 'start' ? range.end - 1 : total());
-    setExportRange(range);
+    return exportsOwner.setExportEdge(edge, frame);
   }
   function cancelExportRange() {
-    if (!exportRangeDrag) return;
-    exportRangeDrag = null;
-    renderExportRange();
+    return exportsOwner.cancelExportRange();
   }
   for (const b of exportRangeBar.children) {
     b.onpointerdown = e => {
@@ -3201,13 +2103,7 @@ async function startEditor(isFailed) {
   });
   window.addEventListener('pointercancel', cancelExportRange);
   interruptions.on(cancelExportRange);
-  function exportFrameValue(value) {
-    if (/^\d+(?:\.\d+)?$/.test(value.trim())) return Math.round(Number(value) * fps);
-    const m = value.trim().match(/^(\d+):(\d{2}):(\d{2}):(\d{2})$/);
-    if (!m || Number(m[2]) >= 60 || Number(m[3]) >= 60 || Number(m[4]) >= fps)
-      throw Error('Enter seconds or HH:MM:SS:FF.');
-    return Math.round((Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3])) * fps + Number(m[4]));
-  }
+
   const exportData = () => ({
     ...T.exportPlan(state, T.exportRange(state)),
     fps,
@@ -3215,187 +2111,15 @@ async function startEditor(isFailed) {
     projectId: projectKey,
   });
   let exportFormat = 'mp4';
-  async function exportVideo() {
-    if (state.clips.some(c => take(c).placeholder)) {
-      toast('Remove empty workflow clips before exporting; they have no generated take.');
-      return;
-    }
-    if (!total()) {
-      toast('Add video or audio before exporting.');
-      return;
-    }
-    showModal(
-      'Export sequence',
-      '<p>Assemble the selected takes using the current trims and clip order.</p><div class="two-fields"><label class="field"><span>Format</span><select id="exportFormat"><option value="mp4">MP4 · H.264</option><option value="otio">OpenTimelineIO (.otio)</option></select></label><label class="field"><span>Resolution / frame rate</span><input value="' +
-        resolution().width +
-        ' × ' +
-        resolution().height +
-        ' / ' +
-        fps +
-        ' fps" readonly></label></div><div class="two-fields export-range-fields"><label class="field"><span>Start</span><input id="exportStart" aria-label="Export start time" value="' +
-        tc(T.exportRange(state).start) +
-        '"></label><label class="field"><span>End</span><input id="exportEnd" aria-label="Export end time" value="' +
-        tc(T.exportRange(state).end) +
-        '"></label></div><div class="export-range-presets"><button class="outline" id="exportPicture">Picture length</button><button class="outline" id="exportEntire">Entire timeline</button><button class="outline" id="exportSelected">Selected clips</button></div><p id="exportRangeSummary"></p><p class="small">Enter seconds or HH:MM:SS:FF. The end marker is the cut after the included footage. Drag markers on the ruler, or use I / O at the playhead.</p><p id="exportRangeError" role="alert"></p><label class="export-audio"><input type="checkbox" id="exportAudio" checked> <span id="exportAudioLabel">Include audio mix</span></label><p class="small" id="exportFormatNote">Monitor mute does not affect export.</p><div id="exportResult"></div>',
-      '<button class="outline" id="exportCancel">Cancel</button><button class="primary" id="renderExport">Export video</button>',
-    );
-    const updateRangeFields = () => {
-      const range = T.exportRange(state);
-      $('exportStart').value = tc(range.start);
-      $('exportEnd').value = tc(range.end);
-      $('exportRangeSummary').textContent =
-        'Duration: ' +
-        tc(range.end - range.start) +
-        ' / ' +
-        (range.end - range.start) +
-        ' frames' +
-        (!state.exportRange ? ' / follows picture length' : '');
-      $('exportRangeError').textContent = '';
-      $('renderExport').disabled = !range.end;
-    };
-    const applyRangeFields = () => {
-      try {
-        const start = exportFrameValue($('exportStart').value),
-          end = exportFrameValue($('exportEnd').value);
-        if (start < 0 || end <= start || end > total()) throw Error('Start must be before end, within the timeline.');
-        const current = T.exportRange(state);
-        if (state.exportRange || current.start !== start || current.end !== end) setExportRange({ start, end });
-        updateRangeFields();
-        return true;
-      } catch (error) {
-        $('exportRangeError').textContent = error.message;
-        $('renderExport').disabled = true;
-        return false;
-      }
-    };
-    $('exportStart').onchange = $('exportEnd').onchange = applyRangeFields;
-    $('exportPicture').onclick = () => {
-      setExportRange(null);
-      updateRangeFields();
-    };
-    $('exportEntire').onclick = () => {
-      setExportRange({ start: 0, end: total() });
-      updateRangeFields();
-    };
-    const selectedRows = [
-      ...layout()
-        .filter(r => selectionIds().includes(r.clip.id))
-        .map(r => ({ start: r.start, end: r.end })),
-      ...(state.audioClips || [])
-        .filter(c => selectionIds().includes(c.id))
-        .map(c => ({ start: c.start, end: c.start + c.out - c.in })),
-    ];
-    $('exportSelected').disabled = !selectedRows.length;
-    $('exportSelected').onclick = () => {
-      setExportRange({
-        start: Math.min(...selectedRows.map(r => r.start)),
-        end: Math.max(...selectedRows.map(r => r.end)),
-      });
-      updateRangeFields();
-    };
-    updateRangeFields();
-    const showFormat = () => {
-      const otio = exportFormat === 'otio';
-      $('exportFormat').value = exportFormat;
-      $('exportAudioLabel').textContent = otio ? 'Include audio tracks' : 'Include audio mix';
-      $('exportFormatNote').textContent = otio
-        ? 'Every track, clip and trim, for Resolve, Premiere Pro and other editors. Media stays where it is and is not copied. Gain and fades are not carried.'
-        : 'Monitor mute does not affect export.';
-      $('renderExport').textContent = otio ? 'Export timeline' : 'Export video';
-      $('exportResult').textContent = '';
-    };
-    $('exportFormat').onchange = () => {
-      exportFormat = $('exportFormat').value;
-      showFormat();
-    };
-    showFormat();
-    $('exportCancel').onclick = closeModal;
-    $('renderExport').onclick = async () => {
-      if (!applyRangeFields()) return;
-      if (
-        layout().some(
-          r => r.start < T.exportRange(state).end && r.end > T.exportRange(state).start && take(r.clip).placeholder,
-        )
-      ) {
-        $('exportRangeError').textContent =
-          'The range includes empty workflow clips. Generate a take or exclude them from this range.';
-        return;
-      }
-      const button = $('renderExport');
-      button.disabled = true;
-      button.textContent = 'Exporting…';
-      if (exportFormat === 'otio') {
-        exportTimeline(button);
-        return;
-      }
-      $('exportResult').textContent = 'Rendering the selected edit locally…';
-      try {
-        await flushNative();
-        const data = exportData();
-        data.audio = $('exportAudio').checked;
-        const result = await api.call('export?projectId=' + encodeURIComponent(projectKey), {
-          method: 'POST',
-          body: data,
-          fallback: 'Export failed.',
-        });
-        if ($('exportResult'))
-          $('exportResult').innerHTML =
-            '<p>Export complete. <a class="download-link" href="' +
-            esc(url(result.url)) +
-            '" download="' +
-            esc(result.filename) +
-            '">Download MP4</a></p>';
-        button.textContent = 'Export complete';
-        setStatus('Sequence exported · ' + result.filename);
-      } catch (error) {
-        if ($('exportResult')) $('exportResult').textContent = error.message;
-        button.disabled = false;
-        button.textContent = 'Try again';
-      }
-    };
+  function exportVideo() {
+    return exportsOwner.exportVideo();
   }
-  async function exportTimeline(button) {
-    $('exportResult').textContent = 'Writing the timeline…';
-    try {
-      await flushNative();
-      const plan = T.timelinePlan(state, T.exportRange(state));
-      if (!$('exportAudio').checked) plan.tracks = plan.tracks.filter(t => t.kind === 'video');
-      const result = await api.call('export/otio?projectId=' + encodeURIComponent(projectKey), {
-        method: 'POST',
-        body: { ...plan, fps, ...resolution(), name: state.project, projectId: projectKey },
-        fallback: 'Export failed.',
-      });
-      const link = URL.createObjectURL(
-        new Blob([JSON.stringify(result.timeline, null, 2)], { type: 'application/json' }),
-      );
-      if ($('exportResult'))
-        $('exportResult').innerHTML =
-          '<p>Export complete. <a class="download-link" href="' +
-          link +
-          '" download="' +
-          esc(result.filename) +
-          '">Download timeline</a></p><p class="small">Also saved as ' +
-          esc(result.path) +
-          '</p>';
-      button.textContent = 'Export complete';
-      setStatus('Timeline exported · ' + result.filename);
-    } catch (error) {
-      if ($('exportResult')) $('exportResult').textContent = error.message;
-      button.disabled = false;
-      button.textContent = 'Try again';
-    }
-  }
-  async function downloadProject() {
-    try {
-      await flushNative();
-      downloadValue(await request('projects/' + projectKey + '/export'));
-    } catch (error) {
-      toast(error.message);
-    }
+
+  function downloadProject() {
+    return exportsOwner.downloadProject();
   }
   function setBinTab(tab) {
-    binTab = tab;
-    renderBin();
+    return layoutControlsOwner.setBinTab(tab);
   }
   for (const button of document.querySelectorAll('[data-media-filter]'))
     button.onclick = () => {
@@ -3541,24 +2265,13 @@ async function startEditor(isFailed) {
     '</button>';
   $('editor').append(mediaRail);
   function syncMediaRail() {
-    const panel = $('mediaPanel'),
-      open = panel.classList.contains('open');
-    for (const b of mediaRail.querySelectorAll('[data-rail-tab]'))
-      b.setAttribute('aria-pressed', open && panel.dataset.tab === b.dataset.railTab);
+    return layoutControlsOwner.syncMediaRail();
   }
   function closeMediaFlyout() {
-    if (window.innerWidth > 1100 && $('mediaPanel').classList.contains('open')) {
-      $('mediaPanel').classList.remove('open');
-      syncMediaRail();
-    }
+    return layoutControlsOwner.closeMediaFlyout();
   }
   function setMediaCollapsed(collapsed) {
-    $('workbench').classList.toggle('hide-media', collapsed);
-    $('mediaPanel').classList.remove('open');
-    try {
-      localStorage.setItem(mediaCollapsedKey, collapsed ? '1' : '0');
-    } catch (error) {}
-    syncMediaRail();
+    return layoutControlsOwner.setMediaCollapsed(collapsed);
   }
   mediaRail.querySelectorAll('[data-rail-tab]').forEach(
     b =>
@@ -3607,34 +2320,10 @@ async function startEditor(isFailed) {
     fullscreenPending = false,
     fullscreenWasNative = false;
   function setViewerExpanded(expanded) {
-    viewerExpanded = expanded;
-    const v = $('viewer');
-    v.classList.toggle('expanded', expanded);
-    $('fullscreen').title = expanded ? 'Exit fullscreen (F / Esc)' : 'Fullscreen viewer (F)';
-    $('fullscreen').setAttribute('aria-label', expanded ? 'Exit fullscreen' : 'Fullscreen viewer');
-    applyViewerZoom();
-    (expanded ? v : $('editor')).focus({ preventScroll: true });
+    return layoutControlsOwner.setViewerExpanded(expanded);
   }
   function toggleViewerFullscreen() {
-    finishViewerPan();
-    setViewerExpanded(!viewerExpanded);
-    if (!viewerExpanded) {
-      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-      return;
-    }
-    // Desktop webviews manage fullscreen in their host; use the window-filling view there.
-    if (document.fullscreenEnabled && !navigator.userAgent.includes('Electron/') && !fullscreenPending) {
-      fullscreenPending = true;
-      $('viewer')
-        .requestFullscreen()
-        .then(() => {
-          fullscreenPending = false;
-          if (!viewerExpanded && document.fullscreenElement) document.exitFullscreen().catch(() => {});
-        })
-        .catch(() => {
-          fullscreenPending = false;
-        });
-    }
+    return layoutControlsOwner.toggleViewerFullscreen();
   }
   $('fullscreen').onclick = toggleViewerFullscreen;
   $('compareTakes').onclick = $('compareTakesStrip').onclick = toggleTakeComparison;
@@ -3875,7 +2564,7 @@ async function startEditor(isFailed) {
   });
   // Zoom is local to this view. Source retains its crop while flipping takes.
   function freshViewerZoom() {
-    return { edit: { scale: 1, x: 0, y: 0 }, source: { scale: 1, x: 0, y: 0 } };
+    return layoutControlsOwner.freshViewerZoom();
   }
   let viewerZoom = freshViewerZoom(),
     viewerPan = null,
@@ -3889,80 +2578,26 @@ async function startEditor(isFailed) {
       }
   } catch (error) {}
   function persistView() {
-    try {
-      sessionStorage.setItem(VIEW_KEY, JSON.stringify(viewState()));
-    } catch (error) {}
+    return layoutControlsOwner.persistView();
   }
   function saveView() {
-    clearTimeout(viewSaveTimer);
-    viewSaveTimer = setTimeout(persistView, 100);
+    return layoutControlsOwner.saveView();
   }
   function viewerImageBox(element) {
-    const parent = element?.closest('.trim-frame') || $('viewerStage'),
-      box = parent.getBoundingClientRect(),
-      ratio = element?.videoWidth
-        ? element.videoWidth / element.videoHeight
-        : element?.naturalWidth
-          ? element.naturalWidth / element.naturalHeight
-          : 16 / 9,
-      width = Math.min(box.width, box.height * ratio),
-      height = width / ratio;
-    return { width, height, cx: box.left + box.width / 2, cy: box.top + box.height / 2 };
+    return layoutControlsOwner.viewerImageBox(element);
   }
   function applyViewerZoom() {
-    const z = viewerZoom[review.mode];
-    z.scale = clamp(z.scale, 1, 6);
-    z.x = clamp(z.x, -(z.scale - 1) / 2, (z.scale - 1) / 2);
-    z.y = clamp(z.y, -(z.scale - 1) / 2, (z.scale - 1) / 2);
-    if (z.scale < 1.01) ((z.scale = 1), (z.x = z.y = 0));
-    for (const element of $('viewerStage').querySelectorAll(
-      ':scope>video:not(.take-scrub-preview),#still,.trim-frame video,.trim-frame img',
-    )) {
-      if (element.hidden || element.closest('.trim-frame')?.hidden) continue;
-      const b = viewerImageBox(element);
-      element.style.transform =
-        z.scale === 1 ? '' : 'translate(' + z.x * b.width + 'px,' + z.y * b.height + 'px) scale(' + z.scale + ')';
-      element.classList.toggle('zoomable', element.tagName === 'VIDEO' || !element.hidden);
-    }
-    if (z.scale === 1) releaseViewerPan();
-    $('viewerStage').classList.toggle('zoomed', z.scale > 1);
-    $('viewerStage').classList.toggle('panning', !!viewerPan);
-    $('viewerZoom').textContent = z.scale === 1 ? 'Fit' : Math.round(z.scale * 100) + '%';
-    $('viewerZoom').title =
-      'Viewer ' +
-      (z.scale === 1 ? 'fit' : Math.round(z.scale * 100) + '%') +
-      ' · Wheel to zoom · Drag to pan · Double-click or Shift+F to fit';
+    return layoutControlsOwner.applyViewerZoom();
   }
-  function releaseViewerPan() {
-    const p = viewerPan;
-    viewerPan = null;
-    const stage = $('viewerStage');
-    if (p && stage.hasPointerCapture(p.pointerId)) stage.releasePointerCapture(p.pointerId);
-    stage.classList.remove('panning');
-  }
+
   function resetViewerZoom() {
-    releaseViewerPan();
-    viewerZoom[review.mode] = { scale: 1, x: 0, y: 0 };
-    applyViewerZoom();
-    saveView();
+    return layoutControlsOwner.resetViewerZoom();
   }
   function viewerZoomAt(scale, element, clientX, clientY) {
-    const z = viewerZoom[review.mode],
-      b = viewerImageBox(element);
-    if (!b.width || !b.height) return;
-    scale = clamp(scale, 1, 6);
-    z.x += ((z.scale - scale) * ((clientX - b.cx) / b.width - z.x)) / z.scale;
-    z.y += ((z.scale - scale) * ((clientY - b.cy) / b.height - z.y)) / z.scale;
-    z.scale = scale;
-    applyViewerZoom();
-    saveView();
+    return layoutControlsOwner.viewerZoomAt(scale, element, clientX, clientY);
   }
   function viewerHit(e) {
-    if (e.target.closest('button') || !viewerData() || pointerBusy()) return null;
-    const frame = e.target.closest('.trim-frame');
-    return frame
-      ? frame.querySelector('video:not([hidden]),img:not([hidden])')
-      : viewer.shownVideo || (!$('still').hidden ? $('still') : null);
+    return layoutControlsOwner.viewerHit(e);
   }
   $('previewQuality').onchange = e => setPreviewQuality(e.target.value);
   // A failed preparation is retryable in place instead of for the rest of the session.
@@ -4019,11 +2654,7 @@ async function startEditor(isFailed) {
     applyViewerZoom();
   });
   function finishViewerPan(cancel = false) {
-    if (!viewerPan) return;
-    if (cancel) viewerZoom[viewerPan.mode] = viewerPan.original;
-    releaseViewerPan();
-    applyViewerZoom();
-    saveView();
+    return layoutControlsOwner.finishViewerPan(cancel);
   }
   for (const event of ['pointerup', 'lostpointercapture'])
     $('viewerStage').addEventListener(event, () => finishViewerPan());
@@ -4037,28 +2668,10 @@ async function startEditor(isFailed) {
   const viewerObserver = new ResizeObserver(() => applyViewerZoom());
   viewerObserver.observe($('viewerStage'));
   function setTimelineZoom(value, anchor = state.frame, pixel = null) {
-    if (pointerBusy()) return;
-    const sc = $('timelineScroll');
-    if (pixel === null) {
-      const x = anchor * ppf - sc.scrollLeft;
-      pixel = x >= 0 && x <= sc.clientWidth ? x : sc.clientWidth / 2;
-      if (x < 0 || x > sc.clientWidth) anchor = (sc.scrollLeft + pixel) / ppf;
-    }
-    state.zoom = Math.round(clamp(value, 100, 1600));
-    $('zoom').value = state.zoom;
-    renderTimeline();
-    sc.scrollLeft = anchor * ppf - pixel;
-    updateViewer();
-    saveView();
+    return layoutControlsOwner.setTimelineZoom(value, anchor, pixel);
   }
   function fitTimeline() {
-    if (drag) return;
-    state.zoom = 100;
-    $('zoom').value = 100;
-    $('timelineScroll').scrollLeft = 0;
-    renderTimeline();
-    updateViewer();
-    saveView();
+    return layoutControlsOwner.fitTimeline();
   }
   $('zoomOut').onclick = () => setTimelineZoom(state.zoom / 1.25);
   $('zoomIn').onclick = () => setTimelineZoom(state.zoom * 1.25);
@@ -4128,13 +2741,7 @@ async function startEditor(isFailed) {
   inspectorHeightButton.setAttribute('aria-label', 'Full height inspector');
   $('inspector').querySelector('.inspector-head').insertBefore(inspectorHeightButton, $('openWorkflow'));
   function applyInspectorHeight() {
-    const panel = $('inspector');
-    (inspectorFull ? $('editor') : $('workbench')).append(panel);
-    $('editor').classList.toggle('inspector-full', inspectorFull);
-    inspectorHeightButton.setAttribute('aria-pressed', inspectorFull);
-    inspectorHeightButton.title = inspectorFull
-      ? 'Switch inspector to viewer height'
-      : 'Extend inspector beside viewer and timeline';
+    return layoutControlsOwner.applyInspectorHeight();
   }
   applyInspectorHeight();
   inspectorHeightButton.onclick = () => {
@@ -4155,55 +2762,16 @@ async function startEditor(isFailed) {
     } catch (error) {}
   }
   function panelBounds(name) {
-    const available = $('editor').clientWidth - 20;
-    const width = available,
-      drawer = name === 'media' ? innerWidth <= 1100 : innerWidth <= 760;
-    let max;
-    if (drawer) max = width - 24;
-    else {
-      const other = $(name === 'media' ? 'inspector' : 'mediaPanel'),
-        takes = $('takes').getBoundingClientRect(),
-        occupied =
-          getComputedStyle(other).display !== 'none' && getComputedStyle(other).position !== 'absolute'
-            ? other.getBoundingClientRect().width
-            : 0,
-        rail = takes.width && Math.abs(takes.top - $('viewer').getBoundingClientRect().top) < 2 ? takes.width : 0;
-      max = width - 320 - occupied - rail;
-    }
-    max = Math.max(0, max);
-    return { min: Math.min(name === 'media' ? 160 : 240, max), max };
+    return layoutControlsOwner.panelBounds(name);
   }
   function applyPanelWidths() {
-    for (const name of ['media', 'inspector']) {
-      const bounds = panelBounds(name),
-        value = panelWidths[name],
-        sized = value !== null,
-        handle = $(name + 'Resize'),
-        panel = $(name === 'media' ? 'mediaPanel' : 'inspector');
-      if (name === 'inspector') $('workbench').classList.toggle('inspector-sized', sized);
-      if (sized) $('editor').style.setProperty('--' + name + '-width', clamp(value, bounds.min, bounds.max) + 'px');
-      else $('editor').style.removeProperty('--' + name + '-width');
-      handle.setAttribute('aria-valuemin', Math.round(bounds.min));
-      handle.setAttribute('aria-valuemax', Math.round(bounds.max));
-      handle.setAttribute('aria-valuenow', Math.round(panel.getBoundingClientRect().width));
-    }
+    return layoutControlsOwner.applyPanelWidths();
   }
   function storePanelWidth(name) {
-    try {
-      if (panelWidths[name] === null) sessionStorage.removeItem(panelKey(name));
-      else sessionStorage.setItem(panelKey(name), panelWidths[name]);
-    } catch (error) {}
+    return layoutControlsOwner.storePanelWidth(name);
   }
   function endPanelResize(cancel = false) {
-    if (!panelDrag) return;
-    const done = panelDrag;
-    panelDrag = null;
-    if (cancel) {
-      panelWidths[done.name] = done.initial;
-      applyPanelWidths();
-    }
-    $('editor').classList.remove('resizing-panels');
-    storePanelWidth(done.name);
+    return layoutControlsOwner.endPanelResize(cancel);
   }
   for (const name of Object.keys(panelWidths)) {
     const handle = $(name + 'Resize'),
@@ -4283,643 +2851,108 @@ async function startEditor(isFailed) {
   const audioSettings = T.audioSettings;
   const trackAudible = track => T.trackAudible(state, track);
   const audioEnvelope = T.audioEnvelope;
-  function audioWave(c, m) {
-    const length = c.out - c.in,
-      a = audioSettings(c),
-      level = clamp((a.gainDb + 60) / 66, 0, 1);
-    return (
-      (m.wave
-        ? '<img src="' +
-          esc(url(m.wave)) +
-          '" alt="" style="width:' +
-          (m.frames / length) * 100 +
-          '%;left:' +
-          (-c.in / length) * 100 +
-          '%">'
-        : '') +
-      '<span class="audio-gain-line" style="top:' +
-      (100 - level * 75) +
-      '%"></span><svg class="audio-fade" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M0 100L' +
-      (a.fadeIn / length) * 100 +
-      ' 0M' +
-      (100 - (a.fadeOut / length) * 100) +
-      ' 0L100 100" stroke="#a7e4be" stroke-width="1" vector-effect="non-scaling-stroke" fill="none"/></svg><div class="audio-fade-handle in" data-fade="in" style="left:' +
-      (a.fadeIn / length) * 100 +
-      '%" title="Drag fade in"></div><div class="audio-fade-handle out" data-fade="out" style="right:' +
-      (a.fadeOut / length) * 100 +
-      '%" title="Drag fade out"></div>'
-    );
-  }
+
   function renderAudioTimeline(rows, refresh = true) {
-    const independent = track =>
-      (state.audioClips || [])
-        .filter(c => T.audioTrack(c) === track && (track !== 'source' || !T.sourceTrackHidden(state, T.sourceLane(c))))
-        .map(
-          c =>
-            '<div class="audio-clip music-clip' +
-            (!T.enabled(c) || audioSettings(c).muted || !trackAudible(track) ? ' muted' : '') +
-            '" data-audio="' +
-            c.id +
-            '" style="top:calc(' +
-            (track === 'source' ? 'var(--source-top-' + T.sourceLane(c) + ')' : '0px') +
-            ' + 5px);height:calc(' +
-            (track === 'source' ? 'var(--source-height-' + T.sourceLane(c) + ')' : 'var(--music-height)') +
-            ' - 10px);left:' +
-            c.start * ppf +
-            'px;width:' +
-            (c.out - c.in) * ppf +
-            'px" tabindex="0" role="button" aria-pressed="false" aria-label="' +
-            esc(c.name) +
-            ' independent audio clip" title="Independent audio: drag to move; drag edges to trim">' +
-            audioWave(c, c.media) +
-            '<span class="audio-name"><span class="audio-title">' +
-            esc(c.name) +
-            '</span>' +
-            clipAttention(c, false) +
-            '</span><div class="trim-handle in" data-audio-trim="in"></div><div class="trim-handle out" data-audio-trim="out"></div></div>',
-        )
-        .join('');
-    draw(
-      'audioLane',
-      Array.from({ length: T.videoTracks(state) }, (_, i) => {
-        const track = T.videoTracks(state) - i;
-        return (
-          '<div class="audio-track-lane" style="top:var(--source-top-' +
-          track +
-          ');height:var(--source-height-' +
-          track +
-          ')"></div>'
-        );
-      }).join('') +
-        rows
-          .filter(r => !r.clip.audioDetached && !T.sourceTrackHidden(state, T.videoTrack(r.clip)))
-          .map(({ clip: c, start }) => {
-            const m = take(c).media,
-              muted = !T.videoEnabled(state, c) || audioSettings(c).muted || !trackAudible('source');
-            return (
-              '<div class="audio-clip ' +
-              (!m.audio ? 'no-audio' : '') +
-              (muted ? ' muted' : '') +
-              '" data-linked-audio="' +
-              c.id +
-              '" style="top:calc(var(--source-top-' +
-              T.videoTrack(c) +
-              ') + 5px);height:calc(var(--source-height-' +
-              T.videoTrack(c) +
-              ') - 10px);left:' +
-              start * ppf +
-              'px;width:' +
-              (c.out - c.in) * ppf +
-              'px" title="' +
-              esc(c.name) +
-              ' - audio linked to video">' +
-              (m.audio
-                ? audioWave(c, m) + '<span class="audio-name">' + svg('link') + ' ' + esc(c.name) + '</span>'
-                : '<span class="no-audio-label">No audio</span>') +
-              '</div>'
-            );
-          })
-          .join('') +
-        independent('source'),
-    );
-    $('audioLane')
-      .querySelectorAll('[data-linked-audio]')
-      .forEach(n => {
-        if (n.classList.contains('no-audio')) return;
-        if (!n.querySelector('[data-trim]'))
-          n.insertAdjacentHTML(
-            'beforeend',
-            '<div class="trim-handle in" data-trim="in"></div><div class="trim-handle out" data-trim="out"></div>',
-          );
-        n.onpointerdown = e =>
-          e.target.closest('[data-fade]')
-            ? startFadeDrag(e, n.dataset.linkedAudio, false)
-            : startClipDrag(e, n.dataset.linkedAudio);
-      });
-    draw(
-      'musicLane',
-      independent('music') ||
-        '<button class="music-empty" id="musicEmpty">+ Add audio - or drop an audio or video file here</button>',
-    );
-    for (const lane of ['audioLane', 'musicLane'])
-      $(lane)
-        .querySelectorAll('[data-audio]')
-        .forEach(n => {
-          n.onpointerdown = e =>
-            e.target.closest('[data-fade]')
-              ? startFadeDrag(e, n.dataset.audio, true)
-              : startAudioDrag(e, n.dataset.audio);
-          n.onkeydown = e => {
-            if (e.key === 'Enter') {
-              selectAudio(n.dataset.audio, e);
-              e.preventDefault();
-            }
-          };
-        });
-    if ($('musicEmpty')) $('musicEmpty').onclick = () => $('audioFiles').click();
-    syncTimelineSelection();
-    if (refresh) refreshGestureHints();
+    return audioEditorOwner.renderAudioTimeline(rows, refresh);
   }
   function renderAudioInspector() {
-    const c = selectedAudio() || selected(),
-      bed = !!selectedAudio();
-    $('clipName').value = c?.name || 'Audio';
-    $('generateLabel').textContent = selected() ? 'Generate ' + selected().count + ' takes' : 'Generate takes';
-    if (!c) {
-      draw(
-        'inspectorContent',
-        '<p class="audio-note">Import music or voiceover to A2. Audio follows the sequence clock, independently of the video edit.</p>',
-      );
-      return;
-    }
-    if (!bed && c.audioDetached) {
-      draw(
-        'inspectorContent',
-        '<div class="group-label">Video only</div><p class="audio-note">Audio has been unlinked. Select its separate clip on A1 to adjust it.</p>',
-      );
-      return;
-    }
-    const m = bed ? c.media : take(c).media,
-      a = audioSettings(c),
-      max = (c.out - c.in) / fps / 2;
-    const html =
-      '<div class="group-label">' +
-      (bed ? (T.audioTrack(c) === 'source' ? 'Independent clip audio' : 'Soundtrack') : 'Linked clip audio') +
-      '<span>' +
-      svg(bed ? 'audio' : 'link') +
-      '</span></div><p class="audio-summary">' +
-      seconds(c.out - c.in) +
-      ' · ' +
-      (bed ? 'at ' + tc(c.start) : takeName(take(c))) +
-      '</p>' +
-      (m.audio
-        ? '<div class="audio-controls"><div><label class="field"><span class="audio-level-head">Level <input id="audioGainNumber" type="number" min="-60" max="6" step="1" value="' +
-          a.gainDb +
-          '" aria-label="Audio level in decibels"></span><input id="audioGain" type="range" min="-60" max="6" step="1" value="' +
-          a.gainDb +
-          '" aria-label="Audio level"><span class="small">dB · double-click slider to reset</span></label><button class="outline' +
-          (a.muted ? ' active' : '') +
-          '" id="clipAudioMute" aria-pressed="' +
-          a.muted +
-          '">' +
-          svg(a.muted ? 'mute' : 'volume') +
-          (a.muted ? 'Clip muted' : 'Mute this clip') +
-          '</button></div><div class="two-fields"><label class="field"><span>Fade in (s)</span><input id="audioFadeIn" type="number" min="0" max="' +
-          max +
-          '" step=".1" value="' +
-          (a.fadeIn / fps).toFixed(2) +
-          '"></label><label class="field"><span>Fade out (s)</span><input id="audioFadeOut" type="number" min="0" max="' +
-          max +
-          '" step=".1" value="' +
-          (a.fadeOut / fps).toFixed(2) +
-          '"></label></div><div><p class="audio-note">' +
-          (bed
-            ? 'Audio stays at its timeline position when the video edit ripples. Trim or move this clip directly on its audio track.'
-            : "This is the chosen take's audio. Video trims, rolls, and slips keep it in sync. Unlink audio and video to edit them independently.") +
-          '</p><p class="audio-note">Track M/S buttons change the saved mix. Monitor mute only changes what you hear.</p></div></div>'
-        : '<p class="audio-note">This take has no audio. Import music or voiceover to the soundtrack lane.</p><button class="outline" id="audioAdd">' +
-          svg('import') +
-          ' Import audio</button>');
-    if (!draw('inspectorContent', html)) return;
-    if ($('audioAdd')) $('audioAdd').onclick = () => $('audioFiles').click();
-    if (!m.audio) return;
-    const commit = (key, value, label) => {
-      const clip = selectedAudio() || selected(),
-        current = audioSettings(clip);
-      if (current[key] === value) return;
-      edits.apply(
-        label,
-        () => {
-          clip.audio = { ...current, [key]: value };
-        },
-        'audio',
-      );
-    };
-    const gain = $('audioGain');
-    gain.onpointerup = () => $('editor').focus({ preventScroll: true });
-    let before = null;
-    gain.oninput = () => {
-      const clip = selectedAudio() || selected();
-      if (!clip) return;
-      if (!before) before = copy(state);
-      clip.audio = { ...audioSettings(clip), gainDb: Number(gain.value) };
-      $('audioGainNumber').value = gain.value;
-      syncAudio();
-    };
-    gain.onchange = () => {
-      const clip = selectedAudio() || selected(),
-        original = clip && [...(before?.audioClips || []), ...(before?.clips || [])].find(x => x.id === clip.id);
-      if (original && audioSettings(original).gainDb !== Number(gain.value))
-        history.record(before, 'Adjust ' + clip.name + ' audio level');
-      before = null;
-      renderAudioTimeline(layout());
-      save();
-      buttons();
-    };
-    gain.ondblclick = () => {
-      commit('gainDb', 0, 'Reset audio level');
-      renderInspector();
-    };
-    $('audioGainNumber').onchange = e => {
-      const value = Number(e.target.value);
-      if (!Number.isFinite(value)) {
-        renderInspector();
-        return;
-      }
-      commit('gainDb', clamp(value, -60, 6), 'Adjust audio level');
-      renderInspector();
-    };
-    for (const [id, key] of [
-      ['audioFadeIn', 'fadeIn'],
-      ['audioFadeOut', 'fadeOut'],
-    ])
-      $(id).onchange = e => {
-        const value = Number(e.target.value);
-        if (!Number.isFinite(value)) {
-          renderInspector();
-          return;
-        }
-        commit(
-          key,
-          clamp(Math.round(value * fps), 0, Math.floor((c.out - c.in) / 2)),
-          'Adjust ' + (key === 'fadeIn' ? 'fade in' : 'fade out'),
-        );
-        renderInspector();
-      };
-    $('clipAudioMute').onclick = () => {
-      const clip = selectedAudio() || selected();
-      if (!clip) return;
-      commit('muted', !audioSettings(clip).muted, (audioSettings(clip).muted ? 'Unmute ' : 'Mute ') + clip.name);
-      renderInspector();
-    };
+    return audioEditorOwner.renderAudioInspector();
   }
   function selectAudio(id, modifiers = {}, preserve = false) {
-    hideTrimPreview();
-    selectedCut = null;
-    nudgeGroup = null;
-    pause();
-    editView();
-    selectTimelineItem(id, modifiers, preserve);
-    const c = selectedAudio();
-    if (c) {
-      review.rememberMedia(c.media, c.in);
-      inspectorTab = 'audio';
-    }
-    renderInspector();
-    renderTimeline();
-    buttons();
-    $('editor').focus({ preventScroll: true });
-    saveView();
+    return clipSelectionOwner.selectAudio(id, modifiers, preserve);
   }
   function addAudioClip(m, start = Math.round(state.frame), track = 'music', lane = activeVideoTrack) {
-    if (!m || !m.audio) {
-      toast('This file has no audio stream');
-      return;
-    }
-    pause();
-    edits.apply('Add ' + m.name + ' audio', () => {
-      const c = T.addAudioClip(state, m, start, 'audio-' + crypto.randomUUID(), { track, fullLength: true, lane });
-      state.selectedAudio = c.id;
-      review.rememberMedia(c.media, c.in);
-      inspectorTab = 'audio';
-      editView();
-    });
-    toast('Audio added to ' + (track === 'source' ? 'A1' : 'A2') + ' · unmute the monitor to listen');
+    return audioEditorOwner.addAudioClip(m, start, track, lane);
   }
   function splitAudio() {
-    const c = selectedAudio(),
-      offset = Math.round(state.frame - c.start);
-    if (!c || offset < 6 || offset > c.out - c.in - 6) {
-      toast('Place the playhead inside the audio clip, away from its edges');
-      return;
-    }
-    edits.apply('Split audio', () => {
-      pause();
-      const d = T.splitAudio(state, state.frame, 'audio-' + crypto.randomUUID(), c.id);
-      state.selectedAudio = d.id;
-    });
+    return audioEditorOwner.splitAudio();
   }
+  const trimPreviewOwner = createTrimPreview({
+    $,
+    copy,
+    getFps: () => fps,
+    getTrimPreviewTimer: () => trimPreviewTimer,
+    writeTrimPreviewTimer: value => (trimPreviewTimer = value),
+    held,
+    getHoverTarget: () => hoverTarget,
+    getSelectedCut: () => selectedCut,
+    getNudgeGroup: () => nudgeGroup,
+    writeNudgeGroup: value => (nudgeGroup = value),
+    getTrimSingle: () => trimSingle,
+    writeTrimSingle: value => (trimSingle = value),
+    getState: () => state,
+    getPpf: () => ppf,
+    getDrag: () => drag,
+    history,
+    redoStack,
+    selected,
+    trackVariable,
+    take,
+    gapAfter,
+    editActions,
+    rowFor,
+    tc,
+    save,
+    toast,
+    setStatus,
+    buttons,
+    editView,
+    renderTimeline,
+    updateViewer,
+    previewFile,
+    videoTiming,
+    videoSource,
+    seekVideo,
+    pause,
+    frameStep,
+    applyViewerZoom,
+    selectedAudio,
+    getClipGesture: () => clipGesture,
+    getCursorCache: () => cursorCache,
+    getAudioNeighbor: () => audioNeighbor,
+    getGestureState: () => gestureState,
+    writeGestureState: value => (gestureState = value),
+    getGestureHintsStale: () => gestureHintsStale,
+    writeGestureHintsStale: value => (gestureHintsStale = value),
+    getLastTrimEdit: () => lastTrimEdit,
+    writeLastTrimEdit: value => (lastTrimEdit = value),
+  });
   function hideTrimPreview(keepViewer = false) {
-    if (!keepViewer) lastTrimEdit = null;
-    if (!keepViewer) $('trimViewButton').hidden = true;
-    clearTimeout(trimPreviewTimer);
-    $('trimPreview').hidden = true;
-    if (!keepViewer) $('editor').classList.remove('trim-active');
-    for (let i = 0; i < 4; i++) $('trimVideo' + i).pause();
+    return trimPreviewOwner.hideTrimPreview(keepViewer);
   }
-  function setTrimFrame(index, media, frame, label) {
-    const v = $('trimVideo' + index),
-      img = $('trimImage' + index),
-      empty = $('trimEmpty' + index);
-    $('trimLabel' + index).textContent = label;
-    $('trimTime' + index).textContent = media ? tc(frame) : '';
-    empty.hidden = !!media;
-    img.hidden = true;
-    v.hidden = media?.kind !== 'video';
-    if (!media) {
-      v.pause();
-      return;
-    }
-    if (media.kind === 'video') {
-      const file = previewFile(media);
-      if (!file) {
-        v.pause();
-        v.hidden = true;
-        return;
-      }
-      if (v.dataset.file !== file) {
-        v.dataset.file = file;
-        videoSource(v, media);
-        v.muted = true;
-        v.onloadedmetadata = () => {
-          seekVideo(v, v.seekTarget || 0);
-          applyViewerZoom();
-        };
-        v.onseeked = () => {
-          if (v.seekPending) {
-            v.seekPending = false;
-            seekVideo(v, v.seekTarget);
-          }
-        };
-      }
-      videoTiming(v, media);
-      seekVideo(v, frame / fps);
-    } else {
-      const file = previewFile(media);
-      img.hidden = !file;
-      if (file) img.src = file;
-    }
-  }
+
   function updateTrimPreview(d, delta) {
-    lastTrimEdit = { d, delta };
-    $('trimViewButton').hidden = false;
-    $('trimViewButton').textContent = trimSingle ? 'Compare' : 'Single';
-    $('editor').classList.add('trim-active');
-    if (trimSingle) {
-      hideTrimPreview(true);
-      return;
-    }
-    const index = state.clips.findIndex(c => c.id === d.id),
-      c = state.clips[index];
-    if (!c) {
-      hideTrimPreview();
-      return;
-    }
-    const clips = T.trackClips(state, T.videoTrack(c)),
-      laneIndex = clips.indexOf(c),
-      prev = laneIndex > 0 && !c.gapBefore ? clips[laneIndex - 1] : null,
-      next = laneIndex + 1 < clips.length && !gapAfter(index) ? clips[laneIndex + 1] : null,
-      four = ['slip', 'slide'].includes(d.kind);
-    $('trimPreview').hidden = false;
-    $('trimGrid').classList.toggle('two', !four);
-    $('trimPreviewTitle').textContent = editActions[d.mode].name + ' · ' + c.name;
-    $('trimDelta').textContent = (delta >= 0 ? '+' : '') + delta + 'f';
-    for (let i = 0; i < 4; i++) $('trimFrame' + i).hidden = !four && i > 1;
-    if (four) {
-      setTrimFrame(0, take(c).media, c.in, 'In · ' + c.name);
-      setTrimFrame(1, take(c).media, c.out - 1, 'Out · ' + c.name);
-      setTrimFrame(
-        2,
-        prev && take(prev).media,
-        prev ? prev.out - 1 : 0,
-        prev ? 'Previous · ' + prev.name : 'Previous · Gap',
-      );
-      setTrimFrame(3, next && take(next).media, next ? next.in : 0, next ? 'Next · ' + next.name : 'Next · Gap');
-    } else if (d.kind === 'in') {
-      setTrimFrame(
-        0,
-        prev && take(prev).media,
-        prev ? prev.out - 1 : 0,
-        prev ? 'Outgoing · ' + prev.name : 'Outgoing · Gap',
-      );
-      setTrimFrame(1, take(c).media, c.in, 'Incoming · ' + c.name);
-    } else {
-      setTrimFrame(0, take(c).media, c.out - 1, 'Outgoing · ' + c.name);
-      setTrimFrame(
-        1,
-        next && take(next).media,
-        next ? next.in : 0,
-        next ? 'Incoming · ' + next.name : 'Incoming · Gap',
-      );
-    }
-    applyViewerZoom();
+    return trimPreviewOwner.updateTrimPreview(d, delta);
   }
   function nudgeEdit(frames) {
-    const audio = selectedAudio(),
-      c = audio || selected();
-    if (!c || (!held.s && !held.d && !selectedCut)) {
-      nudgeGroup = null;
-      frameStep(frames);
-      return;
-    }
-    const target = {
-        id: c.id,
-        audio: !!audio,
-        edge: !held.s && !held.d ? selectedCut?.edge : null,
-        shared: !!selectedCut,
-      },
-      a = clipGesture(target, false);
-    if (a.blocked) {
-      toast(a.blocked);
-      return;
-    }
-    pause();
-    editView();
-    const d = T.beginEdit(state, {
-        id: c.id,
-        audio: !!audio,
-        kind: a.kind,
-        mode: a.mode,
-        edge: target.edge,
-        peer: audio && target.edge ? audioNeighbor(c, target.edge) : null,
-        snapEnabled: state.snap,
-        snapTolerance: T.SNAP_PIXELS / ppf,
-      }),
-      before = d.before;
-    if (audio) {
-      d.operation = a.mode === 'roll' ? 'roll' : a.kind;
-      d.edge = target.edge;
-      d.peer = target.edge && copy(audioNeighbor(c, target.edge));
-    }
-    const delta = T.applyEdit(state, d, frames);
-    if (!delta) {
-      toast('Source limit reached');
-      return;
-    }
-    const key = c.id + ':' + a.mode + ':' + a.kind;
-    if (nudgeGroup !== key) {
-      history.record(before, editActions[a.mode].name + ' ' + c.name);
-      nudgeGroup = key;
-    } else redoStack.length = 0;
-    renderTimeline();
-    updateViewer(true);
-    if (!audio) {
-      updateTrimPreview(d, delta);
-      clearTimeout(trimPreviewTimer);
-      trimPreviewTimer = setTimeout(hideTrimPreview, 1500);
-    }
-    save();
-    buttons();
-    setStatus(editActions[a.mode].name + ' ' + (delta >= 0 ? '+' : '') + delta + 'f');
+    return trimPreviewOwner.nudgeEdit(frames);
   }
   // Gestures are chosen at the drag threshold; held keys never become saved tools.
   const clipGesture = (target, shift = held.shift, alt = held.alt) =>
     T.resolveGesture(state, target, { ...held, shift, alt });
   const cursorCache = {};
   function gestureCursor(a) {
-    if (a.blocked) return 'not-allowed';
-    if (a.kind === 'move') return a.mode === 'copy' ? 'copy' : 'grab';
-    const key = a.mode + ':' + a.kind;
-    if (cursorCache[key]) return cursorCache[key];
-    const shape =
-      a.mode === 'roll'
-        ? 'M10 5v14M14 5v14M6 9l-3 3 3 3M18 9l3 3-3 3M3 12h18'
-        : a.mode === 'slip'
-          ? 'M4 5v14M20 5v14M8 9l-3 3 3 3M16 9l3 3-3 3M5 12h14'
-          : a.mode === 'slide'
-            ? 'M8 5h8v14H8zM5 9l-3 3 3 3M19 9l3 3-3 3'
-            : a.kind === 'in'
-              ? 'M12 4H8v16h4M16 9l-3 3 3 3'
-              : 'M12 4h4v16h-4M8 9l3 3-3 3';
-    const ripple = a.mode === 'ripple' ? 'M3 3h3M3 21h3M18 3h3M18 21h3' : '';
-    const body = '<path d="' + shape + ripple + '"/>';
-    const svg =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><g fill="none" stroke="black" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">' +
-      body +
-      '</g><g fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-      body +
-      '</g></svg>';
-    return (cursorCache[key] = 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '") 12 12, ew-resize');
+    return trimPreviewOwner.gestureCursor(a);
   }
   const audioNeighbor = (c, edge) => T.audioNeighbor(state, c, edge);
   function hoverIdentity(node, edge) {
-    const audio = !!node.dataset.audio,
-      id = node.dataset.audio || node.dataset.clip || node.dataset.linkedAudio,
-      c = audio ? (state.audioClips || []).find(c => c.id === id) : state.clips.find(c => c.id === id),
-      index = state.clips.indexOf(c);
-    return {
-      id,
-      audio,
-      edge,
-      shared: !!c && !!edge && (audio ? !!audioNeighbor(c, edge) : T.isSharedEdge(state, index, edge)),
-    };
+    return trimPreviewOwner.hoverIdentity(node, edge);
   }
-  function gestureLabel(target, a) {
-    return keyText(gestureText(target, a));
-  }
-  function gestureText(target, a) {
-    if (target.edge && !target.audio && !a.blocked)
-      return a.mode === 'roll'
-        ? 'Roll shared cut · Both sources need spare frames'
-        : a.mode === 'ripple'
-          ? 'Ripple trim · Following clips move'
-          : 'Drag edge to trim · Shift ripple · Alt roll shared cut';
-    return a.mode === 'copy'
-      ? 'Alt-drag to duplicate'
-      : a.blocked || a.mode === 'move'
-        ? a.blocked || 'Drag to move · Alt-drag to duplicate · Hold S to slip'
-        : a.mode === 'roll'
-          ? 'Drag to roll cut · Shift to ripple'
-          : a.mode === 'ripple'
-            ? 'Ripple ' + (a.kind === 'in' ? 'start' : 'end') + ' · video stays fixed'
-            : a.mode === 'trim'
-              ? 'Trim ' +
-                (a.kind === 'in' ? 'start' : 'end') +
-                (target.audio ? ' · video stays fixed' : ' · Shift to ripple')
-              : a.mode === 'slip'
-                ? 'Slip source · , / . fine-tune'
-                : 'Slide between neighbors · , / . fine-tune';
-  }
+
   let gestureState = null,
     gestureHintsStale = false;
   function refreshGestureHints(all = false) {
-    gestureHintsStale = false;
-    const key = JSON.stringify([held, selectedCut]);
-    if (key !== gestureState) {
-      gestureState = key;
-      all = true;
-    }
-    for (const node of $('timelineContent').querySelectorAll('[data-clip],[data-audio],[data-linked-audio]')) {
-      if (
-        !all &&
-        node.dataset.gesture &&
-        node.dataset.clip !== hoverTarget?.id &&
-        node.dataset.audio !== hoverTarget?.id &&
-        node.dataset.linkedAudio !== hoverTarget?.id
-      )
-        continue;
-      const t = hoverIdentity(node, null),
-        a = clipGesture(t);
-      node.dataset.gesture = a.mode;
-      node.style.cursor = gestureCursor(a);
-      node.title = gestureLabel(t, a);
-      for (const h of node.querySelectorAll('[data-trim],[data-audio-trim]')) {
-        const edge = h.dataset.trim || h.dataset.audioTrim,
-          target = hoverIdentity(node, edge),
-          action = clipGesture(target);
-        h.dataset.gesture = action.mode;
-        h.style.cursor = gestureCursor(action);
-        h.style.width = Math.min(target.audio ? (target.shared ? 6 : 8) : 12, parseFloat(node.style.width) / 3) + 'px';
-        h.title = gestureLabel(target, action);
-        h.classList.toggle('shared', target.shared);
-        const cut = selectedCut;
-        let selected = false;
-        if (cut && cut.audio === target.audio) {
-          if (cut.id === target.id) selected = cut.edge === target.edge;
-          else if (target.audio) {
-            const c = (state.audioClips || []).find(c => c.id === cut.id);
-            selected = audioNeighbor(c, cut.edge)?.id === target.id && cut.edge !== target.edge;
-          } else {
-            const i = state.clips.findIndex(c => c.id === cut.id);
-            selected = state.clips[i + (cut.edge === 'in' ? -1 : 1)]?.id === target.id && cut.edge !== target.edge;
-          }
-        }
-        h.classList.toggle('cut-selected', selected);
-      }
-    }
-    const a = hoverTarget && clipGesture(hoverTarget);
-    $('gestureHint').textContent = a ? gestureLabel(hoverTarget, a) : 'Drag clips or edges';
-    $('timelineHint').textContent = keyText(
-      'Alt-drag to duplicate · Drag edge to trim · Shift ripple · Alt roll shared cut · Hold S slip · Hold D slide · N snap',
-    );
-    $('remove').title = 'Delete clip (Delete); Shift+Delete ripple deletes';
-    document.querySelectorAll('.hover-source-handles').forEach(n => n.remove());
-    if (!drag && hoverTarget && !hoverTarget.edge && a?.mode === 'slip' && !a.blocked) {
-      const t = hoverTarget,
-        c = t.audio ? (state.audioClips || []).find(c => c.id === t.id) : state.clips.find(c => c.id === t.id),
-        start = t.audio ? c.start : rowFor(c.id)?.start;
-      if (c && start !== undefined) {
-        const outline = document.createElement('div');
-        outline.className = 'source-handles hover-source-handles';
-        outline.style.left = (start - c.in) * ppf + 'px';
-        outline.style.width = (t.audio ? c.media : take(c).media).frames * ppf + 'px';
-        const lane = t.audio ? T.sourceLane(c) : T.videoTrack(c),
-          kind = t.audio ? 'source' : 'video',
-          music = t.audio && T.audioTrack(c) === 'music';
-        outline.style.top = music ? '0px' : 'var(' + trackVariable(kind, lane, 'top') + ')';
-        outline.style.height =
-          'calc(' + (music ? 'var(--music-height)' : 'var(' + trackVariable(kind, lane, 'height') + ')') + ' - 2px)';
-        $(t.audio ? (T.audioTrack(c) === 'source' ? 'audioLane' : 'musicLane') : 'clipLane').append(outline);
-      }
-    }
+    return trimPreviewOwner.refreshGestureHints(all);
   }
   let lastTrimEdit = null;
   function toggleTrimView() {
-    trimSingle = !trimSingle;
-    if (lastTrimEdit) updateTrimPreview(lastTrimEdit.d, lastTrimEdit.delta);
-    save();
+    return trimPreviewOwner.toggleTrimView();
   }
   function editingKey(e) {
-    const key = e.key.toLowerCase();
-    return e.code === 'Comma' || key === '<' ? ',' : e.code === 'Period' || key === '>' ? '.' : key;
+    return trimPreviewOwner.editingKey(e);
   }
   function clearHeld() {
-    held.alt = false;
-    held.s = false;
-    held.d = false;
-    held.shift = false;
-    nudgeGroup = null;
-    refreshGestureHints(true);
+    return trimPreviewOwner.clearHeld();
   }
   $('trimViewButton').onclick = toggleTrimView;
   $('editor').addEventListener('keyup', e => {
@@ -4954,18 +2987,10 @@ async function startEditor(isFailed) {
 
   const timelineHeightKey = VIEW_KEY + ':timeline-height:full';
   function timelineBounds() {
-    const min = innerHeight < 820 ? 180 : 236;
-    return { min, max: Math.max(min, Math.min(440, innerHeight - 330)) };
+    return layoutControlsOwner.timelineBounds();
   }
   function setTimelineHeight(height) {
-    const bounds = timelineBounds();
-    $('editor').style.setProperty('--timeline-height', clamp(height, bounds.min, bounds.max) + 'px');
-    $('timelineResize').setAttribute('aria-valuemin', bounds.min);
-    $('timelineResize').setAttribute('aria-valuemax', bounds.max);
-    $('timelineResize').setAttribute(
-      'aria-valuenow',
-      Math.round(document.querySelector('.timeline-shell').getBoundingClientRect().height),
-    );
+    return layoutControlsOwner.setTimelineHeight(height);
   }
   try {
     const height = Number(sessionStorage.getItem(timelineHeightKey));
@@ -4987,17 +3012,7 @@ async function startEditor(isFailed) {
     if (timelineDrag) setTimelineHeight(timelineDrag.height + timelineDrag.y - e.clientY);
   };
   function endTimelineResize(cancel = false) {
-    if (!timelineDrag) return;
-    if (cancel) {
-      if (timelineDrag.initial) $('editor').style.setProperty('--timeline-height', timelineDrag.initial);
-      else $('editor').style.removeProperty('--timeline-height');
-    } else
-      sessionStorage.setItem(
-        timelineHeightKey,
-        document.querySelector('.timeline-shell').getBoundingClientRect().height,
-      );
-    timelineDrag = null;
-    $('editor').classList.remove('resizing-timeline');
+    return layoutControlsOwner.endTimelineResize(cancel);
   }
   $('timelineResize').onpointerup = () => endTimelineResize();
   $('timelineResize').onpointercancel = () => endTimelineResize(true);
@@ -5027,16 +3042,7 @@ async function startEditor(isFailed) {
   };
   interruptions.on(() => endTimelineResize(true));
   function endTrackResize(cancel = false) {
-    if (!trackResize) return;
-    const done = trackResize;
-    trackResize = null;
-    if (cancel) {
-      if (done.initial === undefined) delete trackHeights[done.key];
-      else trackHeights[done.key] = done.initial;
-      applyTrackHeights();
-    } else storeTrackHeights();
-    $('editor').classList.remove('resizing-track');
-    if (done.handle.hasPointerCapture(done.pointerId)) done.handle.releasePointerCapture(done.pointerId);
+    return layoutControlsOwner.endTrackResize(cancel);
   }
   $('trackHeaders').addEventListener('pointerdown', e => {
     const handle = e.target.closest('[data-track-resize]');
@@ -5138,29 +3144,34 @@ async function startEditor(isFailed) {
     bridgeClient = bridge ? B.createClient(bridge) : null;
   let bridgeReady = null,
     stopWorkflowApply = null;
+  const comfyConnectionOwner = createComfyConnection({
+    getTopbar: () => topbar,
+    request,
+    productCapabilities,
+    getProductDefinitions: () => productDefinitions,
+    writeProductDefinitions: value => (productDefinitions = value),
+    projectKey,
+    getState: () => state,
+    selected,
+    getBridgeId: () => bridgeId,
+    writeBridgeId: value => (bridgeId = value),
+    getBridge: () => bridge,
+    writeBridge: value => (bridge = value),
+    getBridgeClient: () => bridgeClient,
+    writeBridgeClient: value => (bridgeClient = value),
+    getBridgeReady: () => bridgeReady,
+    writeBridgeReady: value => (bridgeReady = value),
+    getStopWorkflowApply: () => stopWorkflowApply,
+    writeStopWorkflowApply: value => (stopWorkflowApply = value),
+    getProjectEdit: () => projectEdit,
+    flushNative,
+    getFocusViewId: () => focusViewId,
+    getComfyConnection: () => comfyConnection,
+    writeComfyConnection: value => (comfyConnection = value),
+    updateClipInputs,
+  });
   function listenForWorkflowApply() {
-    stopWorkflowApply?.();
-    if (!bridge) return;
-    const channel = bridge;
-    const receive = async ({ data }) => {
-      if (
-        !data?.requestId ||
-        data.action !== B.LINK_APPLY ||
-        data.link?.editorId !== focusViewId ||
-        data.link.projectId !== projectKey
-      )
-        return;
-      let reply;
-      try {
-        await updateClipInputs(data.link.clipId, data.link);
-        reply = { result: { applied: true } };
-      } catch (error) {
-        reply = { error: error.message };
-      }
-      if (bridge === channel) channel.postMessage({ requestId: data.requestId, ...reply });
-    };
-    channel.addEventListener('message', receive);
-    stopWorkflowApply = () => channel.removeEventListener('message', receive);
+    return comfyConnectionOwner.listenForWorkflowApply();
   }
   listenForWorkflowApply();
   if (bridgeClient) {
@@ -5175,94 +3186,12 @@ async function startEditor(isFailed) {
         if (bridgeClient === initial) bridgeReady = false;
       });
   }
-  function reconnectBridge(id) {
-    if (id === bridgeId) return;
-    bridgeClient?.close();
-    bridgeId = id;
-    bridgeReady = null;
-    bridge = id ? B.openChannel(id) : null;
-    bridgeClient = bridge ? B.createClient(bridge) : null;
-    listenForWorkflowApply();
-    const address = new URL(location.href);
-    if (id) address.searchParams.set('bridge', id);
-    else address.searchParams.delete('bridge');
-    window.history.replaceState(null, '', address);
-  }
-  async function host(action, values = {}, preparedTab = null) {
-    if (['open', 'prepare'].includes(action) && (values.workflow || values.prompt)) {
-      const prepared = await request('prepare-workflow?projectId=' + encodeURIComponent(projectKey), {
-        ...(values.workflow && (!values.prompt || values.preferWorkflow) ? { workflow: values.workflow } : {}),
-        ...(values.prompt ? { prompt: values.prompt } : {}),
-      });
-      values = {
-        ...values,
-        workflow: values.prompt && !values.preferWorkflow ? null : prepared.workflow,
-        prompt: prepared.prompt,
-        controls: values.controls?.map(c => ({
-          ...c,
-          value: prepared.prompt?.[c.nodeId]?.inputs?.[c.input] ?? c.value,
-        })),
-      };
-    }
-    if (bridgeClient && action !== 'prepare') {
-      let live;
-      try {
-        live = await bridgeClient.call(B.ACTIONS.ping, {}, { timeoutMs: 900 });
-      } catch (error) {
-        if (error.code !== 'SPOOL_BRIDGE_TIMEOUT') throw error;
-      }
-      if (live?.connected && (!values.link || live.workflowLinks)) {
-        bridgeReady = true;
-        preparedTab?.close();
-        return bridgeClient.call(action, values, { timeoutMs: 120000 });
-      }
-      reconnectBridge(null);
-    }
-    if (action === B.ACTIONS.workflowDrop)
-      throw Error('That Comfy tab is no longer connected. Drag the workflow again from its current tab.');
-    if (action === B.ACTIONS.capture && values.link) {
-      if (
-        productCapabilities.configuration?.comfyUrl &&
-        new URL(productCapabilities.configuration.comfyUrl).origin !== location.origin
-      )
-        throw Error('Open Spool from the paired Comfy host to apply linked workflow changes.');
-      throw Error('Choose Edit in Comfy for this clip to reconnect its workflow, then apply changes.');
-    }
-    if (!['capture', 'open', 'prepare'].includes(action))
-      throw Error('This action requires a connected Comfy graph tab.');
-    await ensureComfy();
-    const config = productCapabilities.configuration;
-    await flushNative();
-    const c = values.link ? state.clips.find(c => c.id === values.link.clipId) : selected();
-    if (!c && action === 'open') throw Error('Select a saved shot first.');
-    const handoff = await request('projects/' + projectKey + '/handoffs', {
-      action,
-      clipId: c?.id,
-      revision: projectEdit.revision,
-      ...values,
-    });
-    const address = config.comfyUrl + '/?' + B.HANDOFF_PARAM + '=' + encodeURIComponent(handoff.id);
-    const tab = preparedTab || window.open(address, '_blank');
-    if (preparedTab) preparedTab.location.href = address;
-    if (!tab) throw Error('Allow this site to open the Comfy graph tab, then retry.');
-    const end = Date.now() + 600000;
-    while (Date.now() < end) {
-      await new Promise(r => setTimeout(r, 750));
-      const current = await request('handoffs/' + handoff.id);
-      if (current.state === 'complete') {
-        if (current.result.error) throw Error(current.result.error);
-        if (current.result.bridgeId) reconnectBridge(current.result.bridgeId);
-        return current.result;
-      }
-      if (tab.closed)
-        throw Error(
-          'The Comfy tab was closed before the workflow finished opening. Choose Edit in Comfy to try again.',
-        );
-    }
-    throw Error('Graph handoff expired. Open a fresh one.');
+
+  function host(action, values = {}, preparedTab = null) {
+    return comfyConnectionOwner.host(action, values, preparedTab);
   }
   function withBridge(url) {
-    return url + (bridgeId ? (url.includes('?') ? '&' : '?') + 'bridge=' + encodeURIComponent(bridgeId) : '');
+    return comfyConnectionOwner.withBridge(url);
   }
   const nativeDocument = () => L.authored(projectData());
   const exactInt = W.isExactInt,
@@ -5289,21 +3218,7 @@ async function startEditor(isFailed) {
     }
   }
   function showConflict() {
-    showModal(
-      'Project changed in another view',
-      '<p>Your current edit is kept here. Download it before reloading if you want to preserve it. The server revision has not been overwritten.</p>',
-      '<button class="outline" id="draftDownload">Download local edit</button><button class="primary" id="conflictReload">Reload saved project</button>',
-    );
-    $('draftDownload').onclick = downloadLocalDraft;
-    $('conflictReload').onclick = async () => {
-      try {
-        await projectEdit.reload();
-        closeModal();
-        history.clear();
-      } catch (error) {
-        toast(error.message);
-      }
-    };
+    return projectDialogsOwner.showConflict();
   }
   const projectEdit = createProjectEdit({
     project: BOOT,
@@ -5417,125 +3332,16 @@ async function startEditor(isFailed) {
   connectionButton.id = 'comfyConnection';
   let comfyConnection = { state: productCapabilities.connected ? 'connected' : 'stopped' };
   function renderConnection() {
-    if (topbar) topbar.connection(comfyConnection);
+    return comfyConnectionOwner.renderConnection();
   }
-  async function connectComfy() {
-    comfyConnection = await request('comfy');
-    renderConnection();
-    if (comfyConnection.state !== 'connected') {
-      if (!comfyConnection.settings.startupFile)
-        throw Error('Choose a startup file in Project → Comfy settings first.');
-      comfyConnection = await request('comfy/start', {});
-      renderConnection();
-      const end = Date.now() + 180000;
-      while (comfyConnection.state === 'starting' && Date.now() < end) {
-        await new Promise(r => setTimeout(r, 750));
-        comfyConnection = await request('comfy');
-        renderConnection();
-      }
-      if (comfyConnection.state !== 'connected')
-        throw Error(comfyConnection.error || 'Comfy is still starting. Check its startup log in Comfy settings.');
-    }
+  function connectComfy() {
+    return comfyConnectionOwner.connectComfy();
   }
-  async function ensureComfy() {
-    await connectComfy();
-    Object.assign(productCapabilities, await request('capabilities'));
-    productDefinitions = productCapabilities.definitions || {};
+  function ensureComfy() {
+    return comfyConnectionOwner.ensureComfy();
   }
-  async function comfySettings() {
-    try {
-      comfyConnection = await request('comfy');
-      renderConnection();
-      const s = comfyConnection.settings;
-      showModal(
-        'Comfy settings',
-        (productCapabilities.cloudExecution === false
-          ? '<p class="setup-note">' +
-            esc(productCapabilities.requirements?.optional?.[0] || 'Comfy Cloud is unavailable on this host.') +
-            '</p>'
-          : '') +
-          '<p>' +
-          esc(
-            comfyConnection.error ||
-              { connected: 'Comfy is connected.', starting: 'Comfy is starting.', stopped: 'Comfy is stopped.' }[
-                comfyConnection.state
-              ] ||
-              'Check the connection.',
-          ) +
-          '</p>' +
-          (comfyConnection.state === 'connected'
-            ? '<p><a class="download-link" href="' +
-              esc(s.comfyUrl) +
-              '" target="_blank" rel="noopener">Open ComfyUI</a></p>'
-            : '') +
-          '<label class="field"><span>Comfy Cloud API Key</span><input id="comfyApiKey" type="password" autocomplete="new-password" placeholder="' +
-          (comfyConnection.hasApiKey ? 'Key configured - leave blank to keep it' : 'comfyui-…') +
-          '"></label><p class="small">Stored on this machine. Never included in project exports. Falls back to COMFY_API_KEY.</p><label><input id="comfyClearApiKey" type="checkbox"> Remove saved key</label><label class="field"><span>Startup file</span><input id="comfyStartupFile" list="comfyStartupFiles" value="' +
-          esc(s.startupFile) +
-          '" placeholder="Full path to your Comfy startup script or executable"><datalist id="comfyStartupFiles">' +
-          (comfyConnection.startupFiles || []).map(p => '<option value="' + esc(p) + '"></option>').join('') +
-          '</datalist></label><label class="field"><span>Comfy address</span><input id="comfyAddress" value="' +
-          esc(s.comfyUrl) +
-          '"></label><p class="small">Use the port from your startup file. Spool starts it in its own folder and keeps the same project store.</p><label class="field"><span><input id="comfyAutoStart" type="checkbox" ' +
-          (s.autoStart ? 'checked' : '') +
-          '> Start Comfy automatically when standalone Spool opens</span></label><p class="small">Automatic startup is off by default. Closing Spool leaves Comfy running.</p><pre id="comfyStartupLog" hidden></pre>',
-        '<button class="outline" id="comfyShowLog" ' +
-          (!comfyConnection.logAvailable ? 'disabled' : '') +
-          '>Startup log</button><button class="outline" id="comfySaveSettings">Save settings</button><button class="primary" id="comfySaveStart">Save and connect</button>',
-      );
-      const saveSettings = async () => {
-        await request(
-          'comfy/settings',
-          {
-            startupFile: $('comfyStartupFile').value,
-            comfyUrl: $('comfyAddress').value,
-            autoStart: $('comfyAutoStart').checked,
-            ...($('comfyApiKey').value.trim()
-              ? { apiKey: $('comfyApiKey').value.trim() }
-              : $('comfyClearApiKey').checked
-                ? { apiKey: '' }
-                : {}),
-          },
-          'PUT',
-        ).then(result => {
-          Object.assign(productCapabilities, { hasApiKey: result.hasApiKey, apiKeySource: result.apiKeySource });
-          workflowLibrary?.render();
-        });
-        templateBrowser?.reset();
-        builtinPreparer.reset();
-        preparedWorkflows.clear();
-        workflowLoads.clear();
-      };
-      $('comfyShowLog').onclick = async () => {
-        try {
-          $('comfyStartupLog').textContent = (await request('comfy/log')).text;
-          $('comfyStartupLog').hidden = false;
-        } catch (e) {
-          toast(e.message);
-        }
-      };
-      $('comfySaveSettings').onclick = async () => {
-        try {
-          await saveSettings();
-          closeModal();
-          toast('Comfy settings saved');
-        } catch (e) {
-          toast(e.message);
-        }
-      };
-      $('comfySaveStart').onclick = async () => {
-        try {
-          await saveSettings();
-          closeModal();
-          await ensureComfy();
-          toast('Comfy connected');
-        } catch (e) {
-          toast(e.message);
-        }
-      };
-    } catch (error) {
-      toast(error.message);
-    }
+  function comfySettings() {
+    return projectDialogsOwner.comfySettings();
   }
   connectionButton.onclick = async () => {
     try {
@@ -5573,314 +3379,18 @@ async function startEditor(isFailed) {
   });
   // Renders is a panel, not a modal: editing, playback and shortcuts continue while it is open.
   function closeRenders() {
-    const panel = $('rendersPanel');
-    if (panel.hidden) return;
-    const inside = panel.contains(document.activeElement);
-    panel.hidden = true;
-    panel.innerHTML = '';
-    $('showQueue').setAttribute('aria-expanded', 'false');
-    if (inside) $('showQueue').focus({ preventScroll: true });
+    return renderQueueOwner.closeRenders();
   }
   function queueModal() {
-    const panel = $('rendersPanel');
-    if (!panel.hidden) {
-      closeRenders();
-      return;
-    }
-    panel.innerHTML =
-      '<div class="modal-head"><h2 id="rendersTitle">Renders</h2><button class="iconbutton" id="closeRenders" aria-label="Close renders">' +
-      svg('close') +
-      '</button></div><div class="render-toolbar"><span id="queueSummary" role="status"></span><div class="render-toolbar-actions"><button class="textbutton" id="clearFinishedRenders" title="Clear finished entries from the queue. Takes are kept.">Clear finished</button><button class="textbutton" id="reconcileQueue" title="Refresh render status and retry collecting finished results">' +
-      svg('loop') +
-      ' Refresh</button></div></div><div id="queuePending" class="render-pending" hidden><div><strong>Submission not confirmed</strong><p>Retry to check the same request.</p></div><button class="outline" id="retryQueue">Retry submission</button></div><div id="queueList" class="queue-list"></div>';
-    panel.hidden = false;
-    $('showQueue').setAttribute('aria-expanded', 'true');
-    $('closeRenders').onclick = closeRenders;
-    renderQueueList();
-    $('retryQueue').onclick = async () => {
-      const button = $('retryQueue');
-      button.disabled = true;
-      try {
-        await queueSubmission.retry();
-      } catch (error) {
-        toast(error.message);
-      } finally {
-        renderQueueList();
-        if (!queueSubmission.pending) $('reconcileQueue').focus();
-      }
-    };
-    $('reconcileQueue').onclick = refreshQueue;
-    $('clearFinishedRenders').onclick = () =>
-      clearRenders(
-        visibleJobs()
-          .filter(G.finishedRender)
-          .map(j => j.id),
-      );
-    $('closeRenders').focus();
+    return renderQueueOwner.queueModal();
   }
   function visibleJobs() {
-    return G.visibleRenderJobs(state.jobs, state.clearedRenderIds);
+    return renderQueueOwner.visibleJobs();
   }
-  async function clearRenders(ids) {
-    try {
-      await flushNative();
-      const requested = new Set(ids),
-        clear = state.jobs.filter(j => requested.has(j.id) && G.clearableRender(j));
-      if (!clear.length) return;
-      state.clearedRenderIds = [...new Set([...(state.clearedRenderIds || []), ...clear.map(j => j.id)])];
-      save();
-      await flushNative();
-      renderQueueList();
-      queueLabel();
-      renderJobStatus();
-      $('reconcileQueue')?.focus({ preventScroll: true });
-      toast(clear.length + ' ' + (clear.length === 1 ? 'entry cleared' : 'entries cleared') + '. Takes kept.');
-    } catch (error) {
-      toast(error.message);
-    }
-  }
-  async function refreshQueue() {
-    try {
-      await request('reconcile', {});
-      await pollNative();
-      renderQueueList();
-    } catch (error) {
-      toast(error.message);
-    }
-  }
+
   $('showQueue').onclick = queueModal;
   function renderQueueList() {
-    const list = $('queueList');
-    if (!list) return;
-    const terminal = j => ['complete', 'cancelled'].includes(j.status),
-      attention = j =>
-        ['failed', 'collection_pending', 'submission_uncertain', 'uncertain', 'farm_attention'].includes(j.status);
-    const jobs = visibleJobs().slice().reverse(),
-      current = jobs.filter(j => !terminal(j)),
-      past = jobs.filter(terminal),
-      active = current.filter(j => !attention(j)),
-      needs = current.filter(attention);
-    $('clearFinishedRenders').disabled = !jobs.some(G.finishedRender);
-    $('queueSummary').textContent =
-      [
-        active.length ? active.length + ' active render' + (active.length === 1 ? '' : '') : '',
-        needs.length ? needs.length + ' need' + (needs.length === 1 ? 's' : '') + ' attention' : '',
-      ]
-        .filter(Boolean)
-        .join(' · ') || (past.length ? 'No active renders' : state.jobs.length ? 'Queue is clear' : 'No renders yet');
-    $('queuePending').hidden = !queueSubmission.pending;
-    $('retryQueue').disabled = queueSubmission.sending;
-    const row = j => {
-      const observations = j.nodeProgress || [],
-        running = ['running', 'farm_running'].includes(j.status);
-      const farm = j.farmProgress,
-        percent = jobPercent(j);
-      const progress = Number.isFinite(percent)
-        ? '<div class="render-progress"><progress max="100" value="' +
-          esc(percent) +
-          '" aria-label="' +
-          esc(j.target === 'deadline' ? 'Deadline worker' : 'Current node') +
-          ' progress"></progress></div>'
-        : '';
-      const result = state.clips
-          .flatMap(c => c.takes)
-          .find(t => t.generated && (t.summary?.attemptId ?? t.request?.attemptId) === j.id),
-        output = result?.media?.originalFile;
-      const details =
-        '<div class="render-execution"><p>' +
-        esc(
-          j.target === 'deadline'
-            ? 'Deadline'
-            : j.target === 'cloud'
-              ? 'Comfy Cloud · Developer Platform'
-              : 'Local Comfy',
-        ) +
-        (farm?.worker ? ' · ' + esc(farm.worker) : '') +
-        '</p>' +
-        (farm?.message ? '<p>' + esc(farm.message) + '</p>' : '') +
-        observations
-          .map(
-            n =>
-              '<div class="job-node">' +
-              esc(n.label) +
-              (n.max > 1 ? ' / ' + esc(n.value) + ' of ' + esc(n.max) : '') +
-              '</div>',
-          )
-          .join('') +
-        (j.seeds?.length
-          ? '<p class="job-seeds">' + j.seeds.map(b => esc(b.label) + ': ' + esc(decimal(b.value))).join(' / ') + '</p>'
-          : '') +
-        (j.error ? '<pre class="render-error">' + esc(j.error) + '</pre>' : '') +
-        (output
-          ? '<p class="render-output">Saved to <a class="download-link" target="_blank" href="' +
-            esc(url(output)) +
-            '">' +
-            esc(output) +
-            '</a></p>'
-          : '') +
-        '<code>' +
-        esc(j.submission?.external_id || j.promptId || '') +
-        '</code><a class="download-link" target="_blank" href="/spool/api/attempts/' +
-        encodeURIComponent(j.id) +
-        '">Execution record ↗</a></div>';
-      const actions =
-        (j.status === 'collection_pending'
-          ? '<button class="outline" data-retry-collection data-queue-focus="collect:' +
-            esc(j.id) +
-            '">Retry collection</button>'
-          : '') +
-        (G.cancelAction(j) !== 'refused' && j.status !== 'cancel_requested'
-          ? '<button class="outline" data-cancel-attempt="' +
-            esc(j.id) +
-            '" data-queue-focus="cancel:' +
-            esc(j.id) +
-            '">' +
-            (j.status === 'uncertain' && G.cancelAction(j) === 'cancelled' ? 'Dismiss' : 'Cancel request') +
-            '</button>'
-          : '') +
-        (j.target === 'deadline' && j.status === 'submission_uncertain'
-          ? '<button class="outline" data-recover-submission="' +
-            esc(j.id) +
-            '" data-queue-focus="recover:' +
-            esc(j.id) +
-            '">Find existing Deadline job</button>'
-          : '');
-      return (
-        '<article class="queue-row" data-render="' +
-        esc(j.id) +
-        '"><details data-queue-detail="' +
-        esc(j.id) +
-        '"><summary class="' +
-        (G.clearableRender(j) ? 'has-clear' : '') +
-        '" data-queue-focus="details:' +
-        esc(j.id) +
-        '" aria-label="Take ' +
-        esc(j.takeNumber || '') +
-        ' details"><span class="render-take">Take ' +
-        esc(j.takeNumber || '—') +
-        '</span><span class="render-stage" data-state="' +
-        (attention(j) ? 'attention' : j.status === 'complete' ? 'ready' : running ? 'running' : 'waiting') +
-        '">' +
-        esc(G.jobStage(j)) +
-        '</span>' +
-        (Number.isFinite(percent) ? '<span class="render-percent">' + Math.round(percent) + '%</span>' : '') +
-        '<span data-job-elapsed="' +
-        esc(j.id) +
-        '"></span>' +
-        (G.clearableRender(j)
-          ? '<button class="render-clear" data-clear-render="' +
-            esc(j.id) +
-            '" data-queue-focus="clear:' +
-            esc(j.id) +
-            '" aria-label="Clear take ' +
-            esc(j.takeNumber || '') +
-            ' from queue" title="Clear from queue. Takes are kept.">' +
-            svg('close') +
-            '</button>'
-          : '') +
-        '</summary>' +
-        details +
-        (actions ? '<div class="render-row-actions">' + actions + '</div>' : '') +
-        '</details>' +
-        progress +
-        '</article>'
-      );
-    };
-    const grouped = items => {
-      const groups = new Map();
-      for (const job of items) {
-        if (!groups.has(job.clipId)) groups.set(job.clipId, []);
-        groups.get(job.clipId).push(job);
-      }
-      return [...groups]
-        .map(
-          ([id, group]) =>
-            '<section class="render-shot" data-render-shot="' +
-            esc(id) +
-            '"><h3 title="' +
-            esc(group[0].name) +
-            '">' +
-            esc(state.clips.find(c => c.id === id)?.name || group[0].name) +
-            '</h3>' +
-            group.map(row).join('') +
-            '</section>',
-        )
-        .join('');
-    };
-    const recovered = state.recoverableResults || [];
-    const html =
-      grouped(current) +
-      (past.length
-        ? '<details class="render-history" data-queue-detail="history"><summary data-queue-focus="history">Recent renders <span>' +
-          past.length +
-          '</span></summary><div>' +
-          grouped(past) +
-          '</div></details>'
-        : '') +
-      (!jobs.length
-        ? '<div class="queue-empty">' +
-          (state.jobs.length ? 'Queue is clear. Your takes are kept.' : 'Generated takes will appear here.') +
-          '</div>'
-        : '') +
-      (recovered.length
-        ? '<details class="render-history" data-queue-detail="recovered"><summary data-queue-focus="recovered">Results from removed shots <span>' +
-          recovered.length +
-          '</span></summary>' +
-          recovered
-            .map(
-              r =>
-                '<p>' +
-                esc(r.clipName) +
-                ' / ' +
-                esc(r.takeId) +
-                ' <a class="download-link" target="_blank" href="' +
-                esc(url(r.media.file)) +
-                '">Review media</a></p>',
-            )
-            .join('') +
-          '</details>'
-        : '');
-    if (list.renderMarkup !== html) {
-      const opened = new Set([...list.querySelectorAll('details[open]')].map(el => el.dataset.queueDetail)),
-        focused = list.getRootNode().activeElement,
-        focus = list.contains(focused) ? focused.dataset.queueFocus : null;
-      list.innerHTML = html;
-      list.renderMarkup = html;
-      for (const el of list.querySelectorAll('details')) el.open = opened.has(el.dataset.queueDetail);
-      const bind = (attribute, action, capability) =>
-        list.querySelectorAll('[' + attribute + ']').forEach(
-          button =>
-            (button.onclick = async () => {
-              try {
-                const id = button.getAttribute(attribute),
-                  job = state.jobs.find(j => j.id === id),
-                  clip = state.clips.find(c => c.id === job.clipId) || { id: job.clipId };
-                await authoredCommand(action, { attemptId: id }, clip, [capability]);
-                await pollNative();
-                renderQueueList();
-              } catch (error) {
-                toast(error.message);
-              }
-            }),
-        );
-      bind('data-cancel-attempt', 'cancel', 'cancel');
-      bind('data-recover-submission', 'recover_submission', 'recover');
-      list.querySelectorAll('[data-clear-render]').forEach(
-        button =>
-          (button.onclick = e => {
-            e.preventDefault();
-            e.stopPropagation();
-            return clearRenders([button.dataset.clearRender]);
-          }),
-      );
-      list.querySelectorAll('[data-retry-collection]').forEach(button => (button.onclick = refreshQueue));
-      if (focus)
-        (list.querySelector('[data-queue-focus="' + CSS.escape(focus) + '"]') || $('closeRenders')).focus({
-          preventScroll: true,
-        });
-    }
-    for (const el of list.querySelectorAll('[data-job-elapsed]'))
-      el.textContent = G.jobElapsed(jobs.find(j => j.id === el.dataset.jobElapsed));
+    return renderQueueOwner.renderQueueList();
   }
   const rollKey = e => {
     if (workflowLocked) return;
@@ -5933,458 +3443,61 @@ async function startEditor(isFailed) {
   try {
     experimentRetry = JSON.parse(sessionStorage.getItem(experimentRetryKey) || 'null');
   } catch (error) {}
-  function commandScope(c, capabilities, maxTakes = 16) {
-    return { projectId: projectKey, clipIds: c ? [c.id] : [], capabilities, maxTakes };
-  }
-  async function authoredCommand(action, args, c, capabilities) {
-    await flushNative();
-    const data = {
-      operationId: crypto.randomUUID(),
-      revision: projectEdit.revision,
-      actor: 'human',
-      scope: commandScope(c, capabilities),
-      action,
-      arguments: args,
-    };
-    await projectEdit.change(async () => {
-      await request('projects/' + projectKey + '/commands', data);
-      return request('projects/' + projectKey);
-    });
-    return data;
-  }
+
   function generationSourceLabel(setting) {
-    if (!setting) return 'Workflow file';
-    if (setting.source === 'track')
-      return setting.track === 'music'
-        ? 'A2 soundtrack / aligned to shot'
-        : 'A1 clip audio / V' + (setting.lane || 1) + ' / aligned to shot';
-    if (setting.source === 'clip')
-      return (
-        [...state.clips, ...(state.audioClips || [])].find(c => c.id === setting.clipId)?.name || 'Removed audio clip'
-      );
-    return setting.source === 'original' ? 'Original shot' : 'Selected take';
+    return renderQueueOwner.generationSourceLabel(setting);
   }
-  async function reviewGeneration(clips) {
-    const ids = clips.map(c => c.id);
-    await flushNative();
-    clips = ids.map(id => state.clips.find(c => c.id === id)).filter(Boolean);
-    if (clips.length !== ids.length) throw Error('A selected clip was removed. Select the clips to generate again.');
-    let items;
-    try {
-      items = G.generationItems(clips, { ...cloudDefinitions, ...productDefinitions }, nativeRecipes);
-    } catch (error) {
-      toast(error.message);
-      return;
-    }
-    const signature = G.reviewSignature(state, ids);
-    showModal(
-      'Review generation',
-      '<p>' +
-        items.reduce((n, i) => n + i.count, 0) +
-        ' takes. New takes stay unselected.</p>' +
-        clips
-          .map(
-            c =>
-              '<h3>' +
-              esc(c.name) +
-              '</h3><p>' +
-              esc(
-                {
-                  same: 'Fixed seeds',
-                  different: 'Incrementing seeds',
-                  increment: 'Incrementing seeds',
-                  decrement: 'Decrementing seeds',
-                  randomize: 'Random seeds',
-                }[c.seedMode || 'same'],
-              ) +
-              '</p>' +
-              items
-                .filter(i => i.clipId === c.id)
-                .map(
-                  i =>
-                    '<p>' +
-                    i.count +
-                    ' take(s) / ' +
-                    (G.seedControls(c)
-                      .map(
-                        b =>
-                          esc(b.label) +
-                          ': <code>' +
-                          esc(decimal(i.values?.[b.key] ?? c.inputValues[b.key])) +
-                          '</code>',
-                      )
-                      .join(' / ') || 'No mapped seed') +
-                    '</p>',
-                )
-                .join(''),
-          )
-          .join(''),
-      '<button class="outline" id="generationReviewCancel">Cancel</button><button class="primary" id="generationReviewQueue">Queue these takes</button>',
-    );
-    $('generationReviewCancel').onclick = closeModal;
-    $('generationReviewQueue').onclick = async () => {
-      if (G.reviewSignature(state, ids) !== signature) {
-        await reviewGeneration(clips);
-        toast('Settings changed. Review the updated values.');
-        return;
-      }
-      $('generationReviewQueue').disabled = true;
-      await queueClips(clips, items);
-      if ($('generationReviewQueue')) $('generationReviewQueue').disabled = false;
-    };
+  function reviewGeneration(clips) {
+    return renderQueueOwner.reviewGeneration(clips);
   }
   function renderJobStatus() {
-    if (!selected() || selectedAudio() || selectionIds().length > 1) {
-      jobStatus.textContent = '';
-      return;
-    }
-    const jobs = visibleJobs().filter(j => j.clipId === selected().id && !G.TERMINAL.includes(j.status)),
-      job = jobs.find(j => ['running', 'farm_running', 'collecting'].includes(j.status)) || jobs[0];
-    jobStatus.textContent = job
-      ? G.jobStage(job) + ' / ' + G.jobElapsed(job) + (jobs.length > 1 ? ' / ' + jobs.length + ' pending' : '')
-      : '';
+    return renderQueueOwner.renderJobStatus();
   }
-  async function submitExperiment(data) {
-    await projectEdit.change(async () => {
-      await request('projects/' + projectKey + '/commands', data);
-      return request('projects/' + projectKey);
-    });
-    experimentRetry = null;
-    sessionStorage.removeItem(experimentRetryKey);
-    toast('Experiment accepted. New takes stay unselected.');
+  function submitExperiment(data) {
+    return renderQueueOwner.submitExperiment(data);
   }
-  async function showActivity() {
-    try {
-      const value = await request('projects/' + projectKey + '/events?limit=30&latest=true');
-      showModal(
-        'Activity',
-        '<p>View ID: ' +
-          esc(focusViewId) +
-          '</p>' +
-          value.events
-            .slice(-30)
-            .reverse()
-            .map(
-              e =>
-                '<p>' +
-                esc(e.kind) +
-                ' / ' +
-                esc(e.data.actor || 'execution') +
-                '</p><details><summary>Details</summary><pre>' +
-                esc(JSON.stringify(e.data, null, 2)) +
-                '</pre></details>',
-            )
-            .join(''),
-        '<button class="outline" id="retryExperiment">Retry pending experiment</button>',
-      );
-      $('retryExperiment').disabled = !experimentRetry;
-      $('retryExperiment').onclick = async () => {
-        try {
-          await submitExperiment(experimentRetry);
-          closeModal();
-        } catch (e) {
-          toast(e.message);
-        }
-      };
-    } catch (error) {
-      toast(error.message);
-    }
+  function showActivity() {
+    return projectDialogsOwner.showActivity();
   }
   function queueReason(c) {
-    const recipe = nativeRecipes[c?.workflowVersion];
-    return (
-      workflowStatus(c, workflows[c?.workflow], recipe, definitionsFor(c)).reason ||
-      (recipe?.provenance?.builtinTemplate?.startsWith('api_') && !productCapabilities.hasApiKey
-        ? 'Set your Comfy Cloud API key in Comfy settings.'
-        : null)
-    );
+    return renderQueueOwner.queueReason(c);
   }
 
+  const workflowControlsOwner = createWorkflowControls({
+    $,
+    copy,
+    esc,
+    svg,
+    request,
+    getProductDefinitions: () => productDefinitions,
+    projectKey,
+    pixelResolution,
+    selected,
+    take,
+    toast,
+    unsavedRecipes,
+    nativeRecipes,
+    isInt,
+    decimal,
+    projectEdit,
+    flushNative,
+    generationSourceLabel,
+    getImagePreviewTicket: () => imagePreviewTicket,
+    writeImagePreviewTicket: value => (imagePreviewTicket = value),
+    getReplaceInputImage: () => replaceInputImage,
+    clipWorkflowLink,
+  });
   function bindWorkflowControls(c, bindings) {
-    if (bindings.length === c.bindings.length) return;
-    const capture = copy(nativeRecipes[c.workflowVersion]),
-      version = crypto.randomUUID();
-    capture.bindings = copy(bindings);
-    c.inputValues = {
-      ...Object.fromEntries(bindings.map(b => [b.key, copy(capture.prompt[b.nodeId].inputs[b.input])])),
-      ...c.inputValues,
-    };
-    c.bindings = copy(bindings);
-    c.workflowVersion = version;
-    nativeRecipes[version] = capture;
-    unsavedRecipes.set(version, capture);
+    return workflowControlsOwner.bindWorkflowControls(c, bindings);
   }
   // Media inputs are compact rows: a thumbnail, the label and chosen file, then their actions.
-  function mediaInputLabel(b, label, empty, c) {
-    return (
-      '<span class="media-label">' +
-      label +
-      (empty && mayStayEmpty(b, c.bindings || [], nativeRecipes[c.workflowVersion]?.inputRules)
-        ? '<em>Optional</em>'
-        : '') +
-      '</span>'
-    );
-  }
-  function mediaRemove(b, i, c, label) {
-    return b.optional && inputFilled(b, c.inputValues || {}, c.shotInputs || [])
-      ? '<button type="button" class="media-action input-clear" data-clear-input="' +
-          i +
-          '" aria-label="Remove ' +
-          label +
-          '" title="Remove">' +
-          svg('close') +
-          '</button>'
-      : '';
-  }
-  function controlField(b, i, c) {
-    const value = Object.hasOwn(c.inputValues || {}, b.key)
-        ? c.inputValues[b.key]
-        : nativeRecipes[c.workflowVersion]?.prompt[b.nodeId]?.inputs[b.input],
-      label = esc(b.label || b.input),
-      source = (c.shotInputs || []).find(s => s.key === b.key);
-    if (b.role === 'resolution' && b.options?.length && b.options.every(v => /^\d+x\d+$/.test(v))) {
-      const current = pixelResolution(value),
-        sizes = [...new Set(b.options.map(v => pixelResolution(v).size))],
-        ratios = [...new Set(b.options.map(v => pixelResolution(v).ratio))];
-      return (
-        '<div class="two-fields" data-pixel-resolution="' +
-        i +
-        '"><label class="field"><span>Resolution</span><select data-resolution-size>' +
-        sizes
-          .map(v => '<option value="' + v + '" ' + (v === current.size ? 'selected' : '') + '>' + v + 'p</option>')
-          .join('') +
-        '</select></label><label class="field"><span>Aspect ratio</span><select data-resolution-ratio>' +
-        ratios.map(v => '<option ' + (v === current.ratio ? 'selected' : '') + '>' + v + '</option>').join('') +
-        '</select></label></div>'
-      );
-    }
 
-    const missing = nativeRecipes[c.workflowVersion]?.inputRecovery?.missing?.some(
-      m => m.nodeId === b.nodeId && m.input === b.input && m.sources.includes(value),
-    );
-    if (b.asset && ['video', 'audio'].includes(b.slot)) {
-      const video = b.slot === 'video',
-        current = take(c),
-        available = !current.placeholder && current.media.kind === 'video',
-        timeline = video && source?.source === 'selected';
-      const empty = !source && (!value || missing),
-        description = source
-          ? timeline
-            ? 'Timeline video · ' + c.name
-            : generationSourceLabel(source)
-          : empty
-            ? 'No ' + b.slot + ' selected'
-            : String(value).split('/').at(-1);
-      return (
-        '<div class="field binding-source media-slot' +
-        (empty ? ' empty' : '') +
-        '" data-media-input="' +
-        i +
-        '"><div class="media-row"><span class="media-thumb">' +
-        svg(video ? 'video' : 'audio') +
-        '</span><span class="media-text">' +
-        mediaInputLabel(b, label, empty, c) +
-        '<span class="native-source-value" data-media-source>' +
-        esc(description) +
-        '</span></span><span class="media-input-actions">' +
-        (video
-          ? '<button class="media-action" type="button" data-use-timeline-video aria-pressed="' +
-            timeline +
-            '" ' +
-            (!available ? 'disabled' : '') +
-            ' aria-label="Use timeline video" title="' +
-            (available ? 'Use this clip’s selected take and timeline trim' : 'This clip needs a video take first') +
-            '">' +
-            svg('timeline') +
-            '</button>'
-          : '') +
-        '<button class="media-action" type="button" data-media-upload aria-label="Choose ' +
-        b.slot +
-        ' file" title="Choose file…">' +
-        svg('folder') +
-        '</button>' +
-        mediaRemove(b, i, c, label) +
-        '</span></div><input type="file" accept="' +
-        b.slot +
-        '/*" hidden></div>'
-      );
-    }
-    if (
-      b.asset &&
-      ['LoadImage', 'LoadImageMask'].includes(
-        b.contract?.classType || nativeRecipes[c.workflowVersion]?.prompt[b.nodeId]?.class_type,
-      )
-    ) {
-      const empty = !source && (!value || missing),
-        name = source ? generationSourceLabel(source) : empty ? 'Choose image' : String(value).split('/').at(-1);
-      return (
-        '<div class="field binding-source image-input media-slot' +
-        (empty ? ' empty' : '') +
-        '" data-image-input="' +
-        i +
-        '"><button type="button" class="image-input-target media-row" aria-label="' +
-        (empty ? 'Choose ' : 'Replace ') +
-        label +
-        '" title="Click, paste or drop an image"><span class="media-thumb"><img class="native-source-preview" ' +
-        (!value || missing || source ? 'hidden' : 'src="/spool/api/input/' + encodeURIComponent(value) + '"') +
-        ' alt="">' +
-        svg('image') +
-        '</span><span class="media-text">' +
-        mediaInputLabel(b, label, empty, c) +
-        '<strong>' +
-        esc(name) +
-        '</strong></span></button>' +
-        mediaRemove(b, i, c, label) +
-        '<input type="file" accept="image/*" data-image-file hidden></div>'
-      );
-    }
-    let field =
-      typeof value === 'boolean'
-        ? '<select data-native-control="' +
-          i +
-          '"><option value="true" ' +
-          (value ? 'selected' : '') +
-          '>On</option><option value="false" ' +
-          (!value ? 'selected' : '') +
-          '>Off</option></select>'
-        : isInt(value) && b.contract?.inputType !== 'FLOAT'
-          ? '<input type="text" inputmode="numeric" data-exact-integer="true" data-native-control="' +
-            i +
-            '" value="' +
-            esc(decimal(value)) +
-            '">'
-          : typeof value === 'number'
-            ? '<input type="number" step="any" data-native-control="' + i + '" value="' + esc(value) + '">'
-            : '<textarea data-native-control="' + i + '">' + esc(value ?? '') + '</textarea>';
-    if (source) field = '<span class="native-source-value">' + esc(generationSourceLabel(source)) + '</span>';
-    else if (b.role === 'source' || b.options) {
-      const input = productDefinitions[b.contract?.classType]?.input?.required?.[b.input],
-        options = b.options || (Array.isArray(input?.[0]) ? input[0] : input?.[1]?.options || []);
-      field =
-        '<select data-native-control="' +
-        i +
-        '">' +
-        [...new Set([value, ...options])]
-          .map(v => '<option value="' + esc(v) + '" ' + (v === value ? 'selected' : '') + '>' + esc(v) + '</option>')
-          .join('') +
-        '</select>';
-    }
-    if (b.role === 'seed') {
-      const mode = !c.seedKey || c.seedKey === b.key ? c.seedMode || 'same' : 'same';
-      field =
-        '<div class="seed-controls">' +
-        field +
-        '<select data-seed-mode="' +
-        esc(b.key) +
-        '" aria-label="' +
-        label +
-        ' behavior">' +
-        [
-          ['same', 'Fixed'],
-          ['increment', 'Increment'],
-          ['decrement', 'Decrement'],
-          ['randomize', 'Randomize'],
-        ]
-          .map(
-            ([id, name]) =>
-              '<option value="' +
-              id +
-              '" ' +
-              (id === (mode === 'different' ? 'increment' : mode) ? 'selected' : '') +
-              '>' +
-              name +
-              '</option>',
-          )
-          .join('') +
-        '</select></div>';
-    }
-    return (
-      '<label class="field binding-' + esc(b.role || 'other') + '"><span>' + label + '</span>' + field + '</label>'
-    );
+  function controlField(b, i, c) {
+    return workflowControlsOwner.controlField(b, i, c);
   }
   let imagePreviewTicket = 0;
   function bindImageInputs(c) {
-    const ticket = ++imagePreviewTicket;
-    const fields = [...$('inspectorContent').querySelectorAll('[data-image-input]')];
-    for (const field of fields) {
-      const index = Number(field.dataset.imageInput),
-        button = field.querySelector('.image-input-target'),
-        picker = field.querySelector('input');
-      const replace = async files => {
-        if (button.disabled) return;
-        if (files.length !== 1) {
-          toast('Choose one image for this input.');
-          return;
-        }
-        button.disabled = true;
-        try {
-          await replaceInputImage(c, index, files[0]);
-        } catch (error) {
-          toast(error.message);
-        } finally {
-          button.disabled = false;
-        }
-      };
-      button.onclick = () => picker.click();
-      picker.onchange = () => replace([...picker.files]);
-      field.onpaste = e => {
-        const files = [...e.clipboardData.items]
-          .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
-          .map(item => item.getAsFile())
-          .filter(Boolean);
-        if (files.length) {
-          e.preventDefault();
-          e.stopPropagation();
-          void replace(files);
-        }
-      };
-      field.ondragover = e => {
-        e.preventDefault();
-        e.stopPropagation();
-        field.classList.add('drag-over');
-      };
-      field.ondragleave = () => field.classList.remove('drag-over');
-      field.ondrop = e => {
-        e.preventDefault();
-        e.stopPropagation();
-        field.classList.remove('drag-over');
-        void replace([...e.dataTransfer.files]);
-      };
-    }
-    if (
-      fields.some(field => (c.shotInputs || []).some(s => s.key === c.bindings[Number(field.dataset.imageInput)].key))
-    ) {
-      const signature = clipWorkflowLink(c).sourceKey,
-        current = () =>
-          ticket === imagePreviewTicket &&
-          selected()?.id === c.id &&
-          clipWorkflowLink(selected()).sourceKey === signature &&
-          fields.some(field => field.isConnected);
-      void flushNative()
-        .then(() =>
-          current()
-            ? request('projects/' + projectKey + '/generation-preview', {
-                revision: projectEdit.revision,
-                clipId: c.id,
-              })
-            : null,
-        )
-        .then(preview => {
-          if (!preview || !current()) return;
-          for (const field of fields) {
-            const b = c.bindings[Number(field.dataset.imageInput)],
-              asset = preview.assets.find(a => a.nodeId === b.nodeId && a.input === b.input);
-            if (asset && field.isConnected) {
-              const image = field.querySelector('img');
-              image.src = '/spool/api/input/' + encodeURIComponent(asset.frozen);
-              image.hidden = false;
-            }
-          }
-        })
-        .catch(error => {
-          if (current() && error.status !== 409) toast(error.message);
-        });
-    }
+    return workflowControlsOwner.bindImageInputs(c);
   }
   const { useTimelineVideo, clearInput, replaceInputMedia, replaceInputImage } = createInputActions({
     getClips: () => state.clips,
@@ -6410,460 +3523,86 @@ async function startEditor(isFailed) {
   // keeps `media.evidence`, a list naming what exists, so enablement stays
   // synchronous; only the payload is fetched, and only when a surface opens it.
   const evidenceCache = new Map();
-  async function mediaEvidence(m) {
-    if (!m?.id || !Array.isArray(m.evidence) || !m.evidence.length) return null;
-    if (evidenceCache.has(m.id)) return evidenceCache.get(m.id);
-    const held = await request('projects/' + projectKey + '/media/' + encodeURIComponent(m.id) + '/evidence');
-    evidenceCache.set(m.id, held);
-    return held;
-  }
-  async function mediaWorkflowData(m) {
-    if (m.workflowData) return m.workflowData;
-    const kinds = Array.isArray(m.evidence) ? m.evidence : null;
-    if (!kinds?.includes('workflowData')) return null;
-    return (await mediaEvidence(m))?.workflowData || null;
+  const workflowDialogsOwner = createWorkflowDialogs({
+    $,
+    copy,
+    esc,
+    api,
+    request,
+    matchClipInputs,
+    inputReplacements,
+    getProductDefinitions: () => productDefinitions,
+    definitionsFor,
+    projectKey,
+    getFps: () => fps,
+    workflows,
+    reusableBinding,
+    registerWorkflowData,
+    addImportedWorkflowClip,
+    applyPreparedWorkflow,
+    getState: () => state,
+    review,
+    history,
+    edits,
+    selected,
+    take,
+    total,
+    clamp,
+    saveHistory,
+    save,
+    toast,
+    buttons,
+    render,
+    markTakesSeen,
+    renderInspector,
+    showModal,
+    closeModal,
+    saveView,
+    nativeRecipes,
+    linkedSidecarHashes,
+    getBridgeClient: () => bridgeClient,
+    getBridgeReady: () => bridgeReady,
+    host,
+    exactInt,
+    isInt,
+    decimal,
+    projectEdit,
+    flushNative,
+    focusViewId,
+    evidenceCache,
+    getWorkflowSetup: () => workflowSetup,
+  });
+
+  function mediaWorkflowData(m) {
+    return workflowDialogsOwner.mediaWorkflowData(m);
   }
   // A take's editable graph may be a saved recipe, a snapshot frozen in the document,
   // or evidence embedded in the render. Answer whether one exists without fetching it.
   function editableGraph(c) {
-    const recipe = nativeRecipes[c.workflowVersion] || workflows[c.workflow]?.data;
-    if (Array.isArray(recipe?.workflow?.nodes) || (c.generationBase && recipe?.prompt)) return { capture: recipe };
-    const t = take(c),
-      m = t?.media;
-    const snapshot = t?.workflowSnapshot || t?.request?.capture;
-    if (Array.isArray(snapshot?.workflow?.nodes)) return { capture: snapshot };
-    if (t?.recipeGraph) return { take: t };
-    const inline = m?.workflowData || (m?.workflow ? { workflow: m.workflow, prompt: m.prompt } : null);
-    if (Array.isArray(inline?.workflow?.nodes)) return { capture: inline };
-    return m?.embeddedGraph ? { media: m } : null;
+    return workflowDialogsOwner.editableGraph(c);
   }
-  async function resolvedClipWorkflow(c) {
-    const graph = editableGraph(c);
-    if (!graph) return null;
-    if (graph.capture) return graph.capture;
-    if (graph.take)
-      return (await request('projects/' + projectKey + '/takes/' + encodeURIComponent(graph.take.id))).request.capture;
-    const held = await mediaEvidence(graph.media);
-    return held?.workflowData || (held?.workflow ? { workflow: held.workflow, prompt: held.prompt } : null);
-  }
+
   function clipWorkflowLink(c) {
-    return {
-      projectId: projectKey,
-      clipId: c.id,
-      editorId: focusViewId,
-      sidecarSha: linkedSidecarHashes.get(c.id) ?? nativeRecipes[c.workflowVersion]?.sidecar?.sha256 ?? '',
-      sourceKey: JSON.stringify({
-        graphFormat: 'workflow',
-        version: c.workflowVersion,
-        take: c.takeId,
-        values: Object.fromEntries(
-          Object.entries(c.inputValues || {}).map(([key, value]) => [key, isInt(value) ? decimal(value) : value]),
-        ),
-        sources: c.shotInputs || [],
-        in: c.in,
-        out: c.out,
-        fps,
-      }),
-    };
+    return workflowDialogsOwner.clipWorkflowLink(c);
   }
-  async function openNativeWorkflow() {
-    const tab = bridgeReady !== true ? window.open('about:blank', '_blank') : null;
-    if (tab) {
-      tab.document.title = 'Opening Comfy workflow';
-      tab.document.body.textContent = 'Spool is connecting to Comfy...';
-    }
-    try {
-      await projectEdit.prepareNavigation();
-      if (!selected()) throw Error('Select a clip first.');
-      const c = copy(selected());
-      const saved = c.workflowVersion ? await request('workflows/' + c.workflowVersion) : await resolvedClipWorkflow(c);
-      const current = !take(c)?.placeholder
-        ? await request(
-            'projects/' +
-              projectKey +
-              '/take-workflow/' +
-              encodeURIComponent(c.id) +
-              '/' +
-              encodeURIComponent(c.takeId),
-          )
-        : null;
-      linkedSidecarHashes.set(c.id, current?.sidecar?.sha256 || '');
-      const capture = current?.sidecar ? current : saved,
-        link = clipWorkflowLink(c);
-      if (!capture) throw Error('This clip has no workflow graph');
-      if (!capture.workflow?.nodes?.length)
-        throw Error('This recipe has no editable Comfy graph. Import the original workflow to edit it in Comfy.');
-      const prompt = capture.prompt ? copy(capture.prompt) : null;
-      const sameSetup = !capture.sidecar || capture.sidecar.sha256 === saved?.sidecar?.sha256;
-      const controls = sameSetup
-        ? (c.bindings || [])
-            .filter(b => Object.hasOwn(c.inputValues || {}, b.key))
-            .map(b => ({ nodeId: b.nodeId, input: b.input, value: c.inputValues[b.key] }))
-        : [];
-      if (prompt) for (const b of controls) if (prompt[b.nodeId]) prompt[b.nodeId].inputs[b.input] = b.value;
-      if (prompt && sameSetup && c.shotInputs?.length) {
-        const preview = await request('projects/' + projectKey + '/generation-preview', {
-          revision: projectEdit.revision,
-          clipId: c.id,
-        });
-        for (const asset of preview.assets) prompt[asset.nodeId].inputs[asset.input] = asset.frozen;
-      }
-      if (prompt)
-        for (const control of controls) {
-          control.value = prompt[control.nodeId].inputs[control.input];
-          if (exactInt(control.value)) {
-            const number = Number(decimal(control.value));
-            if (!Number.isSafeInteger(number))
-              throw Error(
-                'This control exceeds Comfy’s exact browser integer range. Keep its preserved execution value or choose an exact safe integer before editing in Comfy.',
-              );
-            control.value = number;
-          }
-        }
-      const result = await host(
-        B.ACTIONS.open,
-        { workflow: capture.workflow, prompt, preferWorkflow: true, controls, name: c.name, link },
-        tab,
-      );
-      toast(
-        result.reused
-          ? 'Focused this clip’s linked Comfy workflow.'
-          : 'Workflow linked. Edit it in Comfy, then choose Apply to clip in Spool.',
-      );
-    } catch (error) {
-      if (tab && !tab.closed) {
-        try {
-          if (tab.location.href === 'about:blank') tab.close();
-        } catch {}
-      }
-      toast(error.message);
-    }
+  function openNativeWorkflow() {
+    return workflowDialogsOwner.openNativeWorkflow();
   }
   function paintWorkflowSetup(question) {
-    const { capture, name, target, choices, result, issue, candidates, savers } = question;
-    if (question.exact) {
-      showModal(
-        'Configure exact controls',
-        '<p>Select literal inputs to expose. Linked inputs keep their edges. Recognized source files are frozen automatically before dispatch.</p><div style="max-height:42vh;overflow:auto">' +
-          candidates
-            .map(
-              (b, i) =>
-                '<label class="field"><span><input type="checkbox" data-bind="' +
-                i +
-                '" ' +
-                (b.old ? 'checked' : '') +
-                '> ' +
-                esc(b.nodeId) +
-                ' · ' +
-                esc(capture.prompt[b.nodeId].class_type) +
-                ' / ' +
-                esc(b.input) +
-                '</span><input data-bind-label="' +
-                i +
-                '" value="' +
-                esc(b.old?.label || b.input) +
-                '" aria-label="Control label"></label>',
-            )
-            .join('') +
-          '</div><div class="three-fields"><label class="field"><span>Result saver</span><select id="nativeSaver">' +
-          savers
-            .map(
-              ([id, n]) =>
-                '<option value="' +
-                esc(id) +
-                '" ' +
-                (capture.result?.nodeId === id ? 'selected' : '') +
-                '>' +
-                esc(id) +
-                ' · ' +
-                esc(n.class_type) +
-                '</option>',
-            )
-            .join('') +
-          '</select></label><label class="field"><span>History group</span><select id="nativeGroup">' +
-          ['images', 'gifs', 'videos']
-            .map(g => '<option ' + (capture.result?.group === g ? 'selected' : '') + '>' + g + '</option>')
-            .join('') +
-          '</select></label><label class="field"><span>Artifact index (0-based)</span><input id="nativeIndex" type="number" min="0" value="' +
-          (capture.result?.index || 0) +
-          '"></label></div><p class="audio-note">All normal output branches execute. This selection chooses which reported artifact enters review. VHS meta_batch is unsupported. A Submit node routes this recipe to Deadline with one job per take. Host widget capture cannot recover integers already rounded by Comfy; raw API JSON preserves 64-bit values.</p><label class="field"><span><input type="checkbox" id="keepOverrides"> Keep existing Spool control overrides instead of newly captured values</span></label>',
-        '<button class="outline" id="captureCancel">Cancel</button><button class="primary" id="captureSave">Save to clip</button>',
-      );
-      $('captureCancel').onclick = closeModal;
-      $('captureSave').onclick = () =>
-        question.confirm('inputs', {
-          bindings: candidates.flatMap((b, i) =>
-            $('modal').querySelector('[data-bind="' + i + '"]').checked
-              ? [{ index: i, label: $('modal').querySelector('[data-bind-label="' + i + '"]').value }]
-              : [],
-          ),
-          result: {
-            nodeId: $('nativeSaver').value,
-            group: $('nativeGroup').value,
-            index: Number($('nativeIndex').value),
-          },
-          keep: $('keepOverrides').checked,
-        });
-      return;
-    }
-    const values = question.essential,
-      optional = question.optional,
-      graphOnly = !capture.prompt && Array.isArray(capture.workflow?.nodes);
-    showModal(
-      graphOnly
-        ? 'Prepare this workflow?'
-        : capture.prompt
-          ? 'Capture inputs from this workflow?'
-          : 'Add this workflow?',
-      '<p>' +
-        esc(name) +
-        '</p>' +
-        (graphOnly
-          ? '<p>Spool will open this workflow in a separate Comfy tab and prepare its settings for generation. Comfy starts if needed. Preparing does not generate a take.</p>'
-          : issue
-            ? '<p>' + esc(issue) + '</p>'
-            : '<p>Choose the key inputs to edit in Spool. Everything else keeps its saved settings.</p>') +
-        (!issue && choices.length > 1
-          ? '<label class="field"><span>Which output belongs to this clip?</span><select id="captureOutput"><option value="">Choose output…</option>' +
-            choices
-              .map(
-                (r, i) =>
-                  '<option value="' +
-                  i +
-                  '" ' +
-                  (result === r ? 'selected' : '') +
-                  '>' +
-                  esc(r.label) +
-                  ' · output ' +
-                  (i + 1) +
-                  '</option>',
-              )
-              .join('') +
-            '</select></label>'
-          : '') +
-        '<div class="native-capture-values">' +
-        values
-          .map(
-            (b, i) =>
-              '<label><input type="checkbox" data-key-input="' +
-              i +
-              '" checked> ' +
-              esc(b.label) +
-              '<output>' +
-              esc(exactInt(b.value) ? decimal(b.value) : b.value) +
-              '</output></label>',
-          )
-          .join('') +
-        '</div>' +
-        (!issue && result && !values.length
-          ? '<p class="audio-note">No supported key inputs found. You can use the workflow’s saved settings.</p>'
-          : '') +
-        (optional.length
-          ? '<details class="native-advanced"><summary>Optional controls</summary>' +
-            optional
-              .map(
-                (b, i) =>
-                  '<label class="field"><span><input type="checkbox" data-optional-input="' +
-                  i +
-                  '"> ' +
-                  esc(b.label) +
-                  '</span></label>',
-              )
-              .join('') +
-            '</details>'
-          : '') +
-        (target && Object.keys(target.inputValues || {}).length
-          ? '<label class="field"><span><input type="checkbox" id="keepKeyOverrides"> Keep my Spool input changes</span></label>'
-          : ''),
-      '<button class="outline" id="keyCaptureCancel">Cancel</button>' +
-        (!issue
-          ? '<button class="outline" id="keyCaptureSaved" ' +
-            (!result ? 'disabled' : '') +
-            '>Use saved settings</button><button class="primary" id="keyCaptureSave" ' +
-            (!result ? 'disabled' : '') +
-            '>Capture</button>'
-          : graphOnly
-            ? '<button class="outline" id="keyCaptureGraph">Save workflow only</button><button class="primary" id="keyCapturePrepare">Prepare in Comfy</button>'
-            : '<button class="primary" id="keyCaptureGraph">Add workflow only</button>'),
-    );
-    $('keyCaptureCancel').onclick = closeModal;
-    if ($('captureOutput')) $('captureOutput').onchange = e => question.chooseOutput(e.target.value);
-    const selection = () => ({
-      essential: values.flatMap((b, i) =>
-        $('modal').querySelector('[data-key-input="' + i + '"]').checked ? [i] : [],
-      ),
-      optional: optional.flatMap((b, i) =>
-        $('modal').querySelector('[data-optional-input="' + i + '"]').checked ? [i] : [],
-      ),
-      keep: $('keepKeyOverrides')?.checked,
-    });
-    if ($('keyCaptureGraph')) $('keyCaptureGraph').onclick = () => question.confirm('graph');
-    if ($('keyCaptureSaved')) $('keyCaptureSaved').onclick = () => question.confirm('saved', selection());
-    if ($('keyCaptureSave')) $('keyCaptureSave').onclick = () => question.confirm('inputs', selection());
-    if (graphOnly)
-      $('keyCapturePrepare').onclick = () => {
-        const graph = { ...capture, importedWorkflowId: question.session.workflowId };
-        closeModal();
-        prepareWorkflow(graph, name, question.session.index, question.session.clipId);
-      };
+    return workflowDialogsOwner.paintWorkflowSetup(question);
   }
-  async function saveWorkflowSetup({ session, capture, name, clipId, index, mode, keep, exact, automatic }) {
-    let c = clipId ? state.clips.find(c => c.id === clipId) : null;
-    if (session.replaceInputs) {
-      const link = capture.provenance?.spoolLink;
-      if (
-        !c ||
-        link?.projectId !== projectKey ||
-        link.clipId !== clipId ||
-        clipWorkflowLink(c).sourceKey !== link.sourceKey
-      )
-        throw Error('This clip changed while Comfy was being captured. Reopen its workflow before applying changes.');
-    }
-    if (clipId) inputReplacements.invalidate(clipId);
-    if (session.takeId) {
-      const before = copy(state);
-      const { adopted } = await projectEdit.change(
-        revision =>
-          request('projects/' + projectKey + '/use-take/' + encodeURIComponent(clipId), {
-            revision,
-            takeId: session.takeId,
-            capture: mode === 'graph' ? null : capture,
-          }),
-        true,
-      );
-      if (adopted) {
-        history.record(before, 'Use take and generation setup');
-        review.used(clipId);
-        markTakesSeen([session.takeId]);
-        state.frame = clamp(state.frame, 0, total());
-        render();
-        saveView();
-        toast(
-          capture && mode !== 'graph'
-            ? 'Take in edit. Next generation uses its metadata.'
-            : 'Take in edit. No executable metadata; choose a workflow from the library.',
-        );
-      } else toast('Take setup saved. Reload to adopt it after resolving your local edit.');
-      return;
-    }
-    const prepared = nativeRecipes[session.preparedVersion],
-      reuse =
-        prepared &&
-        ['nodeId', 'group', 'index'].every(key => prepared.result[key] === capture.result?.[key]) &&
-        prepared.bindings.length === capture.bindings.length &&
-        capture.bindings.every(
-          (b, i) => reusableBinding(prepared.bindings[i], b) && prepared.bindings[i].label === b.label,
-        );
-    if (!c) {
-      const w = session.workflowId ? workflows[session.workflowId] : registerWorkflowData(capture, name);
-      addImportedWorkflowClip(w.id, index, null, session.placement, reuse ? session.preparedVersion : null);
-      c = selected();
-      session.added = true;
-      if (!reuse) await flushNative();
-    }
-    if (reuse) {
-      if (clipId)
-        edits.apply('Replace workflow', () => applyPreparedWorkflow(c, session.workflowId, session.preparedVersion));
-      await flushNative();
-      session.savedClipId = c.id;
-      toast('Workflow prepared. Ready to generate.');
-      return;
-    }
-    if (mode === 'graph') {
-      if (clipId) {
-        edits.apply(
-          'Update workflow graph',
-          () => {
-            const w = registerWorkflowData(
-              { workflow: capture.workflow, prompt: capture.prompt, provenance: capture.provenance },
-              name,
-            );
-            c.workflow = w.id;
-            delete c.workflowVersion;
-            c.bindings = [];
-            c.inputValues = {};
-          },
-          'none',
-        );
-        await flushNative();
-      }
-      toast('Workflow saved. Select the shot and click Prepare when ready.');
-      return;
-    }
-    const before = copy(state),
-      overrides = keep
-        ? Object.fromEntries(
-            capture.bindings
-              .filter(b => Object.hasOwn(c.inputValues || {}, b.key))
-              .map(b => [b.key, c.inputValues[b.key]]),
-          )
-        : undefined;
-    const { adopted } = await projectEdit.change(revision =>
-      request('projects/' + projectKey + '/capture/' + encodeURIComponent(c.id), {
-        revision,
-        capture,
-        overrides,
-        resetInputs: !!(session.replaceInputs || session.replaceWorkflow),
-        saveSidecar: !!session.replaceInputs,
-      }),
-    );
-    if (adopted) {
-      if (clipId && !session.replaceInputs) {
-        const updated = state.clips.find(c => c.id === clipId);
-        if (updated) {
-          const workflow = workflows[session.workflowId] || registerWorkflowData(capture, name);
-          updated.workflow = workflow.id;
-          if (session.replaceWorkflow) {
-            updated.executionTarget = capture.executionTarget || 'local';
-            matchClipInputs(
-              updated,
-              before.clips.find(c => c.id === clipId),
-              nativeRecipes[updated.workflowVersion],
-              definitionsFor(updated),
-              fps,
-            );
-          }
-          save();
-          await flushNative();
-          renderInspector();
-        }
-      }
-      if (!session.added)
-        history.record(
-          before,
-          session.replaceInputs
-            ? 'Apply Comfy workflow'
-            : exact
-              ? 'Save workflow to clip'
-              : session.replaceWorkflow
-                ? 'Replace workflow'
-                : 'Capture clip inputs',
-        );
-      session.savedClipId = c.id;
-      buttons();
-      saveHistory();
-      saveView();
-      if (session.replaceInputs) {
-        session.applied = true;
-        const current = state.clips.find(c => c.id === clipId);
-        linkedSidecarHashes.set(clipId, nativeRecipes[current.workflowVersion]?.sidecar?.sha256 || '');
-        try {
-          await bridgeClient?.call(B.LINK_APPLIED, {
-            previous: capture.provenance.spoolLink,
-            next: clipWorkflowLink(current),
-          });
-        } catch {}
-        toast('Comfy changes applied to ' + current.name);
-        return;
-      }
-      toast(
-        exact
-          ? 'Immutable workflow version saved. Existing take requests are unchanged.'
-          : automatic
-            ? 'Workflow prepared. Ready to generate.'
-            : 'Clip updated. Previous take settings are preserved.',
-      );
-    } else toast('Capture saved; newer local edits kept. Update again to adopt it.');
+  function saveWorkflowSetup({ session, capture, name, clipId, index, mode, keep, exact, automatic }) {
+    return workflowDialogsOwner.saveWorkflowSetup({
+      session: session,
+      capture: capture,
+      name: name,
+      clipId: clipId,
+      index: index,
+      mode: mode,
+      keep: keep,
+      exact: exact,
+      automatic: automatic,
+    });
   }
   const workflowSetup = createWorkflowSetup({
     edit: projectEdit,
@@ -6899,102 +3638,18 @@ async function startEditor(isFailed) {
       },
     },
   });
-  async function configureCapture(origin, initial = null) {
-    const c = selected();
-    if (!c) return;
-    try {
-      await workflowSetup.start({
-        name: c.name,
-        clipId: c.id,
-        exact: true,
-        previous: nativeRecipes[c.workflowVersion],
-        capture: async () => {
-          let capture;
-          if (origin === 'host') {
-            capture = initial || (await host(B.ACTIONS.capture));
-            if (c.workflowVersion) {
-              const previous = await request('workflows/' + c.workflowVersion);
-              capture.bindings = (previous.bindings || []).filter(
-                b =>
-                  capture.prompt[b.nodeId]?.class_type === previous.prompt[b.nodeId]?.class_type &&
-                  Object.hasOwn(capture.prompt[b.nodeId].inputs, b.input) &&
-                  (['string', 'number', 'boolean'].includes(typeof capture.prompt[b.nodeId].inputs[b.input]) ||
-                    exactInt(capture.prompt[b.nodeId].inputs[b.input])),
-              );
-            }
-          } else if (origin === 'saved') capture = await request('workflows/' + c.workflowVersion);
-          else {
-            const data = workflows[c.workflow]?.data;
-            if (!data?.prompt || Array.isArray(data.prompt.nodes))
-              throw Error('Graph-only JSON needs Open workflow, then Save graph to clip through Comfy.');
-            capture = {
-              workflow: Array.isArray(data.workflow?.nodes) ? data.workflow : null,
-              prompt: copy(data.prompt),
-              provenance: { source: 'explicit API import', historicalMetadata: copy(data) },
-            };
-          }
-          capture.definitions = capture.definitions || (await request('capabilities')).definitions;
-          return capture;
-        },
-      });
-    } catch (error) {
-      toast(error.message);
-    }
+  function configureCapture(origin, initial = null) {
+    return workflowDialogsOwner.configureCapture(origin, initial);
   }
 
-  async function importWorkflowFile(file) {
-    const raw = await file.text();
-    const { value, adopted } = await projectEdit.change(async revision => {
-      return api.call('projects/' + projectKey + '/import-workflow', {
-        method: 'POST',
-        body: raw,
-        json: false,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Filename': encodeURIComponent(file.name),
-          'X-Spool-Revision': String(revision),
-        },
-      });
-    }, true);
-    if (!adopted) throw Error('Workflow imported to the project library. Finish your local edit before adding it.');
-    return value.workflow;
+  function importWorkflowFile(file) {
+    return workflowDialogsOwner.importWorkflowFile(file);
   }
-  async function reset() {
-    await flushNative();
-    showModal(
-      'New project',
-      '<label>Project name<input id="newProjectName" value="Untitled Spool project"></label><label>Project folder<input id="newProjectFolder" placeholder="Leave empty to use your projects directory"></label>',
-      '<button class="primary" id="createProjectFolder">Create project</button>',
-    );
-    $('createProjectFolder').onclick = async () => {
-      try {
-        const folder = $('newProjectFolder').value.trim(),
-          name = $('newProjectName').value.trim() || 'Untitled Spool project';
-        const created = await request('projects', {
-          document: { project: name, clips: [], media: [] },
-          ...(folder ? { folder } : {}),
-        });
-        location.href = withBridge('/spool/?project=' + created.id);
-      } catch (error) {
-        toast(error.message);
-      }
-    };
+  function reset() {
+    return projectDialogsOwner.reset();
   }
-  async function openProjectFolder() {
-    await flushNative();
-    showModal(
-      'Open project folder',
-      '<label>Folder containing project.spool<input id="openProjectFolderPath" placeholder="Full path to the project folder"></label>',
-      '<button class="primary" id="openProjectFolderButton">Open project</button>',
-    );
-    $('openProjectFolderButton').onclick = async () => {
-      try {
-        const opened = await request('open-project', { folder: $('openProjectFolderPath').value.trim() });
-        location.href = withBridge('/spool/?project=' + opened.id);
-      } catch (error) {
-        toast(error.message);
-      }
-    };
+  function openProjectFolder() {
+    return projectDialogsOwner.openProjectFolder();
   }
 
   $('reset').title = 'New project';
@@ -7002,37 +3657,9 @@ async function startEditor(isFailed) {
   $('reset').onclick = reset;
 
   function downloadValue(value, suffix = '') {
-    const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }),
-      link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = state.project.replace(/[^a-z0-9]+/gi, '-') + suffix + '.spool.json';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    return projectDialogsOwner.downloadValue(value, suffix);
   }
-  async function downloadLocalDraft() {
-    const document = copy(projectData()),
-      recipes = {};
-    for (const c of document.clips)
-      if (c.workflowVersion && nativeRecipes[c.workflowVersion])
-        recipes[c.workflowVersion] = nativeRecipes[c.workflowVersion];
-    // Evidence is stored outside the working document, so a portable draft must ask for
-    // it; without it an imported draft would name graphs and probes it cannot supply.
-    let evidence = {};
-    try {
-      evidence = await request('projects/' + projectKey + '/evidence');
-    } catch (error) {
-      toast('Downloading the draft without media evidence: ' + error.message);
-    }
-    downloadValue(
-      {
-        spoolVersion: 1,
-        document: L.compose(document, evidence),
-        recipes,
-        draftOrigin: { projectId: projectKey, revision: projectEdit.revision, unsaved: true },
-      },
-      '-local-draft',
-    );
-  }
+
   $('projectFile').onchange = async e => {
     const file = e.target.files[0];
     if (!file) return;
@@ -7050,116 +3677,26 @@ async function startEditor(isFailed) {
     e.target.value = '';
   };
   function captureInputs(capture, name, index = state.clips.length, clipId = null, automatic = false) {
-    return workflowSetup.start({
-      capture,
-      name,
-      index,
-      clipId,
-      automatic,
-      definitions: productDefinitions,
-      previous: nativeRecipes[state.clips.find(c => c.id === clipId)?.workflowVersion],
-    });
+    return workflowDialogsOwner.captureInputs(capture, name, index, clipId, automatic);
   }
 
-  async function prepareWorkflow(capture, name, index = state.clips.length, clipId = null) {
-    const tab = window.open('about:blank', '_blank');
-    if (!tab) {
-      toast('Allow Spool to open a Comfy tab, then prepare again.');
-      return;
-    }
-    tab.document.title = 'Preparing workflow';
-    tab.document.body.textContent = 'Spool is connecting to Comfy and preparing your workflow…';
-    try {
-      await captureInputs(
-        async () => ({
-          ...(await host('prepare', { workflow: capture.workflow, name, clipId }, tab)),
-          importedWorkflowId: capture.importedWorkflowId,
-        }),
-        name,
-        index,
-        clipId,
-        true,
-      );
-    } catch (error) {
-      tab.close();
-      toast(error.message);
-    }
+  function prepareWorkflow(capture, name, index = state.clips.length, clipId = null) {
+    return workflowDialogsOwner.prepareWorkflow(capture, name, index, clipId);
   }
-  async function updateClipInputs(id, expected = null) {
-    const c = state.clips.find(c => c.id === id);
-    try {
-      if (!c) throw Error('This clip was removed.');
-      if (expected && clipWorkflowLink(c).sourceKey !== expected.sourceKey)
-        throw Error('This clip changed in Spool. Choose Edit in Comfy again.');
-      const session = await workflowSetup.start({
-        name: c.name,
-        clipId: id,
-        index: state.clips.indexOf(c),
-        automatic: true,
-        replaceInputs: true,
-        previous: nativeRecipes[c.workflowVersion],
-        definitions: productDefinitions,
-        capture: () => host(B.ACTIONS.capture, { link: clipWorkflowLink(c) }),
-      });
-      if (expected) {
-        await session.completed;
-        if (!session.applied)
-          throw session.error || Error('Changes were not applied. Finish the workflow setup in Spool.');
-      }
-      return session;
-    } catch (error) {
-      toast(error.message);
-      if (expected) throw error;
-    }
+  function updateClipInputs(id, expected = null) {
+    return workflowDialogsOwner.updateClipInputs(id, expected);
   }
-  async function addNativeGraph(capture, name = capture.name || 'Current workflow', index = state.clips.length) {
-    await captureInputs(capture, name, index);
+  function addNativeGraph(capture, name = capture.name || 'Current workflow', index = state.clips.length) {
+    return workflowDialogsOwner.addNativeGraph(capture, name, index);
   }
   const actionMenu = createActionMenu({ $, esc, menuParent: () => (viewerExpanded ? $('viewer') : document.body) });
   const { clipMenu, closeClipMenu, showActionMenu, placeMenu } = actionMenu;
-  function unlinkClipAudio(id) {
-    const c = state.clips.find(c => c.id === id);
-    if (!c || !T.linkedAudio(c) || take(c).placeholder) return;
-    pause();
-    edits.apply('Unlink audio and video', () => {
-      const audio = T.unlinkAudio(state, id, 'audio-' + crypto.randomUUID());
-      state.selectedAudio = audio.id;
-      review.rememberMedia(audio.media, audio.in);
-      inspectorTab = 'audio';
-      editView();
-    });
-    toast('Audio unlinked on A1 - move or trim it independently');
-  }
-  function unlinkSelectedAudio() {
-    const clips = selectedVideos().filter(c => T.linkedAudio(c) && !take(c).placeholder);
-    if (!clips.length) return;
-    pause();
-    edits.apply('Unlink ' + clips.length + ' clips', () => {
-      const ids = clips.map(c => T.unlinkAudio(state, c.id, 'audio-' + crypto.randomUUID()).id);
-      setTimelineSelection(ids);
-      inspectorTab = 'audio';
-      editView();
-    });
-  }
+
   function toggleSelectedEnabled() {
-    if (drag) return;
-    const ids = selectionIds(),
-      clips = [...state.clips, ...(state.audioClips || [])].filter(c => ids.includes(c.id));
-    if (!clips.length) return;
-    const value = clips.some(c => !T.enabled(c));
-    edits.apply(value ? 'Enable clips' : 'Disable clips', () => {
-      pause();
-      T.setEnabled(state, ids, value);
-    });
-    $('editor').focus({ preventScroll: true });
+    return clipToolsOwner.toggleSelectedEnabled();
   }
   function enableAction() {
-    const ids = selectionIds(),
-      off = [...state.clips, ...(state.audioClips || [])].some(c => ids.includes(c.id) && !T.enabled(c));
-    return {
-      label: off ? 'Enable clip' + (ids.length > 1 ? 's' : '') : 'Disable clip' + (ids.length > 1 ? 's' : ''),
-      run: toggleSelectedEnabled,
-    };
+    return clipToolsOwner.enableAction();
   }
   $('addVideoTrack').onclick = () =>
     edits.apply('Add video track', () => {
@@ -7169,104 +3706,13 @@ async function startEditor(isFailed) {
     $('trackHeaders').style.transform = 'translateY(-' + $('timelineScroll').scrollTop + 'px)';
   });
   function selectionActions() {
-    return [
-      enableAction(),
-      ...(selectedVideos().some(c => T.linkedAudio(c) && !take(c).placeholder)
-        ? [{ label: 'Unlink audio and video', run: unlinkSelectedAudio }]
-        : []),
-      { label: 'Delete selection', run: () => remove(false) },
-      { label: 'Ripple delete selection', run: () => remove(true) },
-    ];
+    return clipToolsOwner.selectionActions();
   }
   function openClipMenu(id, x, y, origin, inspector = false) {
-    const c = state.clips.find(c => c.id === id);
-    if (!c) return;
-    closeClipMenu(false);
-    selectClip(id, false, {}, true);
-    actionMenu.setOrigin(origin, id);
-    if (selectionIds().length > 1) {
-      showActionMenu(
-        'Selection actions',
-        inspector ? [{ label: 'Delete selection', run: () => remove(false) }] : selectionActions(),
-        x,
-        y,
-        origin,
-      );
-      return;
-    }
-    const actions = [
-      ...(editableGraph(c)
-        ? [
-            {
-              label: 'Open workflow in Comfy',
-              reason: !bridge && !productCapabilities.connected ? 'Start the paired Comfy host.' : null,
-              run: () => openNativeWorkflow(),
-            },
-          ]
-        : []),
-      {
-        label: 'Delete',
-        run: () => {
-          selectClip(id, false);
-          remove(false);
-        },
-      },
-    ];
-    if (!inspector) {
-      actions.unshift(
-        enableAction(),
-        ...(T.linkedAudio(c) && !take(c).placeholder
-          ? [{ label: 'Unlink audio and video', run: () => unlinkClipAudio(id) }]
-          : []),
-      );
-      actions.splice(
-        actions.length - 1,
-        0,
-        ...(!take(c).placeholder && take(c).media.kind === 'video'
-          ? [{ label: 'Detect cuts\u2026', run: () => detectClipCuts(id) }]
-          : []),
-      );
-    }
-    showActionMenu('Clip actions', actions, x, y, origin);
+    return clipToolsOwner.openClipMenu(id, x, y, origin, inspector);
   }
   function showViewerMenu(picture, x, y) {
-    const available =
-      picture && !picture.gap && !picture.take?.placeholder && ['video', 'image'].includes(picture.media.kind);
-    closeClipMenu(false);
-    actionMenu.setOrigin($('viewer'));
-    clipMenu.className = 'viewer-menu';
-    clipMenu.setAttribute('aria-label', 'Viewer actions');
-    const detail = available
-      ? 'Original' +
-        (picture.media.width && picture.media.height ? ' · ' + picture.media.width + ' × ' + picture.media.height : '')
-      : 'Choose a frame from video or an image';
-    clipMenu.innerHTML =
-      '<button class="menu-action" role="menuitem" aria-label="Export frame" aria-describedby="viewer-menu-export-detail" data-viewer-action="export" ' +
-      (available ? '' : 'disabled aria-disabled="true"') +
-      '>' +
-      svg('export') +
-      '<span>Export frame<small id="viewer-menu-export-detail">' +
-      esc(detail) +
-      '</small></span><span class="menu-format">PNG</span></button><div class="menu-divider" role="separator"></div><button class="menu-action" role="menuitem" data-viewer-action="fit">' +
-      svg('fit') +
-      '<span>Fit to viewer</span></button><button class="menu-action" role="menuitem" data-viewer-action="fullscreen">' +
-      svg('expand') +
-      '<span>' +
-      (viewerExpanded ? 'Exit fullscreen' : 'Fullscreen') +
-      '</span><kbd>F</kbd></button>';
-    clipMenu.querySelector('[data-viewer-action="export"]').onclick = () => {
-      closeClipMenu();
-      exportViewerFrame(copy(picture));
-    };
-    clipMenu.querySelector('[data-viewer-action="fit"]').onclick = () => {
-      closeClipMenu();
-      resetViewerZoom();
-    };
-    clipMenu.querySelector('[data-viewer-action="fullscreen"]').onclick = () => {
-      closeClipMenu();
-      toggleViewerFullscreen();
-    };
-    placeMenu(x, y);
+    return clipToolsOwner.showViewerMenu(picture, x, y);
   }
   document.addEventListener('contextmenu', e => {
     e.preventDefault();
@@ -7472,104 +3918,8 @@ async function startEditor(isFailed) {
       toast(error.message);
     }
   };
-  async function showProjects() {
-    try {
-      await flushNative();
-      const projects = await request('projects'),
-        c = selected(),
-        size = resolution();
-      const action = (id, label, icon, disabled = false) =>
-        '<button class="project-dialog-action" id="' +
-        id +
-        '" ' +
-        (disabled ? 'disabled' : '') +
-        '>' +
-        svg(icon) +
-        '<span>' +
-        label +
-        '</span></button>';
-      const rows = projects
-        .map(
-          p =>
-            '<a class="saved-project-row" ' +
-            (p.id === projectKey ? 'aria-current="page"' : '') +
-            ' href="' +
-            esc(withBridge('/spool/?project=' + encodeURIComponent(p.id))) +
-            '"><span class="saved-project-icon">' +
-            svg('folder') +
-            '</span><span class="saved-project-copy"><strong>' +
-            esc(p.name) +
-            '</strong><small>' +
-            esc(
-              p.unavailable
-                ? 'Folder unavailable'
-                : p.folder || (p.id === projectKey ? 'Current project' : 'Open project'),
-            ) +
-            '</small></span><span class="saved-project-arrow" aria-hidden="true">›</span></a>',
-        )
-        .join('');
-      showModal(
-        'Project',
-        '<div class="project-dialog-layout"><section aria-labelledby="savedProjectsTitle"><h3 id="savedProjectsTitle">Saved projects <span>' +
-          projects.length +
-          '</span></h3><nav class="saved-project-list" aria-label="Saved projects">' +
-          rows +
-          '</nav>' +
-          action('projectOpenFile', 'Open project folder…', 'folder') +
-          '</section><div class="project-dialog-tools"><section class="project-dialog-group"><h3>Current project</h3><div class="project-current-name">' +
-          esc(state.project) +
-          '</div><div class="project-current-meta">' +
-          state.clips.length +
-          ' clips · ' +
-          fps +
-          ' fps · ' +
-          size.width +
-          ' × ' +
-          size.height +
-          '</div>' +
-          action('projectSettings', 'Project settings…', 'sliders') +
-          '<div class="project-folder-path">' +
-          esc(BOOT.folder || '') +
-          '</div>' +
-          '</section><section class="project-dialog-group"><h3>Import & tools</h3>' +
-          action('projectImportFootage', 'Import footage…', 'import') +
-          action('projectImportVideo', 'Import video from path…', 'folder') +
-          action('projectAddWorkflow', 'Add current workflow', 'nodes', !bridge && !productCapabilities.connected) +
-          action(
-            'projectDetectCuts',
-            'Detect cuts in selected clip…',
-            'scissors',
-            !c || take(c).placeholder || take(c).media.kind !== 'video',
-          ) +
-          '</section><section class="project-dialog-group"><h3>Connection</h3>' +
-          action('projectComfySettings', 'Comfy settings…', 'settings') +
-          '</section></div></div>',
-        '<span>Edits save automatically. ' +
-          keyText('Ctrl') +
-          '+S saves now; a save check runs every minute.</span><button class="primary" id="newNativeProject">' +
-          svg('plus') +
-          'New project</button>',
-      );
-      $('modal').classList.add('project-dialog');
-      $('projectOpenFile').classList.add('project-open-file');
-      $('newNativeProject').onclick = () => reset().catch(error => toast(error.message));
-      $('projectOpenFile').onclick = openProjectFolder;
-      $('projectAddWorkflow').onclick = () => {
-        closeModal();
-        addGraphButton.click();
-      };
-      $('projectImportFootage').onclick = () => {
-        closeModal();
-        $('mediaFiles').onchange = e => importFiles(e.target.files, true);
-        $('mediaFiles').click();
-      };
-      $('projectImportVideo').onclick = importFootageDialog;
-      $('projectSettings').onclick = projectSettings;
-      $('projectComfySettings').onclick = comfySettings;
-      $('projectDetectCuts').onclick = () => detectClipCuts(selected().id);
-    } catch (error) {
-      toast(error.message);
-    }
+  function showProjects() {
+    return projectDialogsOwner.showProjects();
   }
   $('openWorkflow').textContent = '⋯';
   $('openWorkflow').setAttribute('aria-label', 'Clip actions');
