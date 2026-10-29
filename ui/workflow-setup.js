@@ -1,16 +1,19 @@
 import {loaderInputs, profileIssue, resultChoices, keyInputs, sourceInputs, reusableBinding, inputSchema} from './profile.js';
 import {isExactInt} from './wire.js';
 import {builtinInputs,controlnetInputs,dynamicSchema} from './builtin-workflows.js';
+import {inputProblem} from './input-groups.js';
 
 export function matchClipInputs(target,source,recipe,definitions,fps){
  const take=source.takes.find(t=>t.id===source.takeId);if(!take||take.placeholder)return;
- const media=take.media,seconds=(source.out-source.in)/fps,settings=[],number=value=>Number(isExactInt(value)?value.__spool_int__:value),integer=value=>BigInt(isExactInt(value)?value.__spool_int__:value);let reference=false;
+ const media=take.media,seconds=(source.out-source.in)/fps,settings=[],number=value=>Number(isExactInt(value)?value.__spool_int__:value),integer=value=>BigInt(isExactInt(value)?value.__spool_int__:value);let reference=false,grouped=false;
  for(const b of target.bindings){
   const node=recipe.prompt[b.nodeId],definition=definitions[node.class_type],schema=inputSchema(definitions,node.class_type,b.input)||dynamicSchema(definition?.input,b.input,node.inputs),options=b.options||(Array.isArray(schema?.[0])?schema[0]:schema?.[1]?.options);
   if(b.asset){
    const image=['image','firstFrame','lastFrame','reference'].includes(b.slot)&&['image','video'].includes(media.kind),video=b.slot==='video'&&media.kind==='video',audio=b.slot==='audio'&&(media.audio||media.kind==='audio');
-   if(!(image||video||audio)||b.slot==='reference'&&reference)continue;
-   if(b.slot==='reference')reference=true;settings.push({key:b.key,source:'selected',...(image?{frame:b.slot==='lastFrame'?'last':'first'}:{})});continue;
+   // The shot fills one reference, and only the first slot of one group.
+   const first=!b.group||target.bindings.find(other=>other.group===b.group)===b;
+   if(!(image||video||audio)||b.slot==='reference'&&reference||b.group&&(grouped||!first))continue;
+   if(b.slot==='reference')reference=true;if(b.group)grouped=true;settings.push({key:b.key,source:'selected',...(image?{frame:b.slot==='lastFrame'?'last':'first'}:{}),...(video&&b.audio?{audio:true}:{})});continue;
   }
   let value;
   if(b.role==='resolution'&&['ratio','aspect_ratio'].includes(b.input.split('.').at(-1))&&media.width&&media.height){
@@ -28,9 +31,11 @@ export function matchClipInputs(target,source,recipe,definitions,fps){
 
 export function workflowStatus(clip, workflow, recipe, definitions={}, embedded=false) {
  const name=recipe?.provenance?.workflowName||workflow?.name||(clip?.workflowVersion?'Saved workflow':'Imported footage');
- const missing=recipe&&(clip.bindings||[]).some(b=>b.asset&&!(clip.shotInputs||[]).some(s=>s.key===b.key)&&(!clip.inputValues?.[b.key]||recipe.inputRecovery?.missing?.some(m=>b.nodeId===m.nodeId&&b.input===m.input&&m.sources.includes(clip.inputValues?.[b.key]))));
+ // A file Comfy could not find counts as empty.
+ const values=recipe&&Object.fromEntries((clip.bindings||[]).filter(b=>b.asset).map(b=>[b.key,recipe.inputRecovery?.missing?.some(m=>b.nodeId===m.nodeId&&b.input===m.input&&m.sources.includes(clip.inputValues?.[b.key]))?'':clip.inputValues?.[b.key]]));
+ const missing=recipe&&inputProblem(clip.bindings||[],values,clip.shotInputs||[],recipe.inputRules);
  const reason=clip?.generationBase&&clip.generationBase.takeId!==clip.takeId?'Use the take again to update generation settings.':!clip?.workflowVersion?(clip?.generationBase?'This take has no executable metadata. Choose a workflow from the library.':'Capture an executable workflow first.'):!recipe?'Reopen the saved recipe before queueing.':
-  (Object.keys(definitions).length?profileIssue(recipe.prompt,definitions,recipe.workflow):null)||(!recipe.result?'Choose the clip output first.':null)||(missing?'Choose source media in the Inspector.':null);
+  (Object.keys(definitions).length?profileIssue(recipe.prompt,definitions,recipe.workflow):null)||(!recipe.result?'Choose the clip output first.':null)||missing||null;
  return {name,reason,ready:!reason,problem:!!reason&&!!(clip?.generationBase||clip?.workflowVersion),note:!reason?'Ready to generate':clip?.generationBase||clip?.workflowVersion?reason:embedded?'Use this take to set up generation':workflow?'Prepare this workflow to generate':'Use a take or choose a workflow from the library'};
 }
 
@@ -74,10 +79,12 @@ export function createWorkflowSetup({edit, flush, clip, dialog, save}) {
    const controls=()=>{
     if(!result||issue)return [];
     if(builtin)return preparedVersion?capture.bindings.map(b=>({...b,value:capture.prompt[b.nodeId].inputs[b.input]})):builtinInputs(capture,definitions,result,builtin);
-    const held=replaceInputs?(previous?.bindings||[]).flatMap(b=>{
+    // Apply to clip keeps the clip's inputs; Use take keeps the take's optional and grouped inputs.
+    const kept=replaceInputs?previous:takeId&&capture.bindings?.some(b=>b.optional)?capture:null;
+    const held=(kept?.bindings||[]).flatMap(b=>{
      const node=capture.prompt[b.nodeId],value=node?.inputs[b.input];
-     return node?.class_type===previous.prompt[b.nodeId]?.class_type&&(['string','number','boolean'].includes(typeof value)||isExactInt(value))?[{...b,value}]:[];
-    }):[];
+     return node?.class_type===kept.prompt[b.nodeId]?.class_type&&(['string','number','boolean'].includes(typeof value)||isExactInt(value))?[{...b,value}]:[];
+    });
     let inputs=[...held,...keyInputs(capture.prompt,definitions,result).filter(b=>!held.some(old=>old.nodeId===b.nodeId&&old.input===b.input))];
     if(replaceInputs){
      const sources=sourceInputs(capture.prompt,definitions,result).map(source=>{
@@ -116,6 +123,9 @@ export function createWorkflowSetup({edit, flush, clip, dialog, save}) {
       const chosen=mode==='inputs'?(automatic?(takeId||replaceInputs?inputs.filter(b=>!b.ambiguous):essential):[...(selection.essential||[]).map(i=>essential[i]),...(selection.optional||[]).map(i=>optional[i])]):[];
       capture.bindings=chosen.map(({value,...b})=>({...b,key:target?.bindings?.find(old=>replaceInputs?old.nodeId===b.nodeId&&old.input===b.input&&previous?.prompt[old.nodeId]?.class_type===capture.prompt[b.nodeId]?.class_type:reusableBinding(old,b))?.key||crypto.randomUUID()}));
       capture.result=result&&{nodeId:result.nodeId,group:result.group,index:result.index};
+      // Apply to clip keeps the recipe's input rules while their groups remain.
+      const rules=(replaceInputs?previous?.inputRules:capture.inputRules)?.map(rule=>({...rule,anyOf:rule.anyOf.filter(group=>capture.bindings.some(b=>b.group===group))})).filter(rule=>rule.anyOf.length);
+      if(rules?.length)capture.inputRules=rules;else delete capture.inputRules;
       capture.provenance={...capture.provenance,keyInputProfile:'spool-key-inputs-1',workflowName:name,...(builtin?{builtinTemplate:builtin.id,builtinTask:builtin.task}:{})};
      }
      delete capture.definitions;

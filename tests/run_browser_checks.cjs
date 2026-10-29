@@ -172,7 +172,8 @@ async function controlnetVideoFixture(){
  return {id:project.id};
 }
 async function controlnetControlsFixture(){
- const fixture=await controlnetVideoFixture(),capture=JSON.parse(fs.readFileSync(path.join(ui,'builtin-captures.json'),'utf8')).templates.video_minimax_h3_fun_controlnet_union;
+ // Projects saved before Spool shipped its own ControlNet workflow keep the curated template's six bindings.
+ const fixture=await controlnetVideoFixture(),capture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/legacy_controlnet_capture.json'),'utf8'));
  let project=await api('projects/'+fixture.id);
  project=await api('projects/'+fixture.id+'/capture/shot',{revision:project.revision,capture});
  project.document.clips[0].shotInputs=[{key:capture.bindings.find(b=>b.slot==='video').key,source:'selected'}];
@@ -197,6 +198,8 @@ const CHECKS = {
   'workflow-project-profile':{fixture:async()=>{if(!process.env.SPOOL_QA_PROJECT)throw Error('Set SPOOL_QA_PROJECT to an owned QA copy');const project=await api('projects/'+process.env.SPOOL_QA_PROJECT);if(!/QA/.test(project.document.project))throw Error('Profile only an explicitly named QA project');return {id:project.id};},modes:['full'],branchTemplates:true,file:'workflow_project_profile_browser_checks.js'},
   'workflow-drop':{fixture:async()=>api('projects',{document:{project:'Workflow drop QA',fps:24,videoTracks:2,clips:timelineClips(3).map((c,i)=>({...c,videoTrack:i===2?2:1,...(i===2?{gapBefore:48}:{})})),media:[still('drop-footage')],audioClips:[],importedWorkflows:[]}}),modes:['full'],branchTemplates:true,libraryDrop:true,file:'workflow_drop_browser_checks.js'},
   'workflow-insert':{fixture:async()=>api('projects',{document:{project:'Workflow insertion QA',fps:24,clips:[],media:[],audioClips:[],importedWorkflows:[]}}),modes:['full'],branchTemplates:true,file:'workflow_insert_browser_checks.js'},
+  'reference-inputs':{fixture:async()=>api('projects',{document:{project:'Reference inputs QA',fps:24,clips:[],media:[],audioClips:[],importedWorkflows:[]}}),modes:['full'],branchTemplates:true,file:'reference_inputs_browser_checks.js'},
+  'builtin-comfy-link':{fixture:async()=>api('projects',{document:{project:'Spool workflows Comfy link QA',fps:24,clips:[],media:[],audioClips:[],importedWorkflows:[]}}),modes:['full'],branchTemplates:true,userGesture:true,file:'builtin_comfy_link_browser_checks.js'},
   'arrival-focus':{fixture:workflowFixture,modes:['full'],file:'arrival_focus_browser_checks.js'},
   'idle-sync':{fixture:workflowPreviewFixture,modes:['full'],file:'idle_sync_browser_checks.js'},
   'controlnet-video':{fixture:controlnetVideoFixture,modes:['full'],branchTemplates:true,file:'controlnet_video_browser_checks.js'},
@@ -568,6 +571,7 @@ async function runLibraryDrop(page,evaluate,label){
   const catalog=JSON.parse(execFileSync('python',['-c','import json;from spool.templates import CATALOG;print(json.dumps(list(CATALOG.values())))'],{cwd:path.join(__dirname,'..'),encoding:'utf8'}));
   const hostTemplates=new Set((await api('templates')).map(row=>row.id)),addedTemplates=new Set(catalog.filter(row=>!hostTemplates.has(row.id)).map(row=>row.id));
   const bundled=JSON.parse(fs.readFileSync(path.join(__dirname,'../spool/cloud_templates.json'),'utf8'));
+  const ownWorkflows=execFileSync('python',['-c','import json;from spool import templates;print(json.dumps({"templates":{i:templates.own_capture(i) for i in templates.OWN}}))'],{cwd:path.join(__dirname,'..'),encoding:'utf8'});
   let stagedImage;
   if(addedTemplates.size&&names.some(name=>CHECKS[name].branchTemplates)){
    stagedImage=await uploadInput('spool-library-browser-qa.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aE2kAAAAASUVORK5CYII=','base64'));
@@ -603,6 +607,9 @@ async function runLibraryDrop(page,evaluate,label){
               if(check.cloudOnly&&requestUrl.pathname==='/spool/api/capabilities'){const value=JSON.parse(body);Object.assign(value,{connected:false,definitions:{},configuration:null});body=Buffer.from(JSON.stringify(value));}
               const responseHeaders=[{name:'Content-Type',value:response.headers.get('Content-Type')||'application/json'},...['Server-Timing','Content-Range','Accept-Ranges'].filter(name=>response.headers.has(name)).map(name=>({name,value:response.headers.get(name)}))];
               await page.send('Fetch.fulfillRequest',{requestId,responseCode:response.status,responseHeaders,body:body.toString('base64')});return;
+            }
+            if(check.branchTemplates&&new URL(request.url).pathname==='/spool/api/builtin-workflows'){
+              await page.send('Fetch.fulfillRequest',{requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(ownWorkflows).toString('base64')});return;
             }
             if(check.branchTemplates&&new URL(request.url).pathname==='/spool/api/templates'){
               await page.send('Fetch.fulfillRequest',{requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(JSON.stringify(catalog)).toString('base64')});return;
@@ -651,7 +658,7 @@ async function runLibraryDrop(page,evaluate,label){
               await page.send('Fetch.fulfillRequest', { requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: file.endsWith('.css') ? 'text/css' : 'text/javascript' }, { name: 'Cache-Control', value: 'no-store' }], body: fs.readFileSync(file).toString('base64') });
             } else await page.send('Fetch.continueRequest', { requestId });
           });
-          await page.send('Fetch.enable', { patterns: [{ urlPattern: '*/spool/ui/*' }, {urlPattern:'*'+webPrefix+'*'}, ...(apiBase!==base?[{urlPattern:'*/spool/api/*'},{urlPattern:'*/spool/media/*'}]:[]), ...(check.branchTemplates?[{urlPattern:'*/spool/api/templates*'}]:[]), ...(check.templates?[{urlPattern:'*spoolTemplates=embedded*'}]:[]), ...(check.cloudOnly||check.missingRequirements?[{urlPattern:'*/spool/api/capabilities'}]:[]), ...(check.mac?[{urlPattern:'*/spool/api/capabilities*'}]:[]), ...(check.bare ? [{ urlPattern: '*/spool/api/projects' }] : []), ...(check.offline ? [{ urlPattern: '*/spool/api/comfy' }] : [])] });
+          await page.send('Fetch.enable', { patterns: [{ urlPattern: '*/spool/ui/*' }, {urlPattern:'*'+webPrefix+'*'}, ...(apiBase!==base?[{urlPattern:'*/spool/api/*'},{urlPattern:'*/spool/media/*'}]:[]), ...(check.branchTemplates?[{urlPattern:'*/spool/api/templates*'},{urlPattern:'*/spool/api/builtin-workflows'}]:[]), ...(check.templates?[{urlPattern:'*spoolTemplates=embedded*'}]:[]), ...(check.cloudOnly||check.missingRequirements?[{urlPattern:'*/spool/api/capabilities'}]:[]), ...(check.mac?[{urlPattern:'*/spool/api/capabilities*'}]:[]), ...(check.bare ? [{ urlPattern: '*/spool/api/projects' }] : []), ...(check.offline ? [{ urlPattern: '*/spool/api/comfy' }] : [])] });
           await page.send('Page.enable');
           await page.send('Runtime.enable');
           await page.send('Emulation.setDeviceMetricsOverride', { width: check.width || 1440, height: check.height || 1000, deviceScaleFactor: 1, mobile: false });

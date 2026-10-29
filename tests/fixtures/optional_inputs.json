@@ -1,0 +1,60 @@
+{
+  "bindings": [
+    {"key": "first", "nodeId": "1", "input": "image", "label": "First frame", "asset": true},
+    {"key": "ref1", "nodeId": "11", "input": "image", "label": "Reference image 1", "asset": true, "optional": true, "group": "Reference images", "omit": ["11"]},
+    {"key": "ref2", "nodeId": "12", "input": "image", "label": "Reference image 2", "asset": true, "optional": true, "group": "Reference images", "omit": ["12"]},
+    {"key": "ref3", "nodeId": "13", "input": "image", "label": "Reference image 3", "asset": true, "optional": true, "group": "Reference images", "omit": ["13"]},
+    {"key": "vid1", "nodeId": "21", "input": "file", "label": "Reference video 1", "asset": true, "optional": true, "group": "Reference videos", "omit": ["21"]},
+    {"key": "vid2", "nodeId": "22", "input": "file", "label": "Reference video 2", "asset": true, "optional": true, "group": "Reference videos", "omit": ["22"]},
+    {"key": "last", "nodeId": "31", "input": "image", "label": "Last frame", "asset": true, "optional": true, "omit": ["31", "32"]},
+    {"key": "prompt", "nodeId": "40", "input": "text", "label": "Prompt", "asset": false}
+  ],
+  "rules": [{"anyOf": ["Reference images", "Reference videos"], "message": "Add a reference image or video."}],
+  "cases": [
+    {
+      "name": "Nothing chosen",
+      "values": {"first": "", "ref1": "", "ref2": "", "ref3": "", "vid1": "", "vid2": "", "last": "", "prompt": "A walk"},
+      "settings": [],
+      "compacted": {"values": {"first": "", "ref1": "", "ref2": "", "ref3": "", "vid1": "", "vid2": "", "last": "", "prompt": "A walk"}, "settings": []},
+      "problem": "First frame is empty. Choose it in the Inspector.",
+      "visible": ["first", "ref1", "vid1", "last", "prompt"],
+      "omitted": ["ref1", "ref2", "ref3", "vid1", "vid2", "last"]
+    },
+    {
+      "name": "A required input alone does not satisfy a rule",
+      "values": {"first": "a.png", "ref1": "", "ref2": "", "ref3": "", "vid1": "", "vid2": "", "last": "", "prompt": "A walk"},
+      "settings": [],
+      "compacted": {"values": {"first": "a.png", "ref1": "", "ref2": "", "ref3": "", "vid1": "", "vid2": "", "last": "", "prompt": "A walk"}, "settings": []},
+      "problem": "Add a reference image or video.",
+      "visible": ["first", "ref1", "vid1", "last", "prompt"],
+      "omitted": ["ref1", "ref2", "ref3", "vid1", "vid2", "last"]
+    },
+    {
+      "name": "A gap in a group closes up",
+      "values": {"first": "a.png", "ref1": "", "ref2": "b.png", "ref3": "c.png", "vid1": "", "vid2": "", "last": "", "prompt": "A walk"},
+      "settings": [],
+      "compacted": {"values": {"first": "a.png", "ref1": "b.png", "ref2": "c.png", "ref3": "", "vid1": "", "vid2": "", "last": "", "prompt": "A walk"}, "settings": []},
+      "problem": null,
+      "visible": ["first", "ref1", "ref2", "ref3", "vid1", "last", "prompt"],
+      "omitted": ["ref3", "vid1", "vid2", "last"]
+    },
+    {
+      "name": "A shot source fills a slot and moves with it",
+      "values": {"first": "a.png", "ref1": "", "ref2": "", "ref3": "", "vid1": "", "vid2": "", "last": "", "prompt": "A walk"},
+      "settings": [{"key": "vid2", "source": "selected"}],
+      "compacted": {"values": {"first": "a.png", "ref1": "", "ref2": "", "ref3": "", "vid1": "", "vid2": "", "last": "", "prompt": "A walk"}, "settings": [{"key": "vid1", "source": "selected"}]},
+      "problem": null,
+      "visible": ["first", "ref1", "vid1", "vid2", "last", "prompt"],
+      "omitted": ["ref1", "ref2", "ref3", "vid2", "last"]
+    },
+    {
+      "name": "Every input chosen",
+      "values": {"first": "a.png", "ref1": "b.png", "ref2": "c.png", "ref3": "d.png", "vid1": "e.mp4", "vid2": "f.mp4", "last": "g.png", "prompt": "A walk"},
+      "settings": [],
+      "compacted": {"values": {"first": "a.png", "ref1": "b.png", "ref2": "c.png", "ref3": "d.png", "vid1": "e.mp4", "vid2": "f.mp4", "last": "g.png", "prompt": "A walk"}, "settings": []},
+      "problem": null,
+      "visible": ["first", "ref1", "ref2", "ref3", "vid1", "vid2", "last", "prompt"],
+      "omitted": []
+    }
+  ]
+}

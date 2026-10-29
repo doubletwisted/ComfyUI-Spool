@@ -96,7 +96,8 @@ Comfy Cloud and refuses to run unless `SPOOL_CLOUD_SMOKE=1`. Start its host with
 the key in `COMFY_API_KEY` (the host keeps no saved key), and set
 `SPOOL_CLOUD_SMOKE_TARGET=local` to run it as Partner Nodes on the host.
 
-`controlnet-comfy` needs a host started with `--partner-nodes`, and
+`controlnet-comfy` and `builtin-comfy-link` need a host started with
+`--partner-nodes`, and
 `comfy-link-placeholder` one started with `--deadline`. The `-mac` checks
 (`take-file-actions-mac`, `clip-folder-mac`) report a Mac platform and a host
 that names Finder, so the macOS labels are checked from Windows too; they are
@@ -148,11 +149,81 @@ timed-out run without submitting again.
 
 ## Built-in workflows
 
-`ui/builtin-captures.json` is generated. To refresh it, run the
-`workflow-capture-bundle` browser check, then pass the QA project ID from its
-`summary.json` to `python tests/build_builtin_captures.py QA_PROJECT_ID`. The
-builder removes example sources and validates every capture before replacing the
-file.
+Spool's own workflows live in `spool/builtin_workflows/<id>/`, one folder per
+workflow. They are read as written; nothing rewrites them at runtime.
+
+| File | Contents |
+| --- | --- |
+| `workflow.json` | The graph, saved from ComfyUI |
+| `prompt.json` | The same graph from ComfyUI's **Export (API)** |
+| `spool.json` | Library name, family, task and target, the result node, and the inspector's inputs in order |
+
+`spool.json` lists each input once, in inspector order:
+
+- A control names its `node`, `input`, `label`, `role` and optional `unit`. Cloud
+  workflows read input types from the shipped Cloud definitions; local workflows
+  state `type`, and `options` for a list, because standalone Spool has no node
+  definitions.
+- A media input names its loader `node`, `label` and `slot`. With `optional` it may
+  stay empty; `alsoRemove` names helper nodes that only feed it, and `bypass` maps
+  a node that cannot run without it to the input passed on in its place, as
+  Comfy's Bypass does (Multi-Frame Reference's guide frames).
+- A `group` lists the loader `nodes` that fill one repeatable input in order. Every
+  slot is optional; a slot may be `{"node": ..., "alsoRemove": [...]}`.
+- `inputRules` lists groups of which at least one input must be filled, with the
+  message shown beside Generate.
+
+Loaders ship with an empty file name, and each loader's title is its inspector
+label, because Apply to clip labels inputs by node title.
+
+To change one, open `workflow.json` in ComfyUI on a test host, edit it, save it
+over `workflow.json`, export the API prompt over `prompt.json`, and update
+`spool.json` if node IDs or inputs changed. A folder with the same ID as a curated
+Comfy template replaces that template. `tests/test_builtin_workflows.py` checks
+that the three files agree, that control types match the node definitions (Cloud
+definitions, or `tests/fixtures/local_node_definitions.json` for local nodes), and
+that every input that can be left out feeds an input its node allows to be
+missing. ComfyUI must also reopen the saved graph unchanged, because **Edit in
+Comfy** loads it the same way: the `builtin-comfy-link` browser check opens every
+Spool workflow through Edit in Comfy and applies it back.
+
+### Slots ComfyUI can reopen
+
+ComfyUI frontend 1.55.18 loses or swaps links when it reopens nodes with many
+connected Autogrow inputs
+([ComfyUI_frontend#10136](https://github.com/Comfy-Org/ComfyUI_frontend/issues/10136)),
+so these workflows connect fewer slots than their nodes accept. The limit depends
+on the node's other inputs, not a fixed count; measure a new shape by reopening
+it in ComfyUI more than once.
+
+| Workflow | Connected | Node accepts |
+| --- | --- | --- |
+| MiniMax H3 Reference to Video (Cloud) | 4 images, 1 video, 1 audio | 9, 3, 3 |
+| MiniMax H3 Max Reference to Video (Cloud) | 2 images, 1 video | 9, 3, 3 |
+| MiniMax H3 Reference to Video (local) | 9 images, 1 video with its soundtrack, 1 audio | 9, 3, 3 |
+| MiniMax H3 ControlNet Union (local) | 9 reference images | 9 |
+| FLUX 3 Image to Video | 10 keyframes | 10 |
+
+The Max workflow feeds each reference to its generator, prompt enhancer and 2K
+regenerator. Wiring the generator alone would allow 3 images, 1 video and 1
+audio. Add slots when a frontend release reopens them intact.
+
+`ui/builtin-captures.json` holds the curated Comfy templates and is generated. To
+refresh it, run the `workflow-capture-bundle` browser check, then pass the QA
+project ID from its `summary.json` to
+`python tests/build_builtin_captures.py QA_PROJECT_ID`. The builder removes example
+sources, skips Spool's own workflows and validates every capture before replacing
+the file.
+
+### Why empty inputs are left out
+
+An empty optional input is removed from the request, with the nodes that only
+fed it, instead of filled with a placeholder. A blank image would still reach the
+model as a reference. An empty Load Image passes ComfyUI's validation but fails
+when it runs, because the empty name points at the input folder. Spool also
+freezes every file a request uses and uploads it for Cloud; there is no file to
+freeze. Removing the input is the one behaviour that means "not provided" on
+local ComfyUI, Comfy Cloud and Deadline alike.
 
 ## Releasing
 

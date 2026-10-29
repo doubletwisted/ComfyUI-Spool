@@ -3,7 +3,8 @@
 Run the opt-in workflow-capture-bundle browser check on 8195 first, then:
   python tests/build_builtin_captures.py QA_PROJECT_ID
 Only built-in template captures are copied; example sources and machine file lists
-are removed. This does not execute a workflow or access a production project.
+are removed. Spool's own workflows in spool/builtin_workflows are read as written and
+are not bundled. This does not execute a workflow or access a production project.
 """
 import copy
 import json
@@ -15,7 +16,7 @@ from urllib.request import urlopen
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from spool.graph_inputs import nodes
 from spool.store import validate_capture
-from spool.templates import CATALOG, cloud_templates
+from spool.templates import CATALOG, OWN, cloud_templates
 from spool.workflow_inputs import sources
 
 
@@ -27,7 +28,7 @@ captures = {}
 for workflow in project['document'].get('importedWorkflows', []):
     capture = copy.deepcopy(workflow['data'])
     identity = capture.get('provenance', {}).get('builtinTemplate')
-    if identity not in CATALOG or identity in captures:
+    if identity not in CATALOG or identity in OWN or identity in captures:
         continue
     row = CATALOG[identity]
     capture.pop('name', None)
@@ -53,8 +54,8 @@ for workflow in project['document'].get('importedWorkflows', []):
             binding.pop('options', None)
     validate_capture(capture)
     captures[identity] = capture
-if set(captures) != set(CATALOG):
-    raise ValueError('Run the workflow-capture-bundle check before bundling: ' + str(set(CATALOG) - set(captures)))
+if set(captures) != set(CATALOG) - set(OWN):
+    raise ValueError('Run the workflow-capture-bundle check before bundling: ' + str(set(CATALOG) - set(OWN) - set(captures)))
 destination = Path(__file__).resolve().parent.parent / 'ui/builtin-captures.json'
 destination.write_text(json.dumps({'templates': captures, 'cloudDefinitions': cloud_templates()['definitions']}, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
 print('Bundled', len(captures), 'serialized templates;', destination.stat().st_size, 'bytes')

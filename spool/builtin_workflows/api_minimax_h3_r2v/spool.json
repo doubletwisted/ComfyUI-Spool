@@ -1,0 +1,20 @@
+{
+  "family": "MiniMax H3",
+  "name": "Reference to Video",
+  "task": "ref",
+  "target": "cloud",
+  "result": "1",
+  "inputs": [
+    {"node": "2", "input": "model.prompt", "label": "Prompt", "role": "positive"},
+    {"group": "Reference images", "label": "Reference image", "slot": "reference", "nodes": ["3", "4", "5", "6"]},
+    {"group": "Reference video", "label": "Reference video", "slot": "video", "audio": true, "nodes": ["7"]},
+    {"group": "Reference audio", "label": "Reference audio", "slot": "audio", "nodes": ["8"]},
+    {"node": "2", "input": "model.resolution", "label": "Resolution", "role": "resolution"},
+    {"node": "2", "input": "model.ratio", "label": "Aspect ratio", "role": "resolution"},
+    {"node": "2", "input": "model.duration", "label": "Duration (seconds)", "role": "duration", "unit": "seconds"},
+    {"node": "2", "input": "seed", "label": "Seed", "role": "seed"}
+  ],
+  "inputRules": [
+    {"anyOf": ["Reference images", "Reference video"], "message": "Add a reference image or video."}
+  ]
+}

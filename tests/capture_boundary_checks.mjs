@@ -83,6 +83,9 @@ const auto=fixture();await auto.start({automatic:true});check('Prepared single-o
 const continuation=fixture();await continuation.start({automatic:true,takeId:'take-04'});
 check('Take adoption resets old input overrides',continuation.saved.length===1&&continuation.saved[0].keep===false&&continuation.saved[0].session.takeId==='take-04');
 const linked=fixture();await linked.start({automatic:true,replaceInputs:true});check('Applying a Comfy graph takes its current inputs instead of old Spool overrides',linked.saved[0].keep===false&&linked.saved[0].session.replaceInputs);
+const grouped=capture(),groupedRules=[{anyOf:['Images'],message:'Add an image.'}];grouped.bindings=[{key:'one',nodeId:'load',input:'image',asset:true,role:'source',slot:'reference',label:'Image 1',optional:true,group:'Images',omit:['load']}];grouped.inputRules=groupedRules;
+const adopted=fixture();await adopted.start({automatic:true,takeId:'take-grouped',capture:grouped});
+check('Use take keeps the optional grouped inputs and rule of a recipe',adopted.saved[0].capture.bindings.some(b=>b.nodeId==='load'&&b.optional&&b.group==='Images')&&JSON.stringify(adopted.saved[0].capture.inputRules)===JSON.stringify(groupedRules));
 const plain=fixture();await plain.start({automatic:true,takeId:'plain',capture:null});
 check('A take without metadata still commits through the same editor owner',plain.saved.length===1&&plain.saved[0].capture===null&&!plain.busy);
 const missing=fixture();await missing.start({automatic:true,takeId:'missing-node',capture:capture(),definitions:{}});

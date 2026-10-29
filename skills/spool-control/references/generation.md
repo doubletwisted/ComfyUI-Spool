@@ -6,6 +6,8 @@ Read the clip's recipe, inputs, routing and selected source. `GET /spool/api/wor
 
 Saved execution routing may target local ComfyUI, Cloud or Deadline. Check host capabilities and the recipe/clip target before submitting. Deadline launcher nodes may determine routing. Do not substitute another target or paid service when one is unavailable.
 
+Media bindings with `optional` may stay empty; a request leaves them out of the prompt. Bindings sharing a `group` (for example `Reference images`) fill in order, and a request moves filled ones into the group's first slots, so "Image 1" in a prompt is the first filled one. `status` reports the recipe's `inputRules` (at least one filled input among the named groups) and `inputProblem`, the reason generation would be refused, or `null`.
+
 For a source check, POST `/spool/api/projects/{project}/generation-preview` with `{revision, clipId}`. It can bake media through ffmpeg but does not queue a model render. Verify required local files, source choice, trim and output contract. A missing source is a preparation problem, not a reason to clear routing silently.
 
 ## Bounded experiments

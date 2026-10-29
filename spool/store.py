@@ -63,6 +63,14 @@ def validate_capture(capture):
         if (node, name) in seen:
             raise ValueError("An input can only have one binding")
         seen.add((node, name))
+        omit, bypass = binding.get("omit", []), binding.get("bypass", {})
+        if (not isinstance(binding.get("group", ""), str) or not isinstance(omit, list) or not all(isinstance(n, str) for n in omit)
+                or not isinstance(bypass, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in bypass.items())):
+            raise ValueError("An optional input names its group and the nodes it leaves out")
+    rules = capture.get("inputRules", [])
+    if not isinstance(rules, list) or not all(isinstance(r, dict) and isinstance(r.get("message"), str) and isinstance(r.get("anyOf"), list)
+                                              and all(isinstance(g, str) for g in r["anyOf"]) for r in rules):
+        raise ValueError("Each input rule needs its groups and a message")
     saver = capture.get("result", {})
     if saver.get("nodeId") not in prompt or saver.get("group") not in ("images", "gifs", "videos") or not isinstance(saver.get("index"), int) or saver["index"] < 0:
         raise ValueError("Choose an exact result node, output group and artifact index")

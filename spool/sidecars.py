@@ -45,7 +45,7 @@ def read(source):
         cache = extra.get("spoolWorkflow") if isinstance(extra, dict) else None
         cache = cache if isinstance(cache, dict) else {}
         valid = cache.get("schemaVersion") == 1 and cache.get("graphHash") == graph_hash(graph)
-        capture = {key: copy.deepcopy(cache[key]) for key in ("prompt", "bindings", "result", "provenance", "widgetBindings") if valid and key in cache}
+        capture = {key: copy.deepcopy(cache[key]) for key in ("prompt", "bindings", "result", "provenance", "widgetBindings", "inputRules") if valid and key in cache}
         capture.update({"workflow": graph_only(graph), "preferWorkflow": True,
                         "sidecar": {"sha256": hashlib.sha256(raw).hexdigest(), "name": path.name, "needsSerialization": not bool(capture.get("prompt"))}})
         if not isinstance(capture.get("prompt"), dict):
@@ -65,7 +65,7 @@ def serialize(capture):
     if capture.get("prompt"):
         graph, bindings = with_prompt({**capture, "workflow": graph}, capture["prompt"])
         graph.setdefault("extra", {})["spoolWorkflow"] = {"schemaVersion": 1, "graphHash": graph_hash(graph), "widgetBindings": bindings,
-            **{key: copy.deepcopy(capture[key]) for key in ("prompt", "bindings", "result", "provenance") if key in capture}}
+            **{key: copy.deepcopy(capture[key]) for key in ("prompt", "bindings", "result", "provenance", "inputRules") if key in capture}}
     return json.dumps(graph, ensure_ascii=False, indent=2, allow_nan=False).encode("utf-8")
 
 
@@ -102,6 +102,18 @@ def write_result(store, media, attempt, result):
         return
     history = result.get("history", {}).get("prompt", [])
     prompt = result.get("observedPrompt") or (history[2] if len(history) > 2 else None) or attempt["request"]["prompt"]
+    if attempt["request"].get("omittedInputs"):
+        # Empty optional inputs were left out of the run. Keep the recipe's nodes and
+        # links so Use take restores them, with the values the take used.
+        full = copy.deepcopy(capture["prompt"])
+        omitted = set(attempt["request"]["omittedInputs"])
+        for binding in capture.get("bindings", []):
+            if binding["key"] in omitted and binding["nodeId"] in full:
+                full[binding["nodeId"]]["inputs"][binding["input"]] = ""
+        for identity, node in prompt.items():
+            if identity in full:
+                full[identity]["inputs"].update({k: v for k, v in node["inputs"].items() if not isinstance(v, list)})
+        prompt = full
     capture["prompt"] = copy.deepcopy(prompt)
     for identity, node in attempt["request"]["prompt"].items():
         if node["class_type"] in ("DeadlineSubmit", "SaveAndSubmitNode"):

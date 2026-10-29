@@ -46,8 +46,10 @@ executor. `__main__.py` runs the same routes standalone (`python -m spool`).
   (recovery without Comfy's queue), `folder_takes.py` (external takes in clip
   folders), `sidecars.py` (`take.json` workflows), `take_files.py` (permanent
   deletion), `take_workflow.py` (continue from a take).
-- **Workflows:** `workflows.py`, `workflow_inputs.py`, `graph_inputs.py`,
-  `templates.py` (curated built-ins), `cloud_templates.json`.
+- **Workflows:** `workflows.py`, `workflow_inputs.py` (loader addresses, and
+  optional and grouped media inputs: what blocks a request and what it leaves
+  out), `graph_inputs.py`, `templates.py` (built-ins: Spool's own workflow files
+  in `builtin_workflows/` and curated Comfy templates), `cloud_templates.json`.
 - **Media:** `media.py` (probing, proxies, staging, playback copies), `timing.py`
   (source-frame clocks), `cuts.py` (hard-cut detection), `export.py` (MP4),
   `interchange.py` (OpenTimelineIO JSON, written without the OTIO package).
@@ -77,6 +79,8 @@ contracts that have tests of their own:
   tab is hidden.
 - `edit-session.js`: applies an authored edit (undo step, change, repaint scope,
   save); pointer gestures record their own step on release.
+- `input-groups.js`: optional and grouped media inputs, mirroring
+  `spool/workflow_inputs.py`.
 - `history.js` (undo and redo), `generation.js` (attempt status table and seeds),
   `workflow-setup.js` (capture decisions), `profile.js` (input profiles),
   `take-review.js`, `take-seen.js`, `preview.js`, `thumbnails.js`, `notes.js`,
@@ -101,6 +105,7 @@ Comfy templates without touching the user's graph.
 | Attempt statuses | `spool/attempts.py` | `ui/generation.js` | `tests/fixtures/attempt_statuses.json` |
 | Document fields | `spool/ledger.py` | `ui/ledger.js` | `tests/fixtures/document_fields.json` |
 | Take ownership | `spool/ledger.py` | `ui/ledger.js` | `tests/fixtures/ledger_cases.json` |
+| Optional and grouped inputs | `spool/workflow_inputs.py` | `ui/input-groups.js` | `tests/fixtures/optional_inputs.json` |
 | Bridge messages | — | `ui/bridge.js` | `tests/bridge_checks.mjs` |
 
 ## Constraints

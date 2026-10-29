@@ -2,7 +2,7 @@
  const n=spoolNative,checks=[],popups=[],originalOpen=window.open,shot=()=>n.state.clips.find(c=>c.id==='shot');
  const check=(label,ok)=>{if(!ok)throw Error(label);checks.push(label);},wait=async fn=>{const end=Date.now()+60000;while(!await fn()){if(Date.now()>end)throw Error('Added inputs: '+document.getElementById('toast').textContent);await new Promise(r=>setTimeout(r,70));}};
  const api=async path=>{const r=await fetch('/spool/api/'+path);if(!r.ok)throw Error(await r.text());return r.json();};
- const inputFields=()=>[...document.querySelectorAll('[data-image-input]')],field=label=>inputFields().find(f=>f.firstElementChild.textContent===label);
+ const inputFields=()=>[...document.querySelectorAll('[data-image-input]')],field=label=>inputFields().find(f=>f.querySelector('.media-label').firstChild.textContent===label);
  window.open=function(...args){const tab=originalOpen.apply(window,args);if(tab)popups.push(tab);return tab;};
  try{
   n.selectClip('shot');if(!document.getElementById('inspector').getClientRects().length)document.getElementById('showRightPanel').click();await n.flush();
@@ -27,7 +27,7 @@
   const appliedVersion=shot().workflowVersion;n.undo();await n.flush();check('Undo restores the previous graph and Inspector inputs',shot().workflowVersion===initialVersion&&shot().bindings.length===1);
   n.redo();await n.flush();check('Redo restores both inputs with the same identities and chosen files',shot().workflowVersion===appliedVersion&&shot().inputValues[referenceBinding.key]===stored&&!!field('Style reference'));
   reference.widgets.find(w=>w.name==='image').value='';await apply();
-  check('An unchosen new image stays editable and blocks Generate with a source message',shot().inputValues[referenceBinding.key]===''&&document.getElementById('generate').disabled&&document.querySelector('.workflow-problem').textContent.includes('source media')&&field('Style reference').innerText.includes('Choose image'));
+  check('An unchosen new image stays editable and blocks Generate with a source message',shot().inputValues[referenceBinding.key]===''&&document.getElementById('generate').disabled&&document.querySelector('.workflow-problem').textContent==='Style reference is empty. Choose it in the Inspector.'&&field('Style reference').innerText.includes('Choose image'));
   reference.widgets.find(w=>w.name==='image').value=filename;await apply();
   check('Selecting the file again restores readiness without changing input identity',!document.getElementById('generate').disabled&&shot().inputValues[referenceBinding.key]===stored);
   const oldTakes=new Set(shot().takes.map(t=>t.id));await n.queueClips([shot()]);await wait(async()=>{await n.poll();return shot().takes.some(t=>t.generated&&!oldTakes.has(t.id));});

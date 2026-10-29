@@ -22,6 +22,23 @@ Built-in workflows choose their output and expose their main inputs without
 questions. Example source images are not included: pick your own source in the
 inspector before generating.
 
+Some built-in workflows are Spool's own versions with more of their media inputs
+connected. The inspector shows them as they fill (see
+[Optional and repeated inputs](#optional-and-repeated-inputs)).
+
+| Workflow | Media inputs |
+| --- | --- |
+| MiniMax H3 · Reference to Video (Cloud) | Up to 4 reference images, a reference video and a reference audio clip |
+| MiniMax H3 Max · Reference to Video (Cloud) | Up to 2 reference images and a reference video |
+| FLUX 3 · Image to Video (Cloud) | Up to 10 keyframes |
+| MiniMax H3 · Reference to Video (local) | Up to 9 reference images, a reference video with its soundtrack, and a reference audio clip |
+| MiniMax H3 · Multi-Frame Reference (local) | A reference image and three guide frames with their times, all optional |
+| MiniMax H3 · ControlNet Union (local) | The control video, and up to 9 reference images |
+
+The local MiniMax nodes read a reference video's frames as 24 fps. **Use timeline
+video** gives them the clip at the project frame rate; choose 24 fps files
+otherwise.
+
 ### Your own workflows
 
 - **+ Current Comfy Graph** (or **Project → Add current workflow**) adds the graph
@@ -52,12 +69,13 @@ inputs before generating from it.
 
 ## Clip inputs
 
-The inspector shows the selected clip's creative inputs.
+The inspector shows the selected clip's creative inputs. Each image, video or
+audio input is one row with a thumbnail, its name and the chosen file.
 
-- **Images:** paste (Ctrl+V when the field has focus), drop a file, or click to
-  browse. Replacing an image can be undone.
-- **Video:** **Choose file…** or **Use timeline video**, which uses the clip's take
-  in the edit with its current trim. Spool cuts the trimmed part from the original
+- **Images:** paste (Ctrl+V when the row has focus), drop a file, or click the row
+  to browse. Replacing an image can be undone.
+- **Video:** the folder button chooses a file; the timeline button (**Use timeline
+  video**) uses the clip's take in the edit with its current trim. Spool cuts the trimmed part from the original
   at full resolution.
 - **Image from a video:** choose the first, middle or last frame of the trim.
 - **Audio:** the original or selected shot, another clip, or the A1 or A2 lane
@@ -65,8 +83,27 @@ The inspector shows the selected clip's creative inputs.
 - **Prompt, duration, size, seed:** typed values. Seeds and other whole numbers
   keep every digit, including 64-bit seeds.
 
-A source left empty blocks **Generate** until you choose one. The text beside
-Generate says what is missing.
+A required source left empty blocks **Generate** until you choose one. The text
+beside Generate says what is missing.
+
+### Optional and repeated inputs
+
+Some workflows take several inputs of one kind, such as reference images. The
+inspector shows the ones you have filled plus one empty slot; filling it shows
+the next, up to the workflow's limit. Inputs marked **Optional** can stay empty.
+
+- **Remove** empties an optional input. Later inputs of the same kind move up, so
+  the numbering in the inspector stays continuous. Remove can be undone.
+- Workflows that refer to references by number in the prompt, such as MiniMax's
+  "Image 1" or "Video 2", count them in the order the inspector shows.
+- Some workflows need at least one input from a set. MiniMax Reference to Video
+  needs a reference image or video, and FLUX 3 Image to Video a keyframe; Generate
+  says so until one is added.
+- An empty guide frame in Multi-Frame Reference is skipped, so the video is guided
+  only by the frames you chose.
+
+Spool leaves an empty optional input out of the request, so the node runs as if
+that input were never connected.
 
 Inputs you add are copied into the project, so a clip keeps working when the
 original file moves.

@@ -1,0 +1,18 @@
+{
+  "family": "FLUX 3",
+  "name": "Image to Video",
+  "task": "i2v",
+  "target": "cloud",
+  "result": "422",
+  "inputs": [
+    {"node": "424", "input": "prompt", "label": "Prompt", "role": "positive"},
+    {"group": "Keyframes", "label": "Keyframe", "slot": "firstFrame", "nodes": ["423", "425", "426", "427", "428", "429", "430", "431", "432", "433"]},
+    {"node": "424", "input": "aspect_ratio", "label": "Aspect ratio", "role": "resolution"},
+    {"node": "424", "input": "resolution", "label": "Resolution", "role": "resolution"},
+    {"node": "424", "input": "duration", "label": "Duration (seconds)", "role": "duration", "unit": "seconds"},
+    {"node": "424", "input": "seed", "label": "Seed", "role": "seed"}
+  ],
+  "inputRules": [
+    {"anyOf": ["Keyframes"], "message": "Add a keyframe."}
+  ]
+}

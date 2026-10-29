@@ -5,6 +5,7 @@ import subprocess
 
 from . import attempts, farm, ledger, operations, requests, notes
 from .store import Conflict, linked
+from .workflow_inputs import input_problem
 
 
 def scope_check(project_id, scope, capability, clip_ids=(), takes=0):
@@ -27,8 +28,17 @@ def status(store, project_id, clip_id=None, limit=50, offset=0):
         shots = [c for c in shots if c["id"] == clip_id]
         if not shots:
             raise KeyError("Shot not found")
+    def inputs(c):
+        """The recipe's input rules and, as beside Generate, the first missing media input."""
+        recipe = project["recipes"].get(c.get("workflowVersion"))
+        if not recipe:
+            return {"inputRules": [], "inputProblem": None}
+        bindings = c.get("bindings", [])
+        values = {b["key"]: recipe["prompt"].get(b["nodeId"], {}).get("inputs", {}).get(b["input"]) for b in bindings if b.get("asset")}
+        values.update(c.get("inputValues", {}))
+        return {"inputRules": recipe.get("inputRules", []), "inputProblem": input_problem(bindings, values, c.get("shotInputs", []), recipe.get("inputRules", []))}
     values = [{"id": c["id"], "name": c["name"], "notes": notes.entries(c), "workflowVersion": c.get("workflowVersion"),
-               "inputs": c.get("inputValues", {}), "bindings": c.get("bindings", []), "selectedTakeId": c.get("takeId"), "in": c.get("in"), "out": c.get("out"),
+               "inputs": c.get("inputValues", {}), "bindings": c.get("bindings", []), **inputs(c), "selectedTakeId": c.get("takeId"), "in": c.get("in"), "out": c.get("out"),
                "totalTakes": len(c.get("takes", [])),
                "takes": [{"id": t["id"], "generated": t.get("generated", False), "placeholder": t.get("placeholder", False),
                           "media": {k: t["media"].get(k) for k in ("id", "kind", "width", "height", "duration", "fps", "frames", "audio", "poster", "file")}} for t in c.get("takes", [])[-50:]]} for c in shots[offset:offset + limit]]
@@ -175,6 +185,9 @@ def execute(store, media, project_id, data):
                 if type(value) is not type(original) and not (type(original) is float and type(value) is int) and not numeric_float:
                     raise ValueError("Input literal type changed")
             clip.setdefault("inputValues", {}).update(values)
+            emptied = {key for key, value in values.items() if value == "" and controls[key].get("optional")}
+            if emptied and clip.get("shotInputs"):
+                clip["shotInputs"] = [s for s in clip["shotInputs"] if s.get("key") not in emptied]
         elif action == "set_shot_inputs":
             bindings = {b["key"]: b for b in capture.get("bindings", [])}
             for value in arguments["inputs"]:

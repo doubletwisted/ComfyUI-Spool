@@ -45,6 +45,16 @@ First public release.
   (experimental, through ComfyUI-Deadline-Plugin). Every result is collected with
   a durable receipt; interrupted work is recovered without repeating it.
 - Seed modes (fixed, increment, decrement, randomize) with exact 64-bit seeds.
+- Spool ships its own built-in workflows with more of their media inputs
+  connected: MiniMax H3 and H3 Max Reference to Video on Comfy Cloud (reference
+  images, video and audio), FLUX 3 Image to Video (up to 10 keyframes), and the
+  local MiniMax H3 Reference to Video, Multi-Frame Reference and ControlNet Union
+  (more reference images, reference video and audio, optional guide frames).
+- Image, video and audio inputs are compact rows with a thumbnail, the chosen
+  file and their actions.
+- Optional media inputs can stay empty and are left out of the request. Repeated
+  inputs show one empty slot at a time, **Remove** moves later ones up, and
+  Generate names a missing required input or an unmet "image or video" rule.
 
 ### Automation
 
