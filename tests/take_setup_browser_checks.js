@@ -149,5 +149,5 @@
   );
   // Keep the shared fixture identical for the second editor mode.
   await api('projects/' + n.projectKey, { revision: stored.revision, document: original.document }, 'PUT');
-  return { checks, color, attemptId: generated.request.attemptId, generatedTakeId: generated.id };
+  return { checks, color, attemptId: generated.summary.attemptId, generatedTakeId: generated.id };
 })();

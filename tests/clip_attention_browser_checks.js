@@ -79,8 +79,8 @@
   delete clip().workflowVersion;
   n.selectClip('shot');
   check(
-    'A compact generated take resolves its editable workflow from request.capture',
-    !!compactTake.request?.capture && !$('editClipWorkflow').disabled,
+    'A compact generated take offers its recipe graph without carrying the full request',
+    !compactTake.request && compactTake.recipeGraph === true && !$('editClipWorkflow').disabled,
   );
   clip().takeId = chosen;
   clip().workflowVersion = version;
