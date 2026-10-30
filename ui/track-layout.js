@@ -9,6 +9,7 @@ export function createTrackLayout({
   trackHeightBounds,
   trackHeight,
   preferredTrackHeight,
+  trackFitFloor,
   setTrackFit,
   trackVariable,
   draw,
@@ -47,9 +48,26 @@ export function createTrackLayout({
       if (!T.sourceTrackHidden(getState(), track)) keys.push('source:' + track);
     }
     if (!getState().audioTracks?.musicHidden) keys.push('music');
-    const wanted = keys.reduce((sum, key) => sum + preferredTrackHeight(key), 0),
-      room = $('timelineScroll').clientHeight - $('ruler').offsetHeight;
-    const fit = room > 0 && wanted > room ? room / wanted : 1;
+    const room = $('timelineScroll').clientHeight - $('ruler').offsetHeight,
+      sum = list => list.reduce((total, key) => total + preferredTrackHeight(key), 0);
+    let fit = 1;
+    if (room > 0 && sum(keys) > room) {
+      // Tracks that would shrink below their floor take the floor; the rest share what is left.
+      const floored = new Set();
+      for (let changed = true; changed;) {
+        const free = keys.filter(key => !floored.has(key)),
+          wanted = sum(free);
+        fit = wanted
+          ? Math.max(0, room - [...floored].reduce((total, key) => total + trackFitFloor(key), 0)) / wanted
+          : 0;
+        changed = false;
+        for (const key of free)
+          if (preferredTrackHeight(key) * fit < trackFitFloor(key)) {
+            floored.add(key);
+            changed = true;
+          }
+      }
+    }
     setTrackFit(fit);
     $('editor').classList.toggle('tracks-fitted', fit < 1);
   }

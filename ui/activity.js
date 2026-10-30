@@ -36,7 +36,8 @@ export function activityEntry(event, state) {
     case 'receipt.rejected':
       return entry('problem', 'Result rejected', data.error || '');
     case 'cancellation.observed':
-      return entry('info', 'Cancelled', data.note || '');
+      // A cancellation was sent; the note says whether its delivery was confirmed.
+      return entry('info', 'Cancellation requested', data.note || '');
     case 'execution.collected':
       return data.accepted ? entry('done', 'Result collected') : entry('info', 'Late result kept aside');
     case 'graph.handoff':

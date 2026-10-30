@@ -20,6 +20,14 @@ assert.equal(read('queue.accepted', { attemptIds: ['a', 'b'], actor: 'human' }).
 assert.equal(read('queue.accepted', { attemptIds: ['a'], actor: 'codex' }).title, 'Queued 1 take by codex');
 assert.equal(read('submission.acknowledged', { attemptId: 'a14', jobId: 'j1' }).detail, 'Job j1');
 assert.equal(read('receipt.rejected', { attemptId: 'a14', error: 'bad file' }).tone, 'problem');
+// Delivery may be unconfirmed; the note says so.
+assert.deepEqual(
+  [read('cancellation.observed', { attemptId: 'a14', note: 'Cancellation delivery is unconfirmed' })].map(e => [
+    e.title,
+    e.detail,
+  ]),
+  [['Cancellation requested', 'Cancellation delivery is unconfirmed']],
+);
 assert.equal(read('graph.handoff', { clipId: 'clip', action: 'open' }).subject, 'c11');
 assert.deepEqual(
   [read('command.set_execution', { actor: 'codex', arguments: { clipId: 'clip' } })].map(e => [e.title, e.subject]),

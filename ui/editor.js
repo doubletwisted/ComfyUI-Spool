@@ -400,9 +400,10 @@ async function startEditor(isFailed) {
     return Math.min(b.max, Math.max(b.min, trackHeights[key] ?? defaultTrackHeight(key)));
   };
   let trackFit = 1;
+  const trackFitFloor = key => (key.startsWith('video:') ? 36 : 22);
   const trackHeight = key =>
     trackFit < 1
-      ? Math.max(key.startsWith('video:') ? 36 : 22, Math.floor(preferredTrackHeight(key) * trackFit))
+      ? Math.max(trackFitFloor(key), Math.floor(preferredTrackHeight(key) * trackFit))
       : preferredTrackHeight(key);
   const trackVariable = (kind, track, part) => '--' + kind + '-' + part + '-' + track;
   const trackLayoutOwner = createTrackLayout({
@@ -413,6 +414,7 @@ async function startEditor(isFailed) {
     trackHeightBounds,
     trackHeight,
     preferredTrackHeight,
+    trackFitFloor,
     setTrackFit: value => (trackFit = value),
     trackVariable,
     draw,
@@ -1008,7 +1010,7 @@ async function startEditor(isFailed) {
     takeName,
     pendingJobs,
     failedJobs,
-    clearRenders: ids => renderQueueOwner.clearRenders(ids, () => renderPendingTakes(selected())),
+    clearRenders: ids => renderQueueOwner.clearRenders(ids),
     getTakeBatchKey: () => takeBatchKey,
     updateTakeSelection,
     viewTake,
@@ -1991,7 +1993,10 @@ async function startEditor(isFailed) {
     getExperimentRetry: () => experimentRetry,
     submitExperiment,
     getAddGraphButton: () => addGraphButton,
-    renderInspector: () => renderInspector(),
+    refreshGenerate: () => {
+      renderInspector();
+      buttons();
+    },
   });
   function projectSettings() {
     return projectDialogsOwner.projectSettings();
@@ -2070,6 +2075,7 @@ async function startEditor(isFailed) {
     getExperimentRetry: () => experimentRetry,
     writeExperimentRetry: value => (experimentRetry = value),
     getJobStatus: () => jobStatus,
+    renderPendingTakes: c => renderPendingTakes(c),
   });
   function queueLabel() {
     return renderQueueOwner.queueLabel();

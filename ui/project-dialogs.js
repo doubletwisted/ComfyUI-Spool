@@ -44,7 +44,7 @@ export function createProjectDialogs({
   getExperimentRetry,
   submitExperiment,
   getAddGraphButton,
-  renderInspector,
+  refreshGenerate,
 }) {
   function projectSettings() {
     const size = getResolution()(),
@@ -188,7 +188,7 @@ export function createProjectDialogs({
         ).then(result => {
           Object.assign(productCapabilities, { hasApiKey: result.hasApiKey, apiKeySource: result.apiKeySource });
           getWorkflowLibrary()?.render();
-          renderInspector(); // Generate waits on the key, so it unlocks without a reload.
+          refreshGenerate(); // Generate waits on the key, so it unlocks without a reload.
         });
         getTemplateBrowser()?.reset();
         builtinPreparer.reset();

@@ -35,6 +35,7 @@ export function createRenderQueue({
   getExperimentRetry,
   writeExperimentRetry,
   getJobStatus,
+  renderPendingTakes,
 }) {
   function queueLabel() {
     announceFailures();
@@ -126,7 +127,7 @@ export function createRenderQueue({
     return G.visibleRenderJobs(getState().jobs, getState().clearedRenderIds);
   }
   // Cleared entries disappear at once; the project save that records it follows.
-  async function clearRenders(ids, onCleared = () => {}) {
+  async function clearRenders(ids) {
     const requested = new Set(ids),
       clear = getState().jobs.filter(j => requested.has(j.id) && G.clearableRender(j));
     if (!clear.length) return;
@@ -134,7 +135,7 @@ export function createRenderQueue({
     renderQueueList();
     queueLabel();
     renderJobStatus();
-    onCleared();
+    renderPendingTakes(selected());
     $('reconcileQueue')?.focus({ preventScroll: true });
     toast(clear.length + ' ' + (clear.length === 1 ? 'entry cleared' : 'entries cleared') + '. Takes kept.');
     try {

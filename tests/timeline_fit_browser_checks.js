@@ -22,6 +22,16 @@
     'Three video tracks with their audio shrink together to fit, with no vertical scrollbar',
     !overflows() && height(1) < 72 && height(1) >= 36 && height(1) === height(3),
   );
+  // One lane set very tall: the others stop at their floor and it takes the rest.
+  const tall = $('trackHeaders').querySelector('[data-track-resize="video:1"]');
+  tall.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+  await frame();
+  check(
+    'A lane set very tall still fits with the others at their floor',
+    !overflows() && height(1) > height(2) && height(2) === 36,
+  );
+  tall.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  await frame();
   check(
     'The timeline reserves no blank gutter for a scrollbar it does not show',
     getComputedStyle(scroll).scrollbarGutter !== 'stable',

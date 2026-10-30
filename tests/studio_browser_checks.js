@@ -182,7 +182,10 @@
   click('#comfySaveSettings');
   await wait(() => $('#modalOverlay').hidden, 'Save key');
   check('Cloud key badge confirms configuration', $('[data-cloud-settings]').textContent.includes('API Key ✓'));
-  check('Saving the key unlocks Generate without a reload', !/API key/.test($('#generate').title));
+  check(
+    'Saving the key unlocks Generate and clears its message without a reload',
+    !/API key/.test($('#generate').title) && !/API key/.test($('#generateReason').textContent),
+  );
   const status = await (await fetch('/spool/api/comfy')).json();
   await n.flush();
   const exported = await (await fetch('/spool/api/projects/' + n.projectKey + '/export')).json();

@@ -28,6 +28,15 @@
       { ...base, id: 'rail-waiting', takeNumber: 4, status: 'queued' },
       { ...base, id: 'rail-farm', takeNumber: 5, status: 'farm_queued', target: 'deadline' },
       { ...base, id: 'rail-failed', takeNumber: 6, status: 'failed', finishedAt: now, error },
+      // Failed before this session, so it is listed but not announced.
+      {
+        ...base,
+        id: 'rail-old-failure',
+        takeNumber: 2,
+        status: 'failed',
+        finishedAt: now - 3600,
+        error: 'Out of memory',
+      },
     ];
   const original = w.fetch;
   let slowSaves = false;
@@ -53,7 +62,7 @@
     checks.push('A take that fails while Spool is open is announced with its clip, take and reason');
     check(
       'Failed takes lead the rail, then rendering takes, each in its own state',
-      ['failed', 'running', 'waiting', 'waiting'].join() ===
+      ['failed', 'failed', 'running', 'waiting', 'waiting'].join() ===
         [...d.querySelectorAll('[data-pending-job]')].map(r => r.dataset.state).join(),
     );
     check('A running take shows its percent and progress', /75%/.test(row('rail-running').textContent));
@@ -69,14 +78,24 @@
     check('A failed take shows why on the rail', reason?.title === error && reason.getClientRects().length > 0);
     check(
       'The Renders button counts the failure',
-      $('renderFailures').textContent === '1' && /1 failed/.test($('showQueue').getAttribute('aria-label')),
+      $('renderFailures').textContent === '2' && /2 failed/.test($('showQueue').getAttribute('aria-label')),
     );
     slowSaves = true;
     row('rail-failed').querySelector('[data-dismiss-render]').click();
     check(
       'Dismissing a failed take clears it from the rail and Renders at once, without waiting for the save',
-      !row('rail-failed') && n.state.clearedRenderIds.includes('rail-failed') && $('renderFailures').textContent === '',
+      !row('rail-failed') &&
+        n.state.clearedRenderIds.includes('rail-failed') &&
+        $('renderFailures').textContent === '1',
     );
+    $('showQueue').click();
+    await wait(() => d.querySelector('[data-clear-render="rail-old-failure"]'), 'Renders entry');
+    d.querySelector('[data-clear-render="rail-old-failure"]').click();
+    check(
+      'Clearing a failed take in Renders removes it from the take rail at once too',
+      !row('rail-old-failure') && $('renderFailures').textContent === '',
+    );
+    $('showQueue').click();
     await n.flush();
     slowSaves = false;
 
