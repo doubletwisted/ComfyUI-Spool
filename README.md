@@ -14,6 +14,10 @@
   <a href="https://buymeacoffee.com/doubletwisted"><img alt="Buy me a coffee" src="https://img.shields.io/badge/Buy_me_a_coffee-ffb52e?style=flat&logo=buymeacoffee&logoColor=101113"></a>
 </p>
 
+<p align="center">
+  <a href="https://youtu.be/Z5H-dzL2kUU"><img src="docs/images/watch-the-film.webp" alt="Watch the Spool launch film on YouTube" width="360"></a>
+</p>
+
 Spool turns ComfyUI into a place to make a film, not just a shot. Lay out shots
 on a timeline, generate takes for each one with your own workflows, compare
 them, and choose the take that goes in the edit. Takes render on this computer,
@@ -21,7 +25,7 @@ on Comfy Cloud or on a Deadline farm.
 
 Your workflows stay as they are: Spool needs no custom nodes in the graph.
 
-![The Spool studio: a three-shot sequence, with two takes of the selected shot below the viewer and its workflow inputs on the right](docs/images/studio.webp)
+![The Spool studio: an eight-shot sequence on the timeline, the first shot selected with its four takes beside the viewer and its workflow inputs on the right](docs/images/studio.webp)
 
 > [!NOTE]
 > Spool 0.1.0 is an early release, tested on Windows and Apple Silicon macOS.
