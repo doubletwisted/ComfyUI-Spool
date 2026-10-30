@@ -19,18 +19,7 @@
   $('addVideoTrack').click();
   await frame();
   check(
-    'Three video tracks with their audio shrink together to fit, with no vertical scrollbar' +
-      ' DEBUG ' +
-      [
-        height(1),
-        height(3),
-        scroll.scrollHeight,
-        scroll.clientHeight,
-        $('ruler').offsetHeight,
-        $('clipLane').style.height,
-        $('audioLane').style.height,
-        $('musicLane').style.height,
-      ].join(','),
+    'Three video tracks with their audio shrink together to fit, with no vertical scrollbar',
     !overflows() && height(1) < 72 && height(1) >= 36 && height(1) === height(3),
   );
   check(
@@ -40,5 +29,16 @@
   for (let i = 0; i < 6; i++) $('addVideoTrack').click();
   await frame();
   check('With more tracks than fit at their minimum, the timeline scrolls', height(1) === 36 && overflows());
+  // Growing the timeline until they fit hides the scrollbar while the resize is
+  // being handled; that must not surface as an error, which stops Spool loading.
+  const errors = [],
+    record = e => errors.push(e.message);
+  addEventListener('error', record, true);
+  scroll.style.minHeight = scroll.scrollHeight + 40 + 'px';
+  for (let i = 0; i < 4; i++) await frame();
+  removeEventListener('error', record, true);
+  const fitted = !overflows();
+  scroll.style.minHeight = '';
+  check('Lanes that start fitting while the timeline resizes raise no ResizeObserver error', fitted && !errors.length);
   return { checks };
 })();

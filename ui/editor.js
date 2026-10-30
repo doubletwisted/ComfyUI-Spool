@@ -2729,9 +2729,15 @@ async function startEditor(isFailed) {
   $('zoomOut').onclick = () => setTimelineZoom(state.zoom / 1.25);
   $('zoomIn').onclick = () => setTimelineZoom(state.zoom * 1.25);
 
+  // Lay out in the next frame: fitting lanes can show or hide the scrollbar, which
+  // resizes the timeline again while the observer is still delivering.
+  let resizeFrame = 0;
   const resizeObserver = new ResizeObserver(() => {
-    renderTimeline();
-    updateViewer();
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => {
+      renderTimeline();
+      updateViewer();
+    });
   });
   resizeObserver.observe($('timelineScroll'));
   $('editor').addEventListener('click', e => {

@@ -24,12 +24,18 @@ for (const event of events) window.addEventListener(event, block, true);
 let failed = false,
   timer;
 function fail(error) {
+  // The first failure is the cause; later ones only report that loading stopped.
+  if (failed) return;
   failed = true;
   editor.inert = true;
   notice.textContent = 'Spool could not load. Reload this page to retry. ' + (error.message || 'Initialization failed');
   document.getElementById('saveStatus').textContent = 'Not loaded';
 }
-const onError = e => fail(e.error || Error(e.message));
+// Browsers report a layout that settles over two frames as a ResizeObserver error; it is not a failure.
+const onError = e => {
+  if (/^ResizeObserver loop/.test(e.message)) return;
+  fail(e.error || Error(e.message));
+};
 window.addEventListener('error', onError);
 try {
   const api = await Promise.race([
