@@ -3,9 +3,11 @@
 import copy
 import hashlib
 import logging
+import os
 import subprocess
 import time
 import uuid
+from pathlib import Path
 
 from . import ledger
 from .media import VIDEO_EXTENSIONS, IMAGE_EXTENSIONS, contained
@@ -48,9 +50,14 @@ class FolderTakes:
             directory = contained(store.root, folder)
             if not directory.is_dir():
                 continue
-            for path in directory.iterdir():
-                if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS | IMAGE_EXTENSIONS:
-                    continue
+            # A directory listing carries each entry's type, so files on a share are not stat'ed one by one.
+            with os.scandir(directory) as entries:
+                files = [
+                    Path(entry.path)
+                    for entry in entries
+                    if entry.is_file() and Path(entry.name).suffix.lower() in VIDEO_EXTENSIONS | IMAGE_EXTENSIONS
+                ]
+            for path in files:
                 if any(prefix in path.stem for prefix in inventory[2]):
                     continue
                 relative = path.relative_to(store.root).as_posix()

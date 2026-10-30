@@ -44,6 +44,8 @@ First public release.
   that apply.
 - The studio starts when opened over plain HTTP from another machine, such as a
   LAN or Tailscale address.
+- Projects on a network share open and save without waiting for playback copies
+  to be checked, and clip folders are scanned from one directory listing.
 
 ### Generation
 
@@ -67,7 +69,7 @@ First public release.
   several takes would repeat the same seed.
 - A failed take is announced, stays on its clip's take rail with the reason until
   dismissed, and is counted on **Renders**. Takes still rendering are compact
-  rows, and compact takes fit more on the rail.
+  rows, and large, compact or list takes fit more on the rail.
 - **Renders** shows one line per take with **Cancel** beside it, and **Cancel
   all** per shot. Local takes can be cancelled from Spool, whether queued or
   running.

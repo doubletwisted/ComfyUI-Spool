@@ -70,6 +70,21 @@ class PlaybackTests(unittest.TestCase):
             self.media.prepare_playback(document)
         self.assertEqual(submit.call_args_list[0].args, (self.media, chosen, 1280, 720, 30))
         self.assertTrue(any(call.args[1] == other for call in submit.call_args_list))
+        # The chosen take is listed twice in the document but checked once.
+        self.assertEqual(len(submit.call_args_list), 2)
+
+    def test_project_roots_are_resolved_once_they_exist(self):
+        from spool import media as media_module
+
+        later = self.root / "later"
+        with patch.object(media_module, "RESOLVED_ROOTS", {}) as held:
+            media_module.contained(later, "a.png")
+            self.assertNotIn(str(later), held)
+            later.mkdir()
+            self.assertEqual(media_module.contained(later, "a.png"), later.resolve() / "a.png")
+            self.assertIn(str(later), held)
+            with self.assertRaisesRegex(ValueError, "escapes"):
+                media_module.contained(later, "../outside.png")
 
     def test_legacy_quality_is_dropped_and_old_playback_is_evictable(self):
         workspace = Workspace(self.root / "workspace")

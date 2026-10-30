@@ -139,9 +139,34 @@ def register(server, store, media, executor=None):
             result.headers["Vary"] = "Accept-Encoding"
         return result
 
+    preparing = set()
+
+    def prepare_playback(selected_store, selected_media, document):
+        """Start playback copies without holding up the response.
+
+        Checking each source on a network share takes seconds for a large project,
+        and the collector prepares them again after every change. One preparation
+        runs per project folder at a time. Serializing the response only reads the
+        document, so both can use it at once.
+        """
+        key = str(selected_store.root)
+        if key in preparing:
+            return
+        preparing.add(key)
+
+        def run():
+            try:
+                selected_media.prepare_playback(document)
+            except Exception:
+                logging.exception("Spool could not start playback preparation")
+            finally:
+                preparing.discard(key)
+
+        asyncio.get_running_loop().run_in_executor(None, run)
+
     async def project_response(request, value):
         selected_store, selected_media = await asyncio.to_thread(services, request)
-        await asyncio.to_thread(selected_media.prepare_playback, value["document"])
+        prepare_playback(selected_store, selected_media, value["document"])
 
         def serialize():
             return response(ledger.editor_project(value) if request.headers.get("X-Spool-View") == "editor" else value)

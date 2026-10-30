@@ -1425,6 +1425,37 @@ class ProjectFolderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no longer"):
             self.store.media_record(project["id"], "render")
 
+    def test_project_responses_do_not_wait_for_playback_preparation(self):
+        started, release = Event(), Event()
+        calls = []
+
+        def slow(media, document):
+            calls.append(document)
+            started.set()
+            release.wait(10)
+
+        async def check():
+            server = SimpleNamespace(routes=web.RouteTableDef(), app=web.Application())
+            register(server, self.workspace, self.base_media)
+            server.app.cleanup_ctx.clear()
+            server.app.add_routes(server.routes)
+            with patch.object(Media, "prepare_playback", autospec=True, side_effect=slow):
+                async with TestClient(TestServer(server.app)) as client:
+                    path = "/spool/api/projects/" + self.project["id"]
+                    first = await client.get(path)
+                    self.assertEqual(first.status, 200, await first.text())
+                    await asyncio.to_thread(started.wait, 10)
+                    # A project on a network share takes seconds to check; reads and saves answer meanwhile.
+                    second = await client.get(path)
+                    self.assertEqual(second.status, 200)
+                    self.assertEqual(len(calls), 1)
+                    release.set()
+
+        try:
+            asyncio.run(check())
+        finally:
+            release.set()
+
     def test_import_prepares_playback_at_resolved_footage_rate(self):
         async def check():
             server = SimpleNamespace(routes=web.RouteTableDef(), app=web.Application())

@@ -109,6 +109,24 @@ SAVER_GROUPS = {
 }
 
 
+RESOLVED_ROOTS = {}
+
+
+def resolved_root(root):
+    """`Path(root).resolve()`, remembered once the root exists.
+
+    Resolving a folder on a network share walks the share on every call. The form
+    `resolve()` returns changes when a missing folder is created, so only existing
+    roots are remembered.
+    """
+    held = RESOLVED_ROOTS.get(root)
+    if held is None:
+        held = Path(root).resolve()
+        if held.is_dir():
+            RESOLVED_ROOTS[root] = held
+    return held
+
+
 def contained(root, relative):
     """Resolve a stored relative path, refusing anything outside its root.
 
@@ -117,7 +135,7 @@ def contained(root, relative):
     whose parent does not, so `is_relative_to` compared mismatched strings and
     containment depended on whether a directory had already been created.
     """
-    base = Path(root).resolve()
+    base = resolved_root(str(root))
     target = Path(os.path.normpath(os.path.join(str(base), unquote(relative))))
     key, prefix = os.path.normcase(str(target)), os.path.normcase(str(base))
     if key == prefix or not key.startswith(prefix + os.sep):
@@ -191,11 +209,17 @@ class Media:
                 if t.get("id") == clip.get("takeId") and not t.get("placeholder")
             )
         records.extend(media_records(document))
+        seen = set()
         for record in records:
             if record.get("kind") not in ("image", "video") and not (
                 record.get("kind") == "audio" and record.get("fps")
             ):
                 continue
+            # A take's media is listed again wherever the document repeats it.
+            identity = (record.get("originalFile", record.get("file")), record.get("sourceRange", {}).get("start"))
+            if identity in seen:
+                continue
+            seen.add(identity)
             try:
                 self.playback.submit(self, record, size["width"], size["height"], document.get("fps", 24))
             except (ValueError, OSError):
@@ -1133,8 +1157,8 @@ class Media:
                 pending.unlink(missing_ok=True)
         return self.preview_result(metadata, width, height, fps)
 
-    def preview_result(self, metadata, width, height, fps):
-        output = self.preview_path(metadata, width, height, fps)
+    def preview_result(self, metadata, width, height, fps, output=None):
+        output = output or self.preview_path(metadata, width, height, fps)
         return {
             "state": "ready",
             "file": "_playback/" + output.name,

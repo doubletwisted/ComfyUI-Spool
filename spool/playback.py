@@ -20,7 +20,7 @@ class PlaybackQueue:
                 raise CancelledError("Playback preparation stopped")
             if key.is_file():
                 future = Future()
-                future.set_result(media.preview_result(record, width, height, fps))
+                future.set_result(media.preview_result(record, width, height, fps, key))
                 return future
             future = self.jobs.get(key)
             if future is None:
@@ -39,7 +39,7 @@ class PlaybackQueue:
     def status(self, media, record, width, height, fps):
         key = media.preview_path(record, width, height, fps)
         if key.is_file():
-            return media.preview_result(record, width, height, fps)
+            return media.preview_result(record, width, height, fps, key)
         future = self.submit(media, record, width, height, fps)
         if not future.done():
             return {"state": "preparing"}
