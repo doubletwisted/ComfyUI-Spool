@@ -52,7 +52,7 @@ python tests/run_architecture_checks.py
 
 It checks formatting (ruff for Python, Prettier for JavaScript, HTML and CSS)
 and lint (ruff and ESLint), unused JavaScript files and exports (knip, with the
-entry points in `knip.json`), TypeScript checking of the studio owners without
+entry points under `knip` in `package.json`), TypeScript checking of the studio owners without
 emitting a build, then runs every `tests/test_*.py` and
 `tests/*_checks.mjs` and the contract checks that pin shared Python/JavaScript
 formats (see the table in the architecture doc). It needs no ComfyUI host.

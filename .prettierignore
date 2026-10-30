@@ -6,4 +6,3 @@ skills/
 # Comfy workflow files, generated captures and contract fixtures keep their own layout.
 *.json
 !package.json
-!.prettierrc.json
