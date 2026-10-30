@@ -1180,6 +1180,7 @@ button:disabled {
   width: 24px;
   min-height: 24px;
 }
+/* Tracks fit the height (track-layout.js), so no gutter is reserved for a vertical scrollbar. */
 .timeline-scroll {
   overflow-x: auto;
   flex: 1;
@@ -1187,7 +1188,6 @@ button:disabled {
   scrollbar-width: thin;
   scrollbar-color: #3a3a3f transparent;
   overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 .timeline-content {
   position: relative;
@@ -7755,14 +7755,27 @@ input[type='range'] {
     padding-top: 6px;
   }
 }
-/* While the pointer scrubs a take, a thin bar under its thumbnail shows where in the take it is. */
-.take-card.scrubbing .take-thumb::after {
+/* While the pointer scrubs a take, a thin bar along the tile's bottom edge shows where
+   in the take it is; the whole tile is the scrub area. */
+.take-card.scrubbing::after {
   content: '';
   position: absolute;
   left: 0;
   bottom: 0;
   width: calc(var(--scrub, 0) * 100%);
   height: 2px;
+  border-radius: 0 1px 1px 0;
   background: var(--accent);
   pointer-events: none;
+}
+/* Fitted tracks (track-layout.js) can be shorter than their headers' two lines:
+   headers keep one line and smaller toggles. */
+.full-editor.tracks-fitted .track-title small {
+  display: none;
+}
+.full-editor.tracks-fitted .track-label.audio .track-toggle {
+  height: 16px;
+  min-height: 16px;
+  font-size: 9px;
+  line-height: 14px;
 }

@@ -38,6 +38,8 @@ First public release.
   `python -m spool --open` does the same elsewhere.
 - Clip notes, a keyboard shortcut sheet, a non-blocking Renders panel and a
   layout that adapts to laptop screens.
+- Timeline lanes shrink together to fit the timeline's height instead of
+  scrolling.
 - A status bar for work in progress or the last edit, save state and the Comfy
   connection. **Activity** reads the project's events as sentences. The
   inspector shows short controls as compact rows and only the workflow actions

@@ -8,6 +8,8 @@ export function createTrackLayout({
   trackHeights,
   trackHeightBounds,
   trackHeight,
+  preferredTrackHeight,
+  setTrackFit,
   trackVariable,
   draw,
 }) {
@@ -37,9 +39,24 @@ export function createTrackLayout({
   function setStyle(node, key, value) {
     if (node.style.getPropertyValue(key) !== value) node.style.setProperty(key, value);
   }
+  // Tracks share the timeline's height in proportion to the heights they are set to.
+  function fitTracks(count) {
+    const keys = [];
+    for (let track = count; track > 0; track--) {
+      keys.push('video:' + track);
+      if (!T.sourceTrackHidden(getState(), track)) keys.push('source:' + track);
+    }
+    if (!getState().audioTracks?.musicHidden) keys.push('music');
+    const wanted = keys.reduce((sum, key) => sum + preferredTrackHeight(key), 0),
+      room = $('timelineScroll').clientHeight - $('ruler').offsetHeight;
+    const fit = room > 0 && wanted > room ? room / wanted : 1;
+    setTrackFit(fit);
+    $('editor').classList.toggle('tracks-fitted', fit < 1);
+  }
   function applyTrackHeights() {
     const editor = $('editor'),
       count = T.videoTracks(getState());
+    fitTracks(count);
     for (const kind of ['video', 'source']) {
       let top = 0;
       for (let track = count; track > 0; track--) {

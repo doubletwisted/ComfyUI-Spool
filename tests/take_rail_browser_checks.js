@@ -110,11 +110,10 @@
     card.dispatchEvent(
       new PointerEvent('pointermove', { bubbles: true, clientX: r.left + r.width / 4, clientY: r.top + r.height / 2 }),
     );
-    const bar = getComputedStyle(card.querySelector('.take-thumb'), '::after');
+    const bar = getComputedStyle(card, '::after');
     check(
-      'Scrubbing shows a thin bar under the thumbnail at the scrub position',
-      card.classList.contains('scrubbing') &&
-        Math.abs(parseFloat(bar.width) - card.querySelector('.take-thumb').clientWidth / 4) < 2,
+      'Scrubbing shows a thin bar along the tile at the scrub position',
+      card.classList.contains('scrubbing') && Math.abs(parseFloat(bar.width) - card.clientWidth / 4) < 3,
     );
     card.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
     check('The scrub bar goes when the pointer leaves', !card.classList.contains('scrubbing'));

@@ -27,6 +27,9 @@ under the clip. **A2** is the soundtrack lane for independent audio.
   stays.
 - Drag the lower edge of a track header to resize that lane. Double-click the edge
   to reset it. Lane sizes are remembered for each project in this browser.
+- Lanes share the timeline's height: when they do not all fit, they shrink
+  together in proportion to their sizes, so the timeline scrolls up and down only
+  when there are too many lanes to fit even when small.
 
 ## Selecting
 

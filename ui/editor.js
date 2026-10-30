@@ -392,10 +392,18 @@ async function startEditor(isFailed) {
     max: key.startsWith('video:') ? 480 : 320,
   });
   const defaultTrackHeight = key => (key.startsWith('video:') ? 72 : 48);
-  const trackHeight = key => {
+  // The height a track is set to; tracks shrink together below it when they do not
+  // all fit the timeline, down to a fitting floor below the resize minimum, so the
+  // timeline scrolls only once every track is that small.
+  const preferredTrackHeight = key => {
     const b = trackHeightBounds(key);
     return Math.min(b.max, Math.max(b.min, trackHeights[key] ?? defaultTrackHeight(key)));
   };
+  let trackFit = 1;
+  const trackHeight = key =>
+    trackFit < 1
+      ? Math.max(key.startsWith('video:') ? 36 : 22, Math.floor(preferredTrackHeight(key) * trackFit))
+      : preferredTrackHeight(key);
   const trackVariable = (kind, track, part) => '--' + kind + '-' + part + '-' + track;
   const trackLayoutOwner = createTrackLayout({
     $,
@@ -404,6 +412,8 @@ async function startEditor(isFailed) {
     trackHeights,
     trackHeightBounds,
     trackHeight,
+    preferredTrackHeight,
+    setTrackFit: value => (trackFit = value),
     trackVariable,
     draw,
   });
@@ -3096,7 +3106,8 @@ async function startEditor(isFailed) {
     trackResize = {
       key,
       y: e.clientY,
-      height: trackHeight(key),
+      height: preferredTrackHeight(key),
+      fit: trackFit,
       initial: trackHeights[key],
       pointerId: e.pointerId,
       handle,
@@ -3108,7 +3119,10 @@ async function startEditor(isFailed) {
   window.addEventListener('pointermove', e => {
     if (!trackResize || e.pointerId !== trackResize.pointerId) return;
     const b = trackHeightBounds(trackResize.key);
-    trackHeights[trackResize.key] = Math.round(clamp(trackResize.height + e.clientY - trackResize.y, b.min, b.max));
+    // A fitted track follows the pointer: its set height changes by the drag at full size.
+    trackHeights[trackResize.key] = Math.round(
+      clamp(trackResize.height + (e.clientY - trackResize.y) / trackResize.fit, b.min, b.max),
+    );
     applyTrackHeights();
   });
   window.addEventListener('pointerup', e => {
@@ -3145,7 +3159,7 @@ async function startEditor(isFailed) {
         ? b.min
         : e.key === 'End'
           ? b.max
-          : clamp(trackHeight(key) + (e.key === 'ArrowDown' ? 1 : -1) * (e.shiftKey ? 32 : 8), b.min, b.max);
+          : clamp(preferredTrackHeight(key) + (e.key === 'ArrowDown' ? 1 : -1) * (e.shiftKey ? 32 : 8), b.min, b.max);
     applyTrackHeights();
     storeTrackHeights();
   });
