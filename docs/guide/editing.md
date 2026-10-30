@@ -93,11 +93,13 @@ imported footage has its own heading. Seeds may differ within a batch. Renders
 still in progress appear below the list as compact rows with their stage and
 progress. A take that fails shows there in red with the reason until you dismiss
 it with **×**; Spool also announces the failure when it happens, and **Renders**
-counts it in red. The list icon beside the clip folder makes the takes compact,
-with a small thumbnail and one line each, for clips with many takes.
+counts it in red. For clips with many takes, the list icon beside the clip
+folder switches between large takes, compact takes (a small thumbnail and one
+line of details) and a take list (one line each); Spool remembers the choice.
 
 - Move across a take to scrub the whole take in the main viewer: anywhere on its
-  tile, left to right. Moving away restores what was there; nothing is chosen.
+  tile, left to right. A thin bar under the thumbnail shows where you are in the
+  take. Moving away restores what was there; nothing is chosen.
 - **Source** reviews a take on its own, with its own playhead (**Q** switches
   between Source and the edit; **1** to **9** pick a take). **Compare** (**C**)
   shows two takes side by side.

@@ -282,10 +282,16 @@ export function createTakeRenderer({
         const card = b.closest('.take-card');
         card.onpointerenter = card.onpointermove = e => {
           const r = card.getBoundingClientRect(),
-            end = t.media.frames;
-          scrubTake(b, t, Math.min(end - 1, Math.floor(clamp((e.clientX - r.left) / r.width, 0, 1) * end)));
+            end = t.media.frames,
+            at = clamp((e.clientX - r.left) / r.width, 0, 1);
+          card.classList.add('scrubbing');
+          card.style.setProperty('--scrub', String(at));
+          scrubTake(b, t, Math.min(end - 1, Math.floor(at * end)));
         };
-        card.onpointerleave = () => thumbnails.stopScrub(b);
+        card.onpointerleave = () => {
+          card.classList.remove('scrubbing');
+          thumbnails.stopScrub(b);
+        };
       });
       list.querySelectorAll('[data-use]').forEach(b => (b.onclick = () => chooseTake(c.id, b.dataset.use)));
     }

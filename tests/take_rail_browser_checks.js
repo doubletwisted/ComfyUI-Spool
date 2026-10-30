@@ -30,8 +30,11 @@
       { ...base, id: 'rail-failed', takeNumber: 6, status: 'failed', finishedAt: now, error },
     ];
   const original = w.fetch;
+  let slowSaves = false;
   w.fetch = async (input, options) => {
     const path = new URL(String(input), location.href).pathname;
+    // A project on a network share can take seconds to save.
+    if (slowSaves && options?.method === 'PUT') await new Promise(r => setTimeout(r, 3000));
     if (path === '/spool/api/projects/' + n.projectKey && (!options?.method || options.method === 'GET')) {
       const headers = new Headers(options?.headers);
       headers.delete('X-Spool-Since');
@@ -68,24 +71,53 @@
       'The Renders button counts the failure',
       $('renderFailures').textContent === '1' && /1 failed/.test($('showQueue').getAttribute('aria-label')),
     );
+    slowSaves = true;
     row('rail-failed').querySelector('[data-dismiss-render]').click();
-    await wait(() => !row('rail-failed'), 'Dismiss');
     check(
-      'Dismissing a failed take clears it from the rail and Renders',
-      n.state.clearedRenderIds.includes('rail-failed') && $('renderFailures').textContent === '',
+      'Dismissing a failed take clears it from the rail and Renders at once, without waiting for the save',
+      !row('rail-failed') && n.state.clearedRenderIds.includes('rail-failed') && $('renderFailures').textContent === '',
     );
+    await n.flush();
+    slowSaves = false;
 
+    // The size is remembered per browser, so start from large.
+    while ($('takes').dataset.takeSize !== 'large') $('takeSize').click();
     const card = d.querySelector('.take-card'),
-      tall = card.getBoundingClientRect().height;
-    $('compactTakes').click();
+      height = () => card.getBoundingClientRect().height,
+      large = height();
+    $('takeSize').click();
+    const compact = height();
     check(
       'Compact takes make each tile shorter and are remembered',
-      $('takes').classList.contains('compact-takes') &&
-        card.getBoundingClientRect().height < tall * 0.8 &&
-        localStorage.getItem('spool-compact-takes') === '1',
+      $('takes').dataset.takeSize === 'compact' &&
+        compact < large * 0.8 &&
+        localStorage.getItem('spool-take-size') === 'compact',
     );
-    $('compactTakes').click();
-    check('Compact takes switch back', Math.abs(card.getBoundingClientRect().height - tall) < 1);
+    $('takeSize').click();
+    check(
+      'The take list is shorter still, one line per take',
+      $('takes').dataset.takeSize === 'list' &&
+        height() < compact * 0.8 &&
+        card.querySelector('.take-heading').getBoundingClientRect().top <
+          card.querySelector('.take-details').getBoundingClientRect().bottom &&
+        card.querySelector('.take-details').getBoundingClientRect().top <
+          card.querySelector('.take-heading').getBoundingClientRect().bottom,
+    );
+    $('takeSize').click();
+    check('A third click returns to large takes', Math.abs(height() - large) < 1);
+
+    const r = card.getBoundingClientRect();
+    card.dispatchEvent(
+      new PointerEvent('pointermove', { bubbles: true, clientX: r.left + r.width / 4, clientY: r.top + r.height / 2 }),
+    );
+    const bar = getComputedStyle(card.querySelector('.take-thumb'), '::after');
+    check(
+      'Scrubbing shows a thin bar under the thumbnail at the scrub position',
+      card.classList.contains('scrubbing') &&
+        Math.abs(parseFloat(bar.width) - card.querySelector('.take-thumb').clientWidth / 4) < 2,
+    );
+    card.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+    check('The scrub bar goes when the pointer leaves', !card.classList.contains('scrubbing'));
 
     check(
       'The status bar has one line: work in progress or the last edit, never a resting Ready',

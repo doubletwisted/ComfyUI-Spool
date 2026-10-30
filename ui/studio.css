@@ -7662,12 +7662,13 @@ input[type='range'] {
   color: var(--faint);
   font: 10px var(--mono);
 }
-/* Compact takes: a small thumbnail and one line of details, toggled beside the clip folder. */
-#compactTakes {
+/* Take size, beside the clip folder: large, compact (small thumbnail, one line of
+   details) or list (one line per take with a tiny thumbnail). */
+#takeSize {
   display: none;
 }
 @media (min-width: 1101px) {
-  .full-editor .takes.has-real-takes #compactTakes {
+  .full-editor .takes.has-real-takes #takeSize {
     display: inline-flex;
     order: 2;
     align-items: center;
@@ -7681,33 +7682,87 @@ input[type='range'] {
     background: transparent;
     color: var(--dim);
   }
-  .full-editor .takes.has-real-takes #compactTakes:hover {
+  .full-editor .takes.has-real-takes #takeSize:hover {
     background: var(--hover);
     color: var(--text);
   }
-  .full-editor .takes.has-real-takes #compactTakes[aria-pressed='true'] {
+  .full-editor .takes.has-real-takes:not([data-take-size='large']) #takeSize {
     background: color-mix(in srgb, var(--accent) 14%, transparent);
     color: var(--accent);
   }
-  #compactTakes .icon {
+  #takeSize .icon {
     width: 13px;
     height: 13px;
   }
-  .full-editor .takes.has-real-takes.compact-takes .take-list {
+  .full-editor .takes.has-real-takes:not([data-take-size='large']) .take-list {
     gap: 2px;
   }
-  .full-editor .takes.has-real-takes.compact-takes .take-card {
+  .full-editor .takes.has-real-takes[data-take-size='compact'] .take-card {
     grid-template-columns: 64px minmax(0, 1fr);
     row-gap: 0;
     padding: 3px 5px;
   }
-  .full-editor .takes.has-real-takes.compact-takes .take-heading strong {
+  .full-editor .takes.has-real-takes:not([data-take-size='large']) .take-heading strong {
     font-size: 11px;
   }
-  .full-editor .takes.has-real-takes.compact-takes .take-seed {
+  .full-editor .takes.has-real-takes:not([data-take-size='large']) .take-seed {
     display: none;
   }
-  .full-editor .takes.has-real-takes.compact-takes .take-details {
+  .full-editor .takes.has-real-takes[data-take-size='compact'] .take-details {
     align-content: center;
   }
+  .full-editor .takes.has-real-takes[data-take-size='list'] .take-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 7px;
+    padding: 2px 5px;
+  }
+  .full-editor .takes.has-real-takes[data-take-size='list'] .take-thumb {
+    order: -1;
+    flex: 0 0 32px;
+    width: 32px;
+    border-radius: 2px;
+  }
+  .full-editor .takes.has-real-takes[data-take-size='list'] .take-heading {
+    flex: none;
+    flex-wrap: nowrap;
+    padding-right: 0;
+  }
+  .full-editor .takes.has-real-takes[data-take-size='list'] .take-details {
+    flex: 1;
+    min-width: 0;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    min-height: 0;
+    overflow: hidden;
+  }
+  /* No room for Use take beside the duration: it floats over the row's end on hover. */
+  .full-editor .takes.has-real-takes[data-take-size='list'] .use-take {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    display: none;
+    min-height: 18px;
+    padding: 0 6px;
+    transform: translateY(-50%);
+  }
+  .full-editor .takes.has-real-takes[data-take-size='list'] .take-card:is(:hover, :focus-within, .viewing) .use-take {
+    display: inline-flex;
+    align-items: center;
+  }
+  .takes.has-real-takes[data-take-size='list'] .take-group {
+    padding-top: 6px;
+  }
+}
+/* While the pointer scrubs a take, a thin bar under its thumbnail shows where in the take it is. */
+.take-card.scrubbing .take-thumb::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: calc(var(--scrub, 0) * 100%);
+  height: 2px;
+  background: var(--accent);
+  pointer-events: none;
 }

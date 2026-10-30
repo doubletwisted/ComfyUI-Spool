@@ -998,7 +998,7 @@ async function startEditor(isFailed) {
     takeName,
     pendingJobs,
     failedJobs,
-    clearRenders: ids => renderQueueOwner.clearRenders(ids).then(() => renderPendingTakes(selected())),
+    clearRenders: ids => renderQueueOwner.clearRenders(ids, () => renderPendingTakes(selected())),
     getTakeBatchKey: () => takeBatchKey,
     updateTakeSelection,
     viewTake,
@@ -1054,31 +1054,35 @@ async function startEditor(isFailed) {
   clipFolderButton.className = 'outline';
   clipFolderButton.innerHTML = svg('folder') + '<span class="folder-label">Open clip folder</span>';
   takesHead.append(clipFolderButton);
-  // Compact takes trade thumbnail size for rows; the choice is kept in this browser.
-  const compactTakesKey = 'spool-compact-takes',
-    compactTakes = document.createElement('button');
-  compactTakes.id = 'compactTakes';
-  compactTakes.className = 'outline';
-  compactTakes.title = 'Compact takes';
-  compactTakes.setAttribute('aria-label', 'Compact takes');
-  compactTakes.innerHTML = svg('queue');
-  const showCompactTakes = compact => {
-    $('takes').classList.toggle('compact-takes', compact);
-    compactTakes.setAttribute('aria-pressed', String(compact));
+  // Take size trades thumbnail size for rows: large, compact, or a one-line list.
+  // The choice is kept in this browser.
+  const takeSizeKey = 'spool-take-size',
+    takeSizes = { large: 'Large takes', compact: 'Compact takes', list: 'Take list' },
+    takeSize = document.createElement('button');
+  takeSize.id = 'takeSize';
+  takeSize.className = 'outline';
+  takeSize.innerHTML = svg('queue');
+  const showTakeSize = size => {
+    const next = Object.keys(takeSizes)[(Object.keys(takeSizes).indexOf(size) + 1) % 3];
+    $('takes').dataset.takeSize = size;
+    takeSize.setAttribute('aria-label', takeSizes[size] + '. Switch to ' + takeSizes[next].toLowerCase());
+    takeSize.title = takeSizes[size] + ' · click for ' + takeSizes[next].toLowerCase();
   };
   try {
-    showCompactTakes(localStorage.getItem(compactTakesKey) === '1');
+    const saved = localStorage.getItem(takeSizeKey);
+    showTakeSize(saved in takeSizes ? saved : 'large');
   } catch (error) {
-    showCompactTakes(false);
+    showTakeSize('large');
   }
-  compactTakes.onclick = () => {
-    const compact = !$('takes').classList.contains('compact-takes');
-    showCompactTakes(compact);
+  takeSize.onclick = () => {
+    const keys = Object.keys(takeSizes),
+      size = keys[(keys.indexOf($('takes').dataset.takeSize) + 1) % keys.length];
+    showTakeSize(size);
     try {
-      localStorage.setItem(compactTakesKey, compact ? '1' : '0');
+      localStorage.setItem(takeSizeKey, size);
     } catch (error) {}
   };
-  clipFolderButton.before(compactTakes);
+  clipFolderButton.before(takeSize);
   const takePending = document.createElement('div');
   takePending.id = 'takePending';
   takePending.className = 'take-pending';

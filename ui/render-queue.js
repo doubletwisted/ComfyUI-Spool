@@ -125,20 +125,21 @@ export function createRenderQueue({
   function visibleJobs() {
     return G.visibleRenderJobs(getState().jobs, getState().clearedRenderIds);
   }
-  async function clearRenders(ids) {
+  // Cleared entries disappear at once; the project save that records it follows.
+  async function clearRenders(ids, onCleared = () => {}) {
+    const requested = new Set(ids),
+      clear = getState().jobs.filter(j => requested.has(j.id) && G.clearableRender(j));
+    if (!clear.length) return;
+    getState().clearedRenderIds = [...new Set([...(getState().clearedRenderIds || []), ...clear.map(j => j.id)])];
+    renderQueueList();
+    queueLabel();
+    renderJobStatus();
+    onCleared();
+    $('reconcileQueue')?.focus({ preventScroll: true });
+    toast(clear.length + ' ' + (clear.length === 1 ? 'entry cleared' : 'entries cleared') + '. Takes kept.');
     try {
-      await flushNative();
-      const requested = new Set(ids),
-        clear = getState().jobs.filter(j => requested.has(j.id) && G.clearableRender(j));
-      if (!clear.length) return;
-      getState().clearedRenderIds = [...new Set([...(getState().clearedRenderIds || []), ...clear.map(j => j.id)])];
       save();
       await flushNative();
-      renderQueueList();
-      queueLabel();
-      renderJobStatus();
-      $('reconcileQueue')?.focus({ preventScroll: true });
-      toast(clear.length + ' ' + (clear.length === 1 ? 'entry cleared' : 'entries cleared') + '. Takes kept.');
     } catch (error) {
       toast(error.message);
     }
