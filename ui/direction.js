@@ -1,5 +1,6 @@
 // Directing tools: transitions, extensions, retakes and reworks of a shot.
 // Pure data and rules; ui/directing.js owns the dialogs and edits.
+import { tag } from './cast.js';
 
 /** @typedef {{ id: string, name: string, prompt: string, seconds?: number, colors: string[] }} Preset */
 
@@ -197,7 +198,20 @@ export const WORKFLOWS = {
     { id: 'video_minimax_h3_r2v', label: 'MiniMax H3 · Local', target: 'local', min: 2, max: 15 },
     { id: 'api_minimax_h3_r2v', label: 'MiniMax H3 · Cloud', target: 'cloud', min: 4, max: 15 },
   ],
+  // Recast transfers the shot's motion through pose control, which only runs locally.
+  recast: [
+    {
+      id: 'video_minimax_h3_fun_controlnet_union',
+      label: 'MiniMax H3 ControlNet · Local',
+      target: 'local',
+      min: 2,
+      max: 15,
+    },
+  ],
 };
+
+/** The workflow list a kind of directed clip chooses from. */
+export const toolFor = kind => (kind === 'recast' ? 'recast' : ['reangle', 'effect'].includes(kind) ? 'rework' : kind);
 WORKFLOWS.retake = WORKFLOWS.transition;
 
 /** The nearest length a workflow accepts, in whole seconds. */
@@ -262,7 +276,7 @@ export function transitionPrompt(preset, detail = '') {
     'Use the provided start image as the first frame and the provided end image as the last frame.',
     preset.prompt,
     sentence(detail),
-    'Smooth motion, no text, no cut.',
+    'One smooth continuous motion with a soft whoosh of sound.',
   ]
     .filter(Boolean)
     .join(' ');
@@ -274,6 +288,7 @@ export function extendPrompt(sourcePrompt = '', detail = '') {
     'Use the provided start image as the first frame.',
     'Continue the same shot from this exact moment: the same people, place, lighting and camera style.',
     action || 'The action carries on naturally from where it was.',
+    'The ambient sound carries on.',
     sourcePrompt ? 'Earlier in this shot: ' + sentence(stripFramePhrases(sourcePrompt)) : '',
   ]
     .filter(Boolean)
@@ -285,6 +300,7 @@ export function retakePrompt(sourcePrompt = '', detail = '') {
     'Use the provided start image as the first frame and the provided end image as the last frame.',
     'Keep the same people, place, lighting and camera; join both frames in one continuous motion.',
     sentence(detail),
+    'The ambient sound carries on.',
     sourcePrompt ? 'Context: ' + sentence(stripFramePhrases(sourcePrompt)) : '',
   ]
     .filter(Boolean)
@@ -295,22 +311,33 @@ export function retakePrompt(sourcePrompt = '', detail = '') {
  * MiniMax H3 numbers references by type: <Picture i> for images and <Video k> for
  * videos, with a video's soundtrack labelled <Audio j>.
  */
-export function reworkPrompt(kind, preset, detail = '', { character = '' } = {}) {
-  const keep = 'Keep <Audio 1> exactly as it is.';
-  if (kind === 'recast')
+export function reworkPrompt(
+  kind,
+  preset,
+  detail = '',
+  { character = '', pictures = 1, style = 'angle', audio = true, scene = 0 } = {},
+) {
+  const video = tag(style, 'Video', 1),
+    keep = audio ? 'Keep ' + tag(style, 'Audio', 1) + ' exactly as it is.' : '';
+  if (kind === 'recast') {
+    const shown = Array.from({ length: Math.max(1, pictures) }, (_, i) => tag(style, 'Image', i + 1)).join(' and ');
     return [
-      'Replace the main person in <Video 1> with the character in <Picture 1>' +
+      'The character shown in ' +
+        shown +
         (character ? ' (' + character + ')' : '') +
-        '.',
-      'Preserve the performance, camera, framing, motion, set, lighting and timing of <Video 1> exactly.',
+        ' performs exactly the movement of the pose guide.',
+      scene
+        ? 'Same place, light, camera framing and timing as ' + tag(style, 'Image', scene) + '; only the person changes.'
+        : 'Keep the camera framing and timing; only the person changes.',
       sentence(detail),
-      keep,
+      'Natural ambient sound.',
     ]
       .filter(Boolean)
       .join(' ');
+  }
   if (kind === 'reangle')
     return [
-      'Re-film the exact same moment as <Video 1> from ' + (preset?.prompt || 'a new camera angle') + '.',
+      'Re-film the exact same moment as ' + video + ' from ' + (preset?.prompt || 'a new camera angle') + '.',
       'Same people, clothing, set, lighting, action and timing; only the camera position changes.',
       sentence(detail),
       keep,
@@ -318,8 +345,8 @@ export function reworkPrompt(kind, preset, detail = '', { character = '' } = {})
       .filter(Boolean)
       .join(' ');
   return [
-    sentence((preset?.prompt || 'Change the scene') + ' in <Video 1>'),
-    'Keep everything else in <Video 1> unchanged: the people, their performance, the camera, framing and timing.',
+    sentence((preset?.prompt || 'Change the scene') + ' in ' + video),
+    'Keep everything else in ' + video + ' unchanged: the people, their performance, the camera, framing and timing.',
     sentence(detail),
     keep,
   ]

@@ -85,6 +85,23 @@ module contracts are in [architecture.md](architecture.md).
   Only Use take changes the authored choice; playback and hover decoding stay
   outside this module.
 
+## Directing
+
+- **Direction**: `clip.direction`, how a directing tool made a clip (`kind`:
+  transition, extend, retake, recast, reangle or effect, with its preset). It only
+  drives the timeline badge and the inspector card; the clip's workflow and inputs
+  are ordinary. Owned by `ui/directing.js`; presets and prompts in `ui/direction.js`.
+- **Neighbour input**: a shot input with `source` `previous` or `next`. When a
+  request is frozen it reads the selected take of the clip before or after on the
+  same video track, with that clip's trim (`spool/requests.py:neighbor`, mirrored by
+  `ui/direction.js:neighbor`).
+- **Cast**: `document.cast`, named members with pictures. `@Name` in a positive
+  prompt fills empty reference inputs when a request is frozen (`spool/cast.py`,
+  mirrored by `ui/cast.js`); the request records `castMentions`.
+- **Draft take**: a take queued with `quality: "draft"`. Freezing lowers the
+  resolution controls and turns on `speed` switches (`requests.draft_values`); the
+  take summary keeps `quality`.
+
 ## Integration
 
 - **Bridge**: the per-Comfy-tab BroadcastChannel (`spool-comfy-<id>`) the studio uses

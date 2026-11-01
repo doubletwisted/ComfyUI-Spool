@@ -44,10 +44,11 @@ Replace every placeholder from fresh state. Scope is a command contract, not aut
 | Action | Capability | Arguments and behavior |
 | --- | --- | --- |
 | `set_inputs` | `inputs` | `{clipId, values}`; merges literal values by existing binding key. An empty string empties an `optional` media binding. |
-| `set_shot_inputs` | `inputs` | `{clipId, inputs}`; replaces the entire routing list, so preserve unrelated entries. |
+| `set_shot_inputs` | `inputs` | `{clipId, inputs}`; replaces the entire routing list, so preserve unrelated entries. An image or video entry may use `source: "previous"` or `"next"` to read the neighbouring clip's last or first frame when queued. |
 | `set_execution` | `inputs` | `{clipId, target, deadline?}`; `target` is `local`, `cloud` (Comfy Cloud workflows only) or `deadline` (local workflows, when the capabilities report `deadlineExecution`). `deadline` may set `pool`, `group`, `priority` and `machine_list`; pools and groups must be from the `DeadlineSubmit` definition. A workflow with its own Submit to Deadline node is always on Deadline. Does not render. |
 | `apply_workflow` | `workflow` | `{clipId, workflowVersion}`; uses an existing project recipe as the library does: resets bindings/values to its defaults, sets the recipe's execution target, resets seed behavior to Fixed and removes old shot routing and take setup. Built-in recipes leave media sources empty. |
 | `brief` | `edit` | `{text}`; changes the project brief. |
+| `set_cast` | `edit` | `{cast:[{id,name,description,images}]}`; replaces the cast. `@Name` in a prompt fills reference image inputs at queue time. |
 | `feedback` | `feedback` | `{clipId, takeId, verdict}` where verdict is `keep`, `reject`, `revise` or `unrated`; does not select a take. |
 | `rename_clip` | `edit` | `{clipId,name}`; rename a video clip. |
 | `trim_clip` | `edit` | `{clipId,edge:"in"|"out",frame}`; absolute edge in project/source frames, clamped by the same six-frame, source and gap limits as normal studio trimming. Read the applied value. |

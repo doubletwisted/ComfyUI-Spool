@@ -3,6 +3,31 @@
 All notable changes to Spool are recorded here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Directing tools
+
+- **Add transition** at a cut (the ✦ button on the cut, the clip menu or **T**):
+  nine styles, each previewed between the two real frames, rendered by a first and
+  last frame workflow as a clip of its own.
+- **Extend shot** (**E**) adds the next moment of a shot, starting on its last frame.
+- **Retake part** (**R**) splits a shot around a part you choose and renders a new
+  middle that joins the frames on either side; the original stays as a take.
+- **Recast**, **Re-angle** and **Add effect** rerun one or more shots through
+  MiniMax H3 Reference to Video with the shot as its reference.
+- A **Cast** tab keeps characters with pictures; `@Name` in a prompt fills the
+  workflow's reference inputs and becomes the tag the model reads.
+- Prompt checks under the prompt, and `@` suggestions from the cast.
+- **Draft** renders quick low-resolution takes; **Make final** on a draft renders it
+  again at full quality with the same seed.
+- Image and video inputs can read the clip before or after a shot when it is
+  queued (`previous` and `next` shot inputs), also through `set_shot_inputs`.
+- The local MiniMax H3 Reference to Video workflow shows its **Turbo (4 steps)**
+  switch.
+- Agents can set the cast (`set_cast`) and queue draft variants.
+- API version 2: the project document has a `cast`, which older studios would not
+  keep.
+
 ## 0.1.0 (2026-10-30)
 
 First public release.

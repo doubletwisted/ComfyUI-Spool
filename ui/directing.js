@@ -428,6 +428,10 @@ export function createDirecting({
       toast('Generate or choose a take for this shot first.');
       return;
     }
+    if (t.media.kind !== 'video') {
+      toast('Retake works on video shots.');
+      return;
+    }
     const list = choices('retake'),
       fps = getFps(),
       length = c.out - c.in,
@@ -558,9 +562,9 @@ export function createDirecting({
       toast('Rework needs video shots.');
       return;
     }
-    const list = choices('rework');
+    const list = choices(D.toolFor(kind));
     if (!list.length) {
-      toast('No reference to video workflow is available.');
+      toast('No workflow for this tool is available.');
       return;
     }
     const state = {
@@ -596,9 +600,7 @@ export function createDirecting({
       '</div><div class="rework-shots">' +
       strip +
       (clips.length > 6 ? '<span class="rework-more">+' + (clips.length - 6) + '</span>' : '') +
-      '</div><div id="reworkBody"></div><label class="direct-field"><span>Direction <em>optional</em></span><input id="directDetail" type="text" placeholder="e.g. keep her red scarf"></label><div class="direct-row">' +
-      workflowPicker('rework', state.workflow) +
-      '</div>';
+      '</div><div id="reworkBody"></div><label class="direct-field"><span>Direction <em>optional</em></span><input id="directDetail" type="text" placeholder="e.g. keep her red scarf"></label><div id="reworkModels"></div>';
     const title = n => D.REWORKS[state.kind].verb + ' ' + (n === 1 ? clips[0].name : n + ' shots');
     openDialog(
       title(clips.length),
@@ -642,7 +644,7 @@ export function createDirecting({
             .join('') +
           '<label class="cast-pick-card add" title="Add a cast member from a picture"><input type="file" accept="image/*" hidden id="reworkCastFile"><span>' +
           svg('plus') +
-          '</span><span>New from picture</span></label></div><p class="direct-lede">The main person in each shot becomes this character. Camera, motion, set and sound stay.</p>';
+          '</span><span>New from picture</span></label></div><p class="direct-lede">The main person in each shot becomes this character and moves exactly as before; the place comes from the shot itself. The new take has its own sound.</p>';
         $('reworkBody')
           .querySelectorAll('[data-cast-pick]')
           .forEach(
@@ -687,6 +689,19 @@ export function createDirecting({
           );
       }
       bindThumbs($('reworkBody'));
+      // Each tool has its own models: recast runs on pose control, the others on reference to video.
+      const models = choices(D.toolFor(state.kind));
+      if (!models.some(m => m.id === state.workflow)) state.workflow = models[0]?.id;
+      $('reworkModels').innerHTML = workflowPicker(D.toolFor(state.kind), state.workflow);
+      $('reworkModels')
+        .querySelectorAll('[data-direct-workflow]')
+        .forEach(
+          b =>
+            (b.onclick = () => {
+              state.workflow = b.dataset.directWorkflow;
+              renderBody();
+            }),
+        );
       $('directAdd').textContent = D.REWORKS[state.kind].name;
       $('directGenerate').innerHTML = svg('play') + esc(D.REWORKS[state.kind].name) + ' and generate';
     };
@@ -704,7 +719,8 @@ export function createDirecting({
   }
   async function rework(ids, options, generate = false) {
     const kind = options.kind,
-      choice = choices('rework').find(c => c.id === options.workflow) || choices('rework')[0],
+      list = choices(D.toolFor(kind)),
+      choice = list.find(c => c.id === options.workflow) || list[0],
       member = kind === 'recast' ? castList().find(m => m.id === options.castId) : null,
       preset = D.REWORKS[kind].presets.find(p => p.id === options.preset) || null;
     if (kind === 'recast' && !member) throw Error('Choose a cast member to recast with.');
@@ -718,11 +734,25 @@ export function createDirecting({
         await place(kind, choice.id, { clipId: id }, c => {
           const b = D.toolBindings(c.bindings);
           c.direction = { kind, preset: preset?.id, detail: options.detail || '', castId: member?.id };
+          const recipe = getRecipe(c),
+            style = tagStyle(b.prompt && recipe?.prompt?.[b.prompt.nodeId]?.inputs?.[b.prompt.input]),
+            pictures = member ? Math.min(member.images.length, Math.max(1, b.references.length - 1)) : 0,
+            // A recast also sees the shot's first frame, so the place and light carry over.
+            scene = kind === 'recast' && b.references[pictures] ? pictures + 1 : 0;
           fill(c, {
-            prompt: D.reworkPrompt(kind, preset, options.detail, { character: member?.description || '' }),
+            prompt: D.reworkPrompt(kind, preset, options.detail, {
+              character: member?.description || '',
+              pictures,
+              style,
+              audio: !!b.video?.audio,
+              scene,
+            }),
             seconds,
-            links: [{ key: b.video?.key, source: original, ...(b.video?.audio ? { audio: true } : {}) }],
-            images: member ? member.images.slice(0, Math.max(1, b.references.length)) : [],
+            links: [
+              { key: b.video?.key, source: original, ...(b.video?.audio ? { audio: true } : {}) },
+              ...(scene ? [{ key: b.references[pictures].key, source: original, frame: 'first' }] : []),
+            ],
+            images: member ? member.images.slice(0, pictures) : [],
             shape: source,
           });
         }),
@@ -884,9 +914,44 @@ export function createDirecting({
   }
 
   // ---- inspector card -------------------------------------------------------------------------
+  /** The inspector's row of tools for a shot that has a take. */
+  function directStrip(c) {
+    const t = take(c);
+    if (t.placeholder) return '';
+    const video = t.media.kind === 'video',
+      tools = [
+        ['extend', 'Extend', 'E'],
+        ...(video
+          ? [
+              ['retake', 'Retake', 'R'],
+              ['recast', 'Recast', ''],
+              ['reangle', 'Re-angle', ''],
+              ['effect', 'Effect', ''],
+            ]
+          : []),
+      ];
+    return (
+      '<div class="direct-strip" role="toolbar" aria-label="Directing tools">' +
+      tools
+        .map(
+          ([id, label, key]) =>
+            '<button type="button" data-direct-tool="' +
+            id +
+            '" title="' +
+            esc(label + (key ? ' (' + key + ')' : '')) +
+            '">' +
+            svg(D.KINDS[id].icon) +
+            '<span>' +
+            esc(label) +
+            '</span></button>',
+        )
+        .join('') +
+      '</div>'
+    );
+  }
   function directionCard(c) {
     const d = c.direction;
-    if (!d?.kind || !D.KINDS[d.kind] || !c.workflowVersion) return '';
+    if (!d?.kind || !D.KINDS[d.kind] || !c.workflowVersion) return directStrip(c);
     const doc = getState(),
       previous = D.neighbor(doc, c, 'previous'),
       next = D.neighbor(doc, c, 'next'),
@@ -1023,6 +1088,9 @@ export function createDirecting({
     const index = (c.bindings || []).indexOf(b),
       field = $('inspectorContent').querySelector('textarea[data-native-control="' + index + '"]');
     if (!field) return;
+    $('inspectorContent')
+      .querySelectorAll('.prompt-tools')
+      .forEach(node => node.remove());
     const holder = document.createElement('div');
     holder.className = 'prompt-tools';
     field.closest('.field')?.after(holder);
@@ -1087,23 +1155,34 @@ export function createDirecting({
       mentionMenu.style.left = rect.left - host.left + 'px';
       mentionMenu.style.top = rect.bottom - host.top + 4 + 'px';
       mentionMenu.style.width = Math.min(rect.width, 280) + 'px';
-      mentionMenu.querySelectorAll('[data-mention]').forEach(
-        button =>
-          (button.onmousedown = e => {
-            e.preventDefault();
-            const start = field.selectionStart - match[1].length,
-              insert = button.dataset.mention + ' ';
-            field.setRangeText(insert, start, field.selectionStart, 'end');
-            field.dispatchEvent(new Event('input', { bubbles: true }));
-            field.dispatchEvent(new Event('change', { bubbles: true }));
-            closeMentions();
-            field.focus();
-          }),
-      );
+      mentionMenu.querySelectorAll('[data-mention]').forEach(button => {
+        // Keep the caret in the prompt; Enter, Tab and a click all insert.
+        button.onmousedown = e => e.preventDefault();
+        button.onclick = () => {
+          const start = field.selectionStart - match[1].length,
+            insert = button.dataset.mention + ' ';
+          field.setRangeText(insert, start, field.selectionStart, 'end');
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+          field.dispatchEvent(new Event('change', { bubbles: true }));
+          closeMentions();
+          field.focus();
+        };
+      });
     }
   }
 
   function bindDirectionCard(c) {
+    $('inspectorContent')
+      .querySelectorAll('[data-direct-tool]')
+      .forEach(
+        b =>
+          (b.onclick = () => {
+            const tool = b.dataset.directTool;
+            if (tool === 'extend') extendDialog(c.id);
+            else if (tool === 'retake') retakeDialog(c.id);
+            else reworkDialog([c.id], tool);
+          }),
+      );
     const card = $('inspectorContent').querySelector('.direction-card');
     if (!card) return;
     bindThumbs(card);
@@ -1125,7 +1204,15 @@ export function createDirecting({
                 c.inputValues[bindings.prompt.key] =
                   d.kind === 'transition'
                     ? D.transitionPrompt(preset, d.detail)
-                    : D.reworkPrompt(d.kind, preset, d.detail, { character: member?.description || '' });
+                    : D.reworkPrompt(d.kind, preset, d.detail, {
+                        character: member?.description || '',
+                        pictures: member ? Math.min(member.images.length, Math.max(1, bindings.references.length)) : 0,
+                        style: tagStyle(
+                          bindings.prompt &&
+                            getRecipe(c)?.prompt?.[bindings.prompt.nodeId]?.inputs?.[bindings.prompt.input],
+                        ),
+                        audio: !!bindings.video?.audio,
+                      });
               c.revision++;
             },
             'inspector',
@@ -1156,11 +1243,15 @@ export function createDirecting({
         reason: t.placeholder ? 'Needs a take first.' : null,
         run: () => extendDialog(c.id),
       },
-      {
-        label: 'Retake part…',
-        reason: t.placeholder ? 'Needs a take first.' : c.out - c.in < getFps() * 2 ? 'Needs 2 seconds or more.' : null,
-        run: () => retakeDialog(c.id),
-      },
+      ...(video
+        ? [
+            {
+              label: 'Retake part…',
+              reason: c.out - c.in < getFps() * 2 ? 'Needs 2 seconds or more.' : null,
+              run: () => retakeDialog(c.id),
+            },
+          ]
+        : []),
       ...(video
         ? [
             { label: 'Recast…', run: () => reworkDialog([c.id], 'recast') },

@@ -62,11 +62,21 @@ assert.equal(
   D.transitionPrompt(smoke, 'red smoke'),
   'Use the provided start image as the first frame and the provided end image as the last frame. ' +
     smoke.prompt +
-    ' red smoke. Smooth motion, no text, no cut.',
+    ' red smoke. One smooth continuous motion with a soft whoosh of sound.',
 );
 const extended = D.extendPrompt('Use the provided start image as the first frame. A diver swims.', 'she waves');
 assert.ok(extended.includes(' she waves.') && extended.endsWith('Earlier in this shot: A diver swims.'), extended);
-assert.match(D.reworkPrompt('recast', null, '', { character: 'a knight' }), /<Video 1>.*<Picture 1> \(a knight\)/);
+assert.equal(D.toolFor('recast'), 'recast');
+assert.equal(D.toolFor('effect'), 'rework');
+assert.equal(D.toolFor('transition'), 'transition');
+assert.match(
+  D.reworkPrompt('recast', null, '', { character: 'a knight', pictures: 2, scene: 3 }),
+  /^The character shown in <Picture 1> and <Picture 2> \(a knight\) performs exactly the movement of the pose guide\. Same place, light, camera framing and timing as <Picture 3>;/,
+);
+assert.match(
+  D.reworkPrompt('recast', null, '', { style: 'plain' }),
+  /shown in Image 1 performs.*Keep the camera framing/,
+);
 assert.match(D.reworkPrompt('reangle', D.ANGLES[0]), /from a low angle/);
 assert.match(D.reworkPrompt('effect', D.EFFECTS[0]), /^Add heavy rain.* in <Video 1>\./);
 for (const list of [D.TRANSITIONS, D.ANGLES, D.EFFECTS]) assert.equal(new Set(list.map(p => p.id)).size, list.length);

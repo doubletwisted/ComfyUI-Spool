@@ -8917,3 +8917,77 @@ input[type='range'] {
 .make-final:hover {
   background: #62d0e01f;
 }
+
+/* The viewer previews an ungenerated transition or retake between its frames. */
+.placeholder-direct {
+  position: relative;
+  width: min(420px, 60vw);
+  max-width: 80%;
+  margin: 0 auto 14px;
+}
+.placeholder-direct .preset-swatch {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  box-shadow:
+    0 0 0 1px #ffb52e55,
+    0 18px 50px #000c;
+}
+.placeholder-direct .preset-swatch > * {
+  animation-play-state: running;
+}
+.placeholder-direct em {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 600 11px inherit;
+  font-style: normal;
+}
+.placeholder-direct em .icon {
+  width: 12px;
+  height: 12px;
+}
+.empty-stage.directed > .empty-symbol {
+  display: none;
+}
+
+/* The inspector's directing tools for a shot with a take. */
+.direct-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+  gap: 4px;
+  margin: 0 0 12px;
+}
+.direct-strip button {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 7px 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--dim);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.direct-strip button:hover {
+  color: var(--text);
+  border-color: #ffb52e88;
+  background: linear-gradient(180deg, #ffb52e14, var(--raised));
+}
+.direct-strip button .icon {
+  width: 15px;
+  height: 15px;
+}

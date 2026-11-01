@@ -200,11 +200,12 @@ class QueueOperationTests(unittest.TestCase):
             {"key": "tier", "role": "resolution", "options": ["768P", "2K", "1080P"]},
             {"key": "ratio", "role": "resolution", "options": ["16:9 (Widescreen)", "1:1 (Square)"]},
             {"key": "seed", "role": "seed"},
+            {"key": "turbo", "role": "speed"},
         ]
-        values = {"mp": 0.9, "size": "1080x1920", "tier": "1080P", "ratio": "1:1 (Square)", "seed": 4}
+        values = {"mp": 0.9, "size": "1080x1920", "tier": "1080P", "ratio": "1:1 (Square)", "seed": 4, "turbo": False}
         self.assertEqual(
             requests.draft_values(bindings, values),
-            {"mp": 0.25, "size": "720x1280", "tier": "768P", "ratio": "1:1 (Square)", "seed": 4},
+            {"mp": 0.25, "size": "720x1280", "tier": "768P", "ratio": "1:1 (Square)", "seed": 4, "turbo": True},
         )
         self.assertEqual(requests.draft_values(bindings, {**values, "mp": 0.1})["mp"], 0.1)
         _, request = requests.prepare(

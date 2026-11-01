@@ -112,6 +112,9 @@ def draft_values(bindings, values):
     """Cheaper settings for a draft take: fewer pixels, same shape, everything else unchanged."""
     values = dict(values)
     for b in bindings:
+        # A workflow's own speed switch, such as a turbo LoRA, is on for drafts.
+        if b.get("role") == "speed" and type(values.get(b["key"])) is bool:
+            values[b["key"]] = True
         if b.get("role") != "resolution" or b.get("asset") or b["key"] not in values:
             continue
         value = values[b["key"]]

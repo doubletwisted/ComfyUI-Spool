@@ -2,6 +2,7 @@ import * as T from './timeline.js';
 import { pictureAt } from './picture.js';
 import { createPreviews } from './preview.js';
 import { videoFrameCount } from './video-seek-guard.js';
+import { KINDS, directionLabel, neighbor } from './direction.js';
 
 // Owns viewer presentation, media elements, seeking and the playback clock.
 export function createViewer({
@@ -76,10 +77,42 @@ export function createViewer({
   placeholderState.innerHTML =
     '<span class="empty-symbol">' +
     svg('nodes') +
-    '</span><strong id="placeholderTitle"></strong><p id="placeholderHint"></p>';
+    '</span><div class="placeholder-direct" id="placeholderDirect" hidden></div><strong id="placeholderTitle"></strong><p id="placeholderHint"></p>';
   $('emptyStage').after(placeholderState);
+  let directPreview = '';
+  // An ungenerated transition or retake previews its style between the frames around it.
+  function renderDirectPreview(c) {
+    const kind = c?.direction?.kind,
+      before = kind && neighbor(getState(), c, 'previous'),
+      after = kind && neighbor(getState(), c, 'next'),
+      usable = x => x && !T.takeOf(x).placeholder,
+      show = ['transition', 'retake'].includes(kind) && usable(before) && usable(after),
+      fx = kind === 'transition' ? c.direction.preset || 'dissolve' : 'morph',
+      signature = show
+        ? [c.id, fx, before.id, before.takeId, before.out, after.id, after.takeId, after.in].join('|')
+        : '';
+    $('placeholderDirect').hidden = !show;
+    placeholderState.classList.toggle('directed', show);
+    if (signature === directPreview) return;
+    directPreview = signature;
+    if (!show) {
+      $('placeholderDirect').innerHTML = '';
+      return;
+    }
+    $('placeholderDirect').innerHTML =
+      '<span class="preset-swatch fx-' +
+      fx +
+      '"><img class="fx-a" alt=""><img class="fx-b" alt=""><i></i></span><em>' +
+      svg(KINDS[kind].icon) +
+      directionLabel(c.direction) +
+      '</em>';
+    const [a, b] = $('placeholderDirect').querySelectorAll('img');
+    thumbnails.bind(a, T.takeOf(before).media, Math.max(before.in, before.out - 1), getFps());
+    thumbnails.bind(b, T.takeOf(after).media, after.in, getFps());
+  }
   function renderPlaceholderState(d = viewerData()) {
     placeholderState.hidden = !d?.take?.placeholder;
+    renderDirectPreview(placeholderState.hidden ? null : d.clip);
     if (!placeholderState.hidden) {
       const available = T.realTakes(d.clip).length > 0;
       text('placeholderTitle', available ? 'Choose a take' : 'Not generated yet');

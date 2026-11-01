@@ -271,7 +271,7 @@ export function createClipTools({
           : []),
       );
     }
-    actions.splice(actions.length - 1, 0, ...(getDirecting()?.clipActions(c) || []));
+    if (!inspector) actions.splice(actions.length - 1, 0, ...(getDirecting()?.clipActions(c) || []));
     getShowActionMenu()('Clip actions', actions, x, y, origin);
   }
   function showViewerMenu(picture, x, y) {
