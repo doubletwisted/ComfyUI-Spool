@@ -276,7 +276,7 @@ export function transitionPrompt(preset, detail = '') {
     'Use the provided start image as the first frame and the provided end image as the last frame.',
     preset.prompt,
     sentence(detail),
-    'One smooth continuous motion with a soft whoosh of sound.',
+    'One smooth continuous motion over the whole clip, landing on the last frame only at the very end, with a soft whoosh of sound.',
   ]
     .filter(Boolean)
     .join(' ');
@@ -315,20 +315,23 @@ export function reworkPrompt(
   kind,
   preset,
   detail = '',
-  { character = '', pictures = 1, style = 'angle', audio = true, scene = 0 } = {},
+  { character = '', pictures = 1, style = 'angle', audio = true, place = '' } = {},
 ) {
   const video = tag(style, 'Video', 1),
     keep = audio ? 'Keep ' + tag(style, 'Audio', 1) + ' exactly as it is.' : '';
   if (kind === 'recast') {
     const shown = Array.from({ length: Math.max(1, pictures) }, (_, i) => tag(style, 'Image', i + 1)).join(' and ');
+    // A frame of the shot as a reference brings back its old actor, so the place is described in words.
+    const where = String(place || '')
+      .trim()
+      .replace(/[.!?]+$/, '');
     return [
       'The character shown in ' +
         shown +
         (character ? ' (' + character + ')' : '') +
-        ' performs exactly the movement of the pose guide.',
-      scene
-        ? 'Same place, light, camera framing and timing as ' + tag(style, 'Image', scene) + '; only the person changes.'
-        : 'Keep the camera framing and timing; only the person changes.',
+        (where ? ' is ' + where + ',' : '') +
+        ' performing exactly the movement of the pose guide.',
+      'The plain background of the character pictures is not part of the scene.',
       sentence(detail),
       'Natural ambient sound.',
     ]
@@ -352,6 +355,17 @@ export function reworkPrompt(
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+/** A place to recast into, taken from a shot's prompt: its first sentence without frame instructions. */
+export function placeFrom(prompt = '') {
+  const text = stripFramePhrases(prompt);
+  return text
+    ? text
+        .split(/(?<=[.!?])\s/)[0]
+        .replace(/[.!?]$/, '')
+        .slice(0, 200)
+    : '';
 }
 
 function stripFramePhrases(text) {

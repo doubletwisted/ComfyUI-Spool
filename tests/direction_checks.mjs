@@ -62,21 +62,26 @@ assert.equal(
   D.transitionPrompt(smoke, 'red smoke'),
   'Use the provided start image as the first frame and the provided end image as the last frame. ' +
     smoke.prompt +
-    ' red smoke. One smooth continuous motion with a soft whoosh of sound.',
+    ' red smoke. One smooth continuous motion over the whole clip, landing on the last frame only at the very end, with a soft whoosh of sound.',
 );
 const extended = D.extendPrompt('Use the provided start image as the first frame. A diver swims.', 'she waves');
 assert.ok(extended.includes(' she waves.') && extended.endsWith('Earlier in this shot: A diver swims.'), extended);
 assert.equal(D.toolFor('recast'), 'recast');
 assert.equal(D.toolFor('effect'), 'rework');
 assert.equal(D.toolFor('transition'), 'transition');
-assert.match(
-  D.reworkPrompt('recast', null, '', { character: 'a knight', pictures: 2, scene: 3 }),
-  /^The character shown in <Picture 1> and <Picture 2> \(a knight\) performs exactly the movement of the pose guide\. Same place, light, camera framing and timing as <Picture 3>;/,
+assert.equal(
+  D.reworkPrompt('recast', null, '', { character: 'a knight', pictures: 2, place: 'riding through a forest.' }),
+  'The character shown in <Picture 1> and <Picture 2> (a knight) is riding through a forest, performing exactly the movement of the pose guide. The plain background of the character pictures is not part of the scene. Natural ambient sound.',
 );
 assert.match(
   D.reworkPrompt('recast', null, '', { style: 'plain' }),
-  /shown in Image 1 performs.*Keep the camera framing/,
+  /^The character shown in Image 1 performing exactly/,
 );
+assert.equal(
+  D.placeFrom('Use the provided start image as the first frame. A diver swims in a cave. Bubbles rise.'),
+  'A diver swims in a cave',
+);
+assert.equal(D.placeFrom(''), '');
 assert.match(D.reworkPrompt('reangle', D.ANGLES[0]), /from a low angle/);
 assert.match(D.reworkPrompt('effect', D.EFFECTS[0]), /^Add heavy rain.* in <Video 1>\./);
 for (const list of [D.TRANSITIONS, D.ANGLES, D.EFFECTS]) assert.equal(new Set(list.map(p => p.id)).size, list.length);

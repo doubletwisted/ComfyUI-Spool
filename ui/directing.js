@@ -573,6 +573,8 @@ export function createDirecting({
       detail: '',
       workflow: list[0].id,
       castId: castList()[0]?.id || null,
+      // A generated shot's own prompt usually says where it happens.
+      place: D.placeFrom(sourcePrompt(clips[0])),
       problem: () => (state.kind === 'recast' && !state.castId ? 'Add a cast member to recast with.' : null),
     };
     const tabs = Object.entries(D.REWORKS)
@@ -644,7 +646,10 @@ export function createDirecting({
             .join('') +
           '<label class="cast-pick-card add" title="Add a cast member from a picture"><input type="file" accept="image/*" hidden id="reworkCastFile"><span>' +
           svg('plus') +
-          '</span><span>New from picture</span></label></div><p class="direct-lede">The main person in each shot becomes this character and moves exactly as before; the place comes from the shot itself. The new take has its own sound.</p>';
+          '</span><span>New from picture</span></label></div><label class="direct-field"><span>Where</span><input id="recastPlace" type="text" value="' +
+          esc(state.place) +
+          '" placeholder="e.g. swimming underwater through a sunlit coral palace"></label><p class="direct-lede">The main person in each shot becomes this character and moves exactly as before. Say where it happens; the new take has its own sound.</p>';
+        $('recastPlace').oninput = e => (state.place = e.target.value);
         $('reworkBody')
           .querySelectorAll('[data-cast-pick]')
           .forEach(
@@ -734,24 +739,21 @@ export function createDirecting({
         await place(kind, choice.id, { clipId: id }, c => {
           const b = D.toolBindings(c.bindings);
           c.direction = { kind, preset: preset?.id, detail: options.detail || '', castId: member?.id };
+          if (kind === 'recast') c.direction.place = options.place || '';
           const recipe = getRecipe(c),
             style = tagStyle(b.prompt && recipe?.prompt?.[b.prompt.nodeId]?.inputs?.[b.prompt.input]),
-            pictures = member ? Math.min(member.images.length, Math.max(1, b.references.length - 1)) : 0,
-            // A recast also sees the shot's first frame, so the place and light carry over.
-            scene = kind === 'recast' && b.references[pictures] ? pictures + 1 : 0;
+            pictures = member ? Math.min(member.images.length, Math.max(1, b.references.length)) : 0,
+            place = kind === 'recast' ? options.place || D.placeFrom(sourcePrompt(source)) : '';
           fill(c, {
             prompt: D.reworkPrompt(kind, preset, options.detail, {
               character: member?.description || '',
               pictures,
               style,
               audio: !!b.video?.audio,
-              scene,
+              place,
             }),
             seconds,
-            links: [
-              { key: b.video?.key, source: original, ...(b.video?.audio ? { audio: true } : {}) },
-              ...(scene ? [{ key: b.references[pictures].key, source: original, frame: 'first' }] : []),
-            ],
+            links: [{ key: b.video?.key, source: original, ...(b.video?.audio ? { audio: true } : {}) }],
             images: member ? member.images.slice(0, pictures) : [],
             shape: source,
           });
@@ -1212,6 +1214,7 @@ export function createDirecting({
                             getRecipe(c)?.prompt?.[bindings.prompt.nodeId]?.inputs?.[bindings.prompt.input],
                         ),
                         audio: !!bindings.video?.audio,
+                        place: d.place || '',
                       });
               c.revision++;
             },

@@ -26,7 +26,8 @@ take, trimming or reordering the neighbouring shots therefore changes what the
 next take starts and ends on. The inspector shows these inputs as **Last frame of
 the clip before** and **First frame of the clip after**, with a preview of the
 frame. A tool that needs a neighbour refuses to generate until that neighbour has
-a take.
+a take. **Use take** on a directed clip keeps its workflow and these links, so
+the next take still follows the edit.
 
 The new clip uses the picture shape of the shot it joins, so a workflow whose
 default is square still matches widescreen footage. Generated takes start on the
@@ -62,9 +63,11 @@ back at any time.
 
 **Re-angle** and **Add effect** run the shot through MiniMax H3 Reference to Video
 with the shot itself as the reference video and its sound kept. **Recast** runs it
-through MiniMax H3 ControlNet Union: the shot's pose drives the movement, the cast
-member's pictures give the person, and the shot's first frame gives the place; the
-take has new sound. Select several shots to change them all at once; each gets its
+through MiniMax H3 ControlNet Union: the shot's pose drives the movement and the
+cast member's pictures give the person. Say **Where** it happens; Spool fills it
+from the shot's prompt when it has one. A frame of the shot is not passed as a
+picture, because the model would bring back the old actor. The take has new sound.
+Select several shots to change them all at once; each gets its
 own clip workflow and keeps its footage as a take.
 
 - **Recast** replaces the main person with a cast member. It runs on local ComfyUI

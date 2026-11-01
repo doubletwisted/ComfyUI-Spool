@@ -59,6 +59,14 @@ export function createClipTools({
     const c = getState().clips.find(c => c.id === clipId),
       t = c && T.realTakes(c).find(t => t.id === id);
     if (!t) return;
+    // A directed clip's take came from its own recipe; using it keeps that recipe and the
+    // links to the clips beside it instead of capturing the take's frozen inputs.
+    if (c.direction && t.generated && t.summary?.workflowVersion === c.workflowVersion) {
+      edits.apply('Use take', () => {
+        T.chooseTake(getState(), clipId, id);
+      });
+      return;
+    }
     try {
       await getWorkflowSetup().start({
         clipId,
