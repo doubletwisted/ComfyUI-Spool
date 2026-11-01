@@ -33,6 +33,7 @@ export function createDirecting({
   render,
   getBinTab,
   getRecipe,
+  flush,
 }) {
   const remembered = { transition: 'smoke', reangle: 'low', effect: 'rain' };
   const choices = kind => (D.WORKFLOWS[kind] || []).filter(choice => getTemplate(choice.id));
@@ -267,7 +268,17 @@ export function createDirecting({
     if (clips.length === 1) selectClip(clips[0].id, true);
     render();
     setStatus(message);
-    if (generate) await queueClips(clips);
+    if (!generate) return;
+    // The new clip's edits may still be saving; a revision conflict is retried once they settle.
+    const ids = clips.map(c => c.id);
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      await flush().catch(() => {});
+      const fresh = ids.map(id => getState().clips.find(c => c.id === id)).filter(Boolean),
+        result = await queueClips(fresh);
+      if (result === true || result?.status !== 409) return;
+      await new Promise(resolve => setTimeout(resolve, 400 * attempt));
+    }
+    toast('The project was still saving. Press Generate to queue the new clip.');
   }
 
   // ---- transitions -------------------------------------------------------------------

@@ -3522,6 +3522,7 @@ async function startEditor(isFailed) {
     render,
     getBinTab: () => binTab,
     getRecipe: c => nativeRecipes[c.workflowVersion],
+    flush: flushNative,
   });
   // Renders is a panel, not a modal: editing, playback and shortcuts continue while it is open.
   function closeRenders() {

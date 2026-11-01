@@ -66,34 +66,40 @@ export function createQueueActions({
   // Draft takes are a request setting; the server lowers resolution the same way for agents.
   const withQuality = items => (getQuality() === 'draft' ? items.map(i => ({ ...i, quality: 'draft' })) : items);
   function queueClips(clips, reviewed = null) {
-    return queueSubmission
-      .start(async () => {
-        if (!clips.length) return;
-        for (const c of clips) {
-          const reason = queueReason(c);
-          if (reason) throw Error(c.name + ': ' + reason);
-        }
-        if (!reviewed && clips.some(c => (c.count || 1) > 1)) {
-          await reviewGeneration(clips);
-          return;
-        }
-        await flushNative();
-        const items = withQuality(
-          reviewed || G.generationItems(clips, { ...getCloudDefinitions(), ...getDefinitions() }, getRecipes()),
-        );
-        return {
-          revision: projectEdit.revision,
-          items,
-          seedUpdates: G.seedUpdates(clips, items),
-          operationId: crypto.randomUUID(),
-        };
-      })
-      .catch(error => {
-        if (error.status !== 409) toast(error.message);
-      })
-      .finally(() => {
-        if ($('queueList')) renderQueueList();
-      });
+    return (
+      queueSubmission
+        .start(async () => {
+          if (!clips.length) return;
+          for (const c of clips) {
+            const reason = queueReason(c);
+            if (reason) throw Error(c.name + ': ' + reason);
+          }
+          if (!reviewed && clips.some(c => (c.count || 1) > 1)) {
+            await reviewGeneration(clips);
+            return;
+          }
+          await flushNative();
+          const items = withQuality(
+            reviewed || G.generationItems(clips, { ...getCloudDefinitions(), ...getDefinitions() }, getRecipes()),
+          );
+          return {
+            revision: projectEdit.revision,
+            items,
+            seedUpdates: G.seedUpdates(clips, items),
+            operationId: crypto.randomUUID(),
+          };
+        })
+        // Resolves true when submitted; a conflict stays quiet for a person to press Generate
+        // again, and callers that queue on their own retry it.
+        .then(() => true)
+        .catch(error => {
+          if (error.status !== 409) toast(error.message);
+          return error;
+        })
+        .finally(() => {
+          if ($('queueList')) renderQueueList();
+        })
+    );
   }
   /** Re-render a draft take at full quality with its seed and the clip's current settings. */
   function queueFinal(c, take) {
