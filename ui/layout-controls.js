@@ -206,7 +206,9 @@ export function createLayoutControls({
       pixel = x >= 0 && x <= sc.clientWidth ? x : sc.clientWidth / 2;
       if (x < 0 || x > sc.clientWidth) anchor = (sc.scrollLeft + pixel) / getPpf();
     }
-    getState().zoom = Math.round(clamp(value, 100, 1600));
+    // 100% fits the edit; below that the timeline shows empty time after it. Small wheel
+    // steps from a trackpad add up, so the zoom keeps hundredths.
+    getState().zoom = Math.round(clamp(value, 5, 1600) * 100) / 100;
     $('zoom').value = getState().zoom;
     getRenderTimeline()();
     sc.scrollLeft = anchor * getPpf() - pixel;

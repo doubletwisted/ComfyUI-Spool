@@ -3,6 +3,13 @@
 All notable changes to Spool are recorded here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Timeline
+
+- The mouse wheel zooms the timeline around the pointer, without Ctrl, and zooms
+  out past the end of the edit. Shift+wheel pans; Alt+wheel scrolls the tracks.
+
 ## 0.1.0 (2026-10-30)
 
 First public release.
