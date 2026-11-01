@@ -1,0 +1,63 @@
+{
+  "cast": [
+    { "id": "cast-mara", "name": "Mara", "description": "woman in a red dress", "images": ["cast/mara-1.png", "cast/mara-2.png"] },
+    { "id": "cast-otto", "name": "Otto", "description": "", "images": ["cast/otto.png"] },
+    { "id": "cast-ship", "name": "Ship", "description": "an old sailing ship", "images": [] }
+  ],
+  "bindings": [
+    { "key": "prompt", "role": "positive" },
+    { "key": "r1", "asset": true, "slot": "reference", "group": "Reference images", "optional": true },
+    { "key": "r2", "asset": true, "slot": "reference", "group": "Reference images", "optional": true },
+    { "key": "r3", "asset": true, "slot": "reference", "group": "Reference images", "optional": true }
+  ],
+  "cases": [
+    {
+      "name": "fills empty slots after the chosen ones",
+      "style": "angle",
+      "values": { "prompt": "@Otto waves at @mara.", "r1": "street.png", "r2": "", "r3": "" },
+      "settings": [],
+      "expected": {
+        "values": { "prompt": "<Picture 2> waves at <Picture 3>.", "r1": "street.png", "r2": "cast/otto.png", "r3": "cast/mara-1.png" },
+        "report": [
+          { "id": "cast-otto", "name": "Otto", "pictures": [2] },
+          { "id": "cast-mara", "name": "Mara", "pictures": [3] }
+        ]
+      }
+    },
+    {
+      "name": "extra pictures are named at the end",
+      "style": "plain",
+      "values": { "prompt": "@Mara swims.", "r1": "", "r2": "", "r3": "" },
+      "settings": [],
+      "expected": {
+        "values": { "prompt": "Image 1 swims. Image 2 also show Mara.", "r1": "cast/mara-1.png", "r2": "cast/mara-2.png", "r3": "" },
+        "report": [{ "id": "cast-mara", "name": "Mara", "pictures": [1, 2] }]
+      }
+    },
+    {
+      "name": "without free slots a mention becomes its description",
+      "style": "angle",
+      "values": { "prompt": "@Ship sails past @Nobody and mara@example.com.", "r1": "a.png", "r2": "b.png", "r3": "c.png" },
+      "settings": [],
+      "expected": {
+        "values": { "prompt": "Ship (an old sailing ship) sails past @Nobody and mara@example.com.", "r1": "a.png", "r2": "b.png", "r3": "c.png" },
+        "report": [{ "id": "cast-ship", "name": "Ship", "pictures": [] }]
+      }
+    },
+    {
+      "name": "a shot input fills a slot",
+      "style": "angle",
+      "values": { "prompt": "@Otto", "r1": "", "r2": "", "r3": "" },
+      "settings": [{ "key": "r1", "source": "selected" }],
+      "expected": {
+        "values": { "prompt": "<Picture 2>", "r1": "", "r2": "cast/otto.png", "r3": "" },
+        "report": [{ "id": "cast-otto", "name": "Otto", "pictures": [2] }]
+      }
+    }
+  ],
+  "styles": [
+    { "text": "Image 1 is the main character.", "style": "plain" },
+    { "text": "<Subject 1> is the samurai in <Picture 1>.", "style": "angle" },
+    { "text": "A quiet street.", "style": "angle" }
+  ]
+}

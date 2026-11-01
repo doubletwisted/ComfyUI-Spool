@@ -863,7 +863,7 @@ class Media:
         shutil.copyfile(source, target)
         return target.relative_to(self.host_roots["input"]).as_posix()
 
-    def bake_shot(self, metadata, start, end, fps, slot, frame=None, audio=False):
+    def bake_shot(self, metadata, start, end, fps, slot, frame=None, audio=False, exact_frame=False):
         if not 0 <= start < end <= metadata["frames"] or slot not in (
             "video",
             "image",
@@ -884,7 +884,8 @@ class Media:
         if metadata["kind"] == "image" and slot == "video":
             raise ValueError("An image cannot supply a video slot")
         if slot != "video" and metadata["kind"] == "video":
-            frame = "first" if slot == "firstFrame" else "last" if slot == "lastFrame" else frame
+            if not exact_frame:
+                frame = "first" if slot == "firstFrame" else "last" if slot == "lastFrame" else frame
             if frame not in ("first", "last", "middle"):
                 raise ValueError("Choose First, Last or Middle frame for this image slot")
             first += 0 if frame == "first" else end - start - 1 if frame == "last" else (end - start - 1) // 2

@@ -1,4 +1,5 @@
 import * as T from './timeline.js';
+import { KINDS, cuts, directionLabel } from './direction.js';
 
 // Retains timeline DOM and its geometry-only repaint path during gestures.
 export function createTimelineRenderer({
@@ -41,6 +42,7 @@ export function createTimelineRenderer({
   applyTrackHeights,
   selectionIds,
   refreshGestureHints,
+  getDirecting,
 }) {
   // Geometry during a getDrag(): the clip set and its content are unchanged, so positions
   // are written to the nodes that are already there instead of rebuilding the lane and
@@ -63,6 +65,10 @@ export function createTimelineRenderer({
       }
       previous.set(track, c);
     }
+    // Cut buttons are drawn with the full lane and hidden while geometry moves.
+    $('clipLane')
+      .querySelectorAll('.cut-transition')
+      .forEach(node => (node.hidden = true));
     for (const { clip: c, start } of rows) {
       const node = laneNodes.get(c.id);
       if (!node) return false;
@@ -263,6 +269,7 @@ export function createTimelineRenderer({
             return (
               '<div class="timeline-clip ' +
               (trial ? ' audition' : t.placeholder ? ' no-take' : '') +
+              (KINDS[c.direction?.kind] ? ' directed directed-' + c.direction.kind : '') +
               (!T.videoEnabled(getState(), c) ? ' disabled-clip' : '') +
               '" data-clip="' +
               c.id +
@@ -286,6 +293,15 @@ export function createTimelineRenderer({
               '</span><strong>' +
               esc(c.name) +
               '</strong>' +
+              (KINDS[c.direction?.kind]
+                ? '<span class="direction-badge" title="' +
+                  esc(KINDS[c.direction.kind].name) +
+                  '">' +
+                  svg(KINDS[c.direction.kind].icon) +
+                  '<span>' +
+                  esc(directionLabel(c.direction)) +
+                  '</span></span>'
+                : '') +
               clipAttention(c) +
               '</div><div class="clip-meta"><span>' +
               (trial
@@ -308,9 +324,40 @@ export function createTimelineRenderer({
             );
           })
           .join('') +
+        cuts(getState())
+          .map(cut => {
+            const row = rowFor(cut.left);
+            return (
+              '<button type="button" class="cut-transition" data-cut-left="' +
+              esc(cut.left) +
+              '" data-cut-right="' +
+              esc(cut.right) +
+              '" style="left:' +
+              row.end * getPixelScale() +
+              'px;top:calc(var(--video-top-' +
+              cut.track +
+              ') + 6px)" title="Add transition" aria-label="Add transition between ' +
+              esc(getState().clips.find(c => c.id === cut.left)?.name || '') +
+              ' and ' +
+              esc(getState().clips.find(c => c.id === cut.right)?.name || '') +
+              '">' +
+              svg('transition') +
+              '</button>'
+            );
+          })
+          .join('') +
         (length ? '' : '<div class="timeline-empty">Drop a workflow or media here to begin.</div>');
       if (draw('clipLane', lane)) {
         laneNodes = new Map();
+        $('clipLane')
+          .querySelectorAll('.cut-transition')
+          .forEach(button => {
+            button.onpointerdown = e => e.stopPropagation();
+            button.onclick = e => {
+              e.stopPropagation();
+              getDirecting()?.transitionDialog(button.dataset.cutLeft, button.dataset.cutRight);
+            };
+          });
         $('clipLane')
           .querySelectorAll('[data-clip]')
           .forEach(node => {

@@ -88,6 +88,7 @@ export function createWorkflowRegistry({
     m = null,
     placement = null,
     workflowVersion = null,
+    setup = null,
   ) {
     const w = workflows[workflow];
     if (!w?.imported) return;
@@ -136,6 +137,7 @@ export function createWorkflowRegistry({
         out: asset.frames,
       };
       if (workflowVersion) getApplyPreparedWorkflow()(c, workflow, workflowVersion);
+      setup?.(c);
       T.insertClip(
         getState(),
         c,

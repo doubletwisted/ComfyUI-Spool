@@ -21,6 +21,7 @@ export function createQueueActions({
   flushNative,
   toast,
   renderQueueList,
+  getQuality = () => 'final',
 }) {
   const queueSubmission = G.createQueueSubmission({ storage, key: retryKey, submit: submitQueue });
   async function submitQueue(body) {
@@ -62,6 +63,8 @@ export function createQueueActions({
           : 'Requests saved; waiting for Comfy.',
     );
   }
+  // Draft takes are a request setting; the server lowers resolution the same way for agents.
+  const withQuality = items => (getQuality() === 'draft' ? items.map(i => ({ ...i, quality: 'draft' })) : items);
   function queueClips(clips, reviewed = null) {
     return queueSubmission
       .start(async () => {
@@ -75,8 +78,9 @@ export function createQueueActions({
           return;
         }
         await flushNative();
-        const items =
-          reviewed || G.generationItems(clips, { ...getCloudDefinitions(), ...getDefinitions() }, getRecipes());
+        const items = withQuality(
+          reviewed || G.generationItems(clips, { ...getCloudDefinitions(), ...getDefinitions() }, getRecipes()),
+        );
         return {
           revision: projectEdit.revision,
           items,
@@ -91,5 +95,33 @@ export function createQueueActions({
         if ($('queueList')) renderQueueList();
       });
   }
-  return { queueClips, queueSubmission };
+  /** Re-render a draft take at full quality with its seed and the clip's current settings. */
+  function queueFinal(c, take) {
+    return queueSubmission
+      .start(async () => {
+        const reason = queueReason(c);
+        if (reason) throw Error(c.name + ': ' + reason);
+        if (take.summary?.workflowVersion && take.summary.workflowVersion !== c.workflowVersion)
+          throw Error('This draft came from another workflow. Use it again before making it final.');
+        await flushNative();
+        const seeds = Object.fromEntries(
+          (c.bindings || [])
+            .filter(b => b.role === 'seed')
+            .map(b => [b.key, take.summary?.inputValues?.[b.key] ?? take.seed])
+            .filter(([, value]) => value != null),
+        );
+        return {
+          revision: projectEdit.revision,
+          items: [{ clipId: c.id, count: 1, values: seeds }],
+          operationId: crypto.randomUUID(),
+        };
+      })
+      .catch(error => {
+        if (error.status !== 409) toast(error.message);
+      })
+      .finally(() => {
+        if ($('queueList')) renderQueueList();
+      });
+  }
+  return { queueClips, queueFinal, queueSubmission };
 }

@@ -3,6 +3,7 @@
 import asyncio
 import copy
 import json
+import re
 import subprocess
 
 from .errors import NotFound, OperationConflict, InvalidRequest
@@ -26,6 +27,7 @@ ACTION_CAPABILITIES = {
     "rename_clip": "edit",
     "feedback": "feedback",
     "brief": "edit",
+    "set_cast": "edit",
     "cancel": "cancel",
     "recover_submission": "recover",
     "add_note": "notes",
@@ -46,6 +48,7 @@ ARGUMENT_FIELDS = {
     "rename_clip": {"clipId": str, "name": str},
     "feedback": {"clipId": str, "takeId": str, "verdict": str},
     "brief": {"text": str},
+    "set_cast": {"cast": list},
     "cancel": {"attemptId": str},
     "recover_submission": {"attemptId": str},
     "add_note": {"clipId": str, "text": str},
@@ -81,6 +84,20 @@ def validate_envelope(data):
         require(arguments["edge"] in ("in", "out") and type(arguments["frame"]) is int)
     if action == "rename_clip":
         require(1 <= len(arguments["name"].strip()) <= 200)
+    if action == "set_cast":
+        require(len(arguments["cast"]) <= 50)
+        for member in arguments["cast"]:
+            require(
+                isinstance(member, dict) and isinstance(member.get("id"), str) and isinstance(member.get("name"), str)
+            )
+            require(re.fullmatch(r"[\w-]{1,40}", member["name"]) is not None)
+            require(isinstance(member.get("description", ""), str) and len(member.get("description", "")) <= 300)
+            images = member.get("images")
+            require(
+                isinstance(images, list) and 1 <= len(images) <= 4 and all(isinstance(i, str) and i for i in images)
+            )
+        names = [m["name"].lower() for m in arguments["cast"]]
+        require(len(set(names)) == len(names))
     if action == "set_execution":
         require(arguments["target"] in ("local", "cloud", "deadline"))
     if "mode" in arguments:
@@ -96,6 +113,7 @@ def validate_envelope(data):
             require(isinstance(variant, dict) and isinstance(variant.get("clipId"), str))
             require(type(variant.get("count", 1)) is int and 1 <= variant.get("count", 1) <= 16)
             require(isinstance(variant.get("values", {}), dict))
+            require(variant.get("quality", "final") in ("draft", "final"))
             require(isinstance(variant.get("shotInputs", []), list))
             require(all(isinstance(v, dict) and isinstance(v.get("key"), str) for v in variant.get("shotInputs", [])))
     scope = data.get("scope")
@@ -202,6 +220,7 @@ def status(store, project_id, clip_id=None, limit=50, offset=0):
         "projectId": project_id,
         "revision": project["revision"],
         "brief": project["document"].get("brief", ""),
+        "cast": project["document"].get("cast", []),
         "shots": values,
         "audioClips": [
             {"id": c["id"], "name": c.get("name", "Audio"), "notes": notes.entries(c)}
@@ -263,6 +282,8 @@ def prepare_experiment(store, project_id, revision, arguments):
         item = {"clipId": clip["id"], "count": count, "values": copy.deepcopy(values)}
         if "shotInputs" in variant:
             item["shotInputs"] = copy.deepcopy(variant["shotInputs"])
+        if variant.get("quality") == "draft":
+            item["quality"] = "draft"
         items.append(item)
         resolved.append(
             {
@@ -343,7 +364,7 @@ def execute(store, media, project_id, data):
         return status(store, project_id)
     note_actions = {"add_note", "edit_note", "address_note", "reopen_note"}
     clip_id = arguments.get("clipId")
-    if action not in ("brief", "cancel", "recover_submission") and not clip_id:
+    if action not in ("brief", "set_cast", "cancel", "recover_submission") and not clip_id:
         raise ValueError("Supply an explicit shot ID for this command")
     scope_check(project_id, scope, ACTION_CAPABILITIES[action], [clip_id] if clip_id else [])
     if action == "use_take":
@@ -455,6 +476,16 @@ def execute(store, media, project_id, data):
             return {"feedbackId": identity}, False
         elif action == "brief":
             document["brief"] = arguments["text"]
+        elif action == "set_cast":
+            document["cast"] = [
+                {
+                    "id": m["id"],
+                    "name": m["name"],
+                    "description": m.get("description", ""),
+                    "images": list(m["images"]),
+                }
+                for m in arguments["cast"]
+            ]
         elif action == "cancel":
             attempt = store.project_attempt(project_id, arguments["attemptId"], db)
             if not attempt or attempt["clip_id"] not in scope.get("clipIds", []):

@@ -29,6 +29,7 @@ import { createActionMenu } from './action-menu.js';
 import { createQueueActions } from './queue-submission.js';
 import { createInputActions } from './input-actions.js';
 import { createInputReplacements } from './input-replacement.js';
+import { createDirecting } from './directing.js';
 import { keyText } from './keys.js';
 // Native editor runtime. Demo source is not loaded or transformed.
 let initialization;
@@ -89,6 +90,14 @@ async function startEditor(isFailed) {
     close: '<path d="m6 6 12 12M18 6 6 18"/>',
     check: '<path d="m5 12 4 4L20 5"/>',
     warning: '<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.3"/>',
+    transition: '<path d="M3 5v14l9-7zM21 5v14l-9-7z"/>',
+    extend: '<path d="M3 5h8v14H3zM14 12h7M18 8l4 4-4 4"/>',
+    retake: '<path d="M3 5h18v14H3zM9 5v14M15 5v14"/><path d="m10.5 10 3 2-3 2z" fill="currentColor"/>',
+    recast: '<circle cx="8" cy="8" r="3"/><path d="M3 20a5 5 0 0 1 10 0M16 4l3 3-3 3M19 7h-4M16 14l3 3-3 3M19 17h-4"/>',
+    reangle: '<path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/>',
+    effect:
+      '<path d="m12 3 1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+    cast: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14a5 5 0 0 1 6.5 5"/>',
   };
   let diagnosticsTimer = 0;
   const $ = id => document.getElementById(id);
@@ -283,8 +292,9 @@ async function startEditor(isFailed) {
     m = null,
     placement = null,
     workflowVersion = null,
+    setup = null,
   ) {
-    return workflowRegistryOwner.addImportedWorkflowClip(workflow, index, m, placement, workflowVersion);
+    return workflowRegistryOwner.addImportedWorkflowClip(workflow, index, m, placement, workflowVersion, setup);
   }
   const { applyPreparedWorkflow } = createWorkflowAssignment({
     inputReplacements,
@@ -310,6 +320,7 @@ async function startEditor(isFailed) {
   let exportRangeDrag = null;
   let state = copy(INITIAL),
     binTab = 'workflows',
+    directing = null,
     workflowLocked = false,
     ppf = 1,
     drag = null,
@@ -767,6 +778,7 @@ async function startEditor(isFailed) {
     getPause: () => pause,
     getFinishViewerPan: () => finishViewerPan,
     getDecimal: () => decimal,
+    getDirecting: () => directing,
   });
   const mediaImportOwner = createMediaImport({
     $,
@@ -990,6 +1002,7 @@ async function startEditor(isFailed) {
     getOpenNativeWorkflow: () => openNativeWorkflow,
     getPrepareWorkflow: () => prepareWorkflow,
     deadlineExecution: () => productCapabilities.deadlineExecution === true,
+    getDirecting: () => directing,
   });
   const takeRendererOwner = createTakeRenderer({
     $,
@@ -1022,6 +1035,7 @@ async function startEditor(isFailed) {
     getPlay: () => play,
     selectedAudio,
     getDecimal: () => decimal,
+    getQueueFinal: () => queueFinal,
   });
 
   // Consecutive takes generated from the same inputs form one batch; seeds may differ within it.
@@ -1336,6 +1350,7 @@ async function startEditor(isFailed) {
     applyTrackHeights,
     selectionIds,
     refreshGestureHints,
+    getDirecting: () => directing,
   });
   const { renderTimeline } = timelineRenderer;
   function selectClip(id, seekTo = false, modifiers = {}, preserve = false) {
@@ -1393,6 +1408,7 @@ async function startEditor(isFailed) {
     getCloseClipMenu: () => closeClipMenu,
     getShowActionMenu: () => showActionMenu,
     getPlaceMenu: () => placeMenu,
+    getDirecting: () => directing,
   });
   function chooseTake(clipId, id) {
     return clipToolsOwner.chooseTake(clipId, id);
@@ -2563,6 +2579,16 @@ async function startEditor(isFailed) {
       $('snap').click();
       return;
     }
+    if (['t', 'e', 'r'].includes(key) && !e.shiftKey && !e.repeat) {
+      e.preventDefault();
+      e.stopPropagation();
+      const c = selectedAudio() ? null : selected();
+      if (key === 't') directing.transitionAtPlayhead(c ? T.videoTrack(c) : activeVideoTrack);
+      else if (!c) toast('Select a shot first.');
+      else if (key === 'e') directing.extendDialog(c.id);
+      else directing.retakeDialog(c.id);
+      return;
+    }
     if (
       ![
         ' ',
@@ -3434,7 +3460,7 @@ async function startEditor(isFailed) {
       toast(error.message);
     }
   };
-  const { queueClips, queueSubmission } = createQueueActions({
+  const { queueClips, queueFinal, queueSubmission } = createQueueActions({
     storage: sessionStorage,
     retryKey: STORAGE_KEY + ':queue-request',
     getClips: () => state.clips,
@@ -3454,6 +3480,48 @@ async function startEditor(isFailed) {
     flushNative,
     toast,
     renderQueueList,
+    getQuality: () => (draftMode ? 'draft' : 'final'),
+  });
+  // Draft mode belongs to this browser, like other view preferences.
+  let draftMode = localStorage.getItem('spool:draft-mode') === '1';
+  function syncDraftToggle() {
+    $('draftToggle').setAttribute('aria-pressed', String(draftMode));
+    $('draftToggle').classList.toggle('active', draftMode);
+    $('generateLabel').textContent = draftMode ? 'Generate drafts' : 'Generate';
+  }
+  $('draftToggle').onclick = () => {
+    draftMode = !draftMode;
+    try {
+      localStorage.setItem('spool:draft-mode', draftMode ? '1' : '0');
+    } catch (error) {}
+    syncDraftToggle();
+  };
+  syncDraftToggle();
+  directing = createDirecting({
+    $,
+    esc,
+    svg,
+    api,
+    projectKey,
+    getState: () => state,
+    edits,
+    getFps: () => fps,
+    thumbnails,
+    take,
+    rowFor,
+    addBuiltinShot,
+    getTemplate: id => (builtinCaptures[id] ? workflowLibrary?.template(id) || { id } : null),
+    queueClips,
+    showModal,
+    closeModal,
+    toast,
+    setStatus,
+    selectClip,
+    editView,
+    pause: () => pause(),
+    render,
+    getBinTab: () => binTab,
+    getRecipe: c => nativeRecipes[c.workflowVersion],
   });
   // Renders is a panel, not a modal: editing, playback and shortcuts continue while it is open.
   function closeRenders() {

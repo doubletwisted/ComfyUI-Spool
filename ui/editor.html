@@ -62,7 +62,8 @@
           <div class="panel-head">
             <div class="seg" role="tablist" aria-label="Library">
               <button class="active" data-bin-tab="workflows" role="tab" aria-selected="true">Workflows</button
-              ><button data-bin-tab="media" role="tab" aria-selected="false">Media</button>
+              ><button data-bin-tab="media" role="tab" aria-selected="false">Media</button
+              ><button data-bin-tab="cast" role="tab" aria-selected="false">Cast</button>
             </div>
             <button
               class="iconbutton"
@@ -88,6 +89,7 @@
             </div>
           </div>
           <div class="panel-scroll"><div class="bin-grid" id="binGrid"></div></div>
+          <section class="cast-panel" id="castPanel" aria-label="Cast"></section>
           <section class="workflow-library" aria-label="Workflow library">
             <div class="panel-head">
               <strong>Workflows</strong
@@ -297,6 +299,14 @@
           </div>
           <div class="inspector-foot">
             <p class="generate-reason" id="generateReason" role="status" hidden></p>
+            <button
+              class="outline draft-toggle"
+              id="draftToggle"
+              aria-pressed="false"
+              title="Drafts render quickly at low resolution. Make the best one final from its take."
+            >
+              Draft
+            </button>
             <button class="primary generate" id="generate">
               <span data-icon="spark"></span><span id="generateLabel">Generate</span>
             </button>

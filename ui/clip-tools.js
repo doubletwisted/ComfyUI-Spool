@@ -53,6 +53,7 @@ export function createClipTools({
   getCloseClipMenu,
   getShowActionMenu,
   getPlaceMenu,
+  getDirecting,
 }) {
   async function chooseTake(clipId, id) {
     const c = getState().clips.find(c => c.id === clipId),
@@ -228,7 +229,9 @@ export function createClipTools({
     if (selectionIds().length > 1) {
       getShowActionMenu()(
         'Selection actions',
-        inspector ? [{ label: 'Delete selection', run: () => getRemove()(false) }] : selectionActions(),
+        inspector
+          ? [{ label: 'Delete selection', run: () => getRemove()(false) }]
+          : [...(getDirecting()?.selectionActions(selectedVideos()) || []), ...selectionActions()],
         x,
         y,
         origin,
@@ -268,6 +271,7 @@ export function createClipTools({
           : []),
       );
     }
+    actions.splice(actions.length - 1, 0, ...(getDirecting()?.clipActions(c) || []));
     getShowActionMenu()('Clip actions', actions, x, y, origin);
   }
   function showViewerMenu(picture, x, y) {

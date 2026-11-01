@@ -1,0 +1,16 @@
+{
+  "clips": [
+    { "id": "a" },
+    { "id": "b" },
+    { "id": "x", "videoTrack": 2 },
+    { "id": "c", "videoTrack": 1, "gapBefore": 12 },
+    { "id": "y", "videoTrack": 2 }
+  ],
+  "cases": [
+    { "clip": "a", "previous": null, "next": "b" },
+    { "clip": "b", "previous": "a", "next": "c" },
+    { "clip": "c", "previous": "b", "next": null },
+    { "clip": "x", "previous": null, "next": "y" },
+    { "clip": "y", "previous": "x", "next": null }
+  ]
+}

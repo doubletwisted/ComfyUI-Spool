@@ -514,6 +514,8 @@ export function createRenderQueue({
         [...getState().clips, ...(getState().audioClips || [])].find(c => c.id === setting.clipId)?.name ||
         'Removed audio clip'
       );
+    if (setting.source === 'previous') return 'Last frame of the clip before';
+    if (setting.source === 'next') return 'First frame of the clip after';
     return setting.source === 'original' ? 'Original shot' : 'Selected take';
   }
   async function reviewGeneration(clips) {

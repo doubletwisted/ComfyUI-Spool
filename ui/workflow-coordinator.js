@@ -98,7 +98,8 @@ export function createWorkflowCoordinator({
     promise.catch(() => workflowLoads.delete(key));
     return promise;
   }
-  function addLibraryShot(id, index = null, clipId = null, builtin = false, placement = null) {
+  // `setup(clip)` lets a caller fill the new or replaced clip inside the same edit.
+  function addLibraryShot(id, index = null, clipId = null, builtin = false, placement = null, { setup = null } = {}) {
     setWorkflowAdds(
       getWorkflowAdds()
         .catch(() => {})
@@ -137,8 +138,11 @@ export function createWorkflowCoordinator({
               resultChoices(getNativeRecipes()[prepared.version].prompt, prepared.definitions).length === 1)
           ) {
             if (target)
-              edits.apply('Replace workflow', () => applyPreparedWorkflow(target, prepared.workflow, prepared.version));
-            else addImportedWorkflowClip(prepared.workflow, index, null, placement, prepared.version);
+              edits.apply('Replace workflow', () => {
+                applyPreparedWorkflow(target, prepared.workflow, prepared.version);
+                setup?.(target);
+              });
+            else addImportedWorkflowClip(prepared.workflow, index, null, placement, prepared.version, setup);
             $('editor').focus({ preventScroll: true });
             setStatus('Workflow added');
             return;
@@ -183,8 +187,8 @@ export function createWorkflowCoordinator({
     );
     return getWorkflowAdds();
   }
-  function addBuiltinShot(id, index = null, clipId = null, placement = null) {
-    return addLibraryShot(id, index, clipId, true, placement);
+  function addBuiltinShot(id, index = null, clipId = null, placement = null, options = {}) {
+    return addLibraryShot(id, index, clipId, true, placement, options);
   }
   function showShotPicker() {
     getPause()();

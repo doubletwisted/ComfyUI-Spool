@@ -38,6 +38,7 @@
         "choose_take",
         "feedback",
         "brief",
+        "set_cast",
         "cancel",
         "recover_submission",
         "add_note",
@@ -144,6 +145,12 @@
                     }
                   }
                 }
+              },
+              "quality": {
+                "enum": [
+                  "draft",
+                  "final"
+                ]
               }
             }
           }
@@ -190,6 +197,40 @@
             },
             "machine_list": {
               "type": "string"
+            }
+          }
+        },
+        "cast": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "images"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[\\w-]{1,40}$"
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "images": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 4,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
             }
           }
         }
@@ -361,6 +402,24 @@
           "arguments": {
             "required": [
               "text"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "set_cast"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "arguments": {
+            "required": [
+              "cast"
             ]
           }
         }

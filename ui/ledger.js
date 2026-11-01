@@ -29,6 +29,7 @@ export const EDIT_FIELDS = Object.freeze([
   'hiddenMediaIds',
   'deletedTakeIds',
   'deletedMediaIds',
+  'cast',
 ]);
 export const RECORD_FIELDS = Object.freeze([
   'jobs',
@@ -61,7 +62,13 @@ export const EDITOR_TAKE_FIELDS = Object.freeze([
   'summary',
   'recipeGraph',
 ]);
-export const TAKE_SUMMARY_FIELDS = Object.freeze(['attemptId', 'workflowVersion', 'inputValues', 'bindings']);
+export const TAKE_SUMMARY_FIELDS = Object.freeze([
+  'attemptId',
+  'workflowVersion',
+  'inputValues',
+  'bindings',
+  'quality',
+]);
 export const UNDO_SKIPS = Object.freeze([...RECORD_FIELDS, 'zoom', 'snap', 'muted', 'loop']);
 // What the editor saves, in its established order; the server owns jobs' recoverable results.
 const SAVED_ORDER = [
@@ -84,9 +91,10 @@ const SAVED_ORDER = [
   'audioClips',
   'audioTracks',
   'hiddenMediaIds',
+  'cast',
   'importedWorkflows',
 ];
-const OMIT_EMPTY = new Set(['deletedTakeIds', 'deletedMediaIds', 'clearedRenderIds', 'hiddenMediaIds']),
+const OMIT_EMPTY = new Set(['deletedTakeIds', 'deletedMediaIds', 'clearedRenderIds', 'hiddenMediaIds', 'cast']),
   SAVED_DEFAULTS = { brief: '', tailGap: 0, disabledVideoTracks: [], audioClips: [], importedWorkflows: [] };
 export function savedDocument(state) {
   const out = {};

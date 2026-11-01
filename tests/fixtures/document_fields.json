@@ -15,7 +15,8 @@
   "audioTracks",
   "hiddenMediaIds",
   "deletedTakeIds",
-  "deletedMediaIds"
+  "deletedMediaIds",
+  "cast"
  ],
  "records": [
   "jobs",
@@ -67,6 +68,7 @@
   "attemptId",
   "workflowVersion",
   "inputValues",
-  "bindings"
+  "bindings",
+  "quality"
  ]
 }

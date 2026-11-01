@@ -70,6 +70,20 @@ class CommandTests(unittest.TestCase):
         jsonschema.validate(wire(data), schema)
         return value
 
+    def test_set_cast_replaces_the_cast_and_status_reports_it(self):
+        cast = [{"id": "cast-mara", "name": "Mara", "description": "diver", "images": ["mara.png"]}]
+        self.execute(self.envelope("set_cast", {"cast": cast}, capability="edit"))
+        project = self.store.get(self.project["id"])
+        self.assertEqual(project["document"]["cast"], cast)
+        self.assertEqual(commands.status(self.store, self.project["id"])["cast"], cast)
+        for bad in (
+            [{**cast[0], "name": "two words"}],
+            [cast[0], {**cast[0], "id": "other"}],
+            [{**cast[0], "images": []}],
+        ):
+            with self.assertRaises(Exception):
+                commands.validate_envelope(self.envelope("set_cast", {"cast": bad}, capability="edit"))
+
     def test_scoped_rename_and_trim_replay_preserve_following_positions(self):
         document = self.project["document"]
         clip = document["clips"][0]

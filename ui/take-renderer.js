@@ -33,6 +33,7 @@ export function createTakeRenderer({
   getPlay,
   selectedAudio,
   getDecimal,
+  getQueueFinal,
 }) {
   function takeMidpoint(c, t) {
     return (Math.min(c.in, t.media.frames - 1) + Math.min(c.out, t.media.frames)) / 2;
@@ -220,6 +221,9 @@ export function createTakeRenderer({
                   '</span>'
                 : '') +
               fresh +
+              (t.summary?.quality === 'draft'
+                ? '<span class="take-badge draft" title="Low-resolution draft">Draft</span>'
+                : '') +
               '</div><button class="take-thumb" data-view="' +
               t.id +
               '" aria-label="Preview ' +
@@ -235,6 +239,11 @@ export function createTakeRenderer({
                   '">Seed ' +
                   esc(getDecimal()(t.seed)) +
                   '</span>'
+                : '') +
+              (t.summary?.quality === 'draft'
+                ? '<button class="make-final" data-final="' +
+                  t.id +
+                  '" title="Render again at full quality with this seed">Make final</button>'
                 : '') +
               (!setupChosen ? '<button class="use-take" data-use="' + t.id + '">Use take</button>' : '') +
               '</div>';
@@ -294,6 +303,16 @@ export function createTakeRenderer({
         };
       });
       list.querySelectorAll('[data-use]').forEach(b => (b.onclick = () => chooseTake(c.id, b.dataset.use)));
+      list.querySelectorAll('[data-final]').forEach(
+        b =>
+          (b.onclick = e => {
+            e.stopPropagation();
+            getQueueFinal()(
+              c,
+              c.takes.find(t => t.id === b.dataset.final),
+            );
+          }),
+      );
     }
     updateTakeSelection();
   }
