@@ -181,7 +181,7 @@ export function createTimelineRenderer({
     );
     const width = Math.max(viewport, Math.ceil(Math.max(length, 120) * getPixelScale()) + extra);
     $('timelineContent').style.width = width + 'px';
-    $('zoomValue').textContent = getState().zoom + '%';
+    $('zoomValue').textContent = Math.round(getState().zoom) + '%';
     const second = Math.round(getFps()),
       interval =
         [

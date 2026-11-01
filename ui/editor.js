@@ -686,7 +686,7 @@ async function startEditor(isFailed) {
     updateViewer(force);
     $('projectName').value = state.project;
     $('zoom').value = state.zoom;
-    $('zoomValue').textContent = state.zoom + '%';
+    $('zoomValue').textContent = Math.round(state.zoom) + '%';
     $('snap').classList.toggle('active', state.snap);
     $('loop').classList.toggle('active', state.loop);
     audioButtons();
@@ -2389,7 +2389,7 @@ async function startEditor(isFailed) {
     showModal(
       'Edit by pointing',
       keyText(
-        '<p>Click to select. Ctrl-click toggles clips; Shift-click selects a range on one track. Drag empty timeline space to box-select, or press Ctrl+A to select all. Drag selected clips to move them together; Alt-drag copies them at the drop position. Ctrl+D also duplicates the selection. Drag the clip to move it, a free edge to trim, or a shared cut to roll. The cursor shows what will happen. Your gesture stays fixed until you release it.</p><div class="shortcut-grid"><span>Enable / disable selected clips</span><kbd>Ctrl Shift D</kbd><span>Ripple an edge</span><kbd>Shift + drag</kbd><span>Slip source inside a clip</span><kbd>Hold S + drag</kbd><span>Slide between touching neighbors</span><kbd>Hold D + drag</kbd><span>Nudge held S/D, or selected cut</span><kbd>, / .</kbd><span>Five-frame nudge</span><kbd>Shift + , / .</kbd><span>Compare / single viewer during edit</span><kbd>C</kbd><span>Compare takes / close compare</span><kbd>C</kbd><span>Fullscreen viewer / fit picture</span><kbd>F / Shift F</kbd><span>Timeline zoom / fit</span><kbd>+ / − / Shift Z</kbd><span>Snap</span><kbd>N</kbd><span>Play / pause</span><kbd>Space</kbd><span>Previous / next frame</span><kbd>Left / Right</kbd><span>Previous / next take or edit</span><kbd>Up / Down</kbd><span>Review take 1–9</span><kbd>1–9</kbd><span>Use take</span><kbd>Enter</kbd><span>Source / Edit</span><kbd>Q</kbd><span>Cancel edit</span><kbd>Esc</kbd><span>Split at playhead</span><kbd>B</kbd><span>Delete, leaving space / close selected gap</span><kbd>Delete</kbd><span>Ripple delete</span><kbd>Shift + Delete</kbd><span>Undo / Redo</span><kbd>Ctrl Z / Ctrl Shift Z</kbd></div><p>Wheel over the viewer to zoom around the pointer, then drag to pan. Double-click the picture, click Fit, or press Shift+F to reset. F toggles fullscreen; Esc exits it. Compare opens two synchronized takes; select A or B, then click a take to replace that pane. Only the active pane plays audio. Enter uses its take. Timeline +/− or Ctrl+wheel zooms; Shift+Z fits.</p><p>A1 edits with its linked video; fade handles adjust fades. A2 moves and slips independently, and its shared cuts roll. A2 never ripples or slides with video edits.</p><p>Click a gap to select it, then Delete to close it. Drag dividers to resize panels or the timeline; double-click resets them.</p>',
+        '<p>Click to select. Ctrl-click toggles clips; Shift-click selects a range on one track. Drag empty timeline space to box-select, or press Ctrl+A to select all. Drag selected clips to move them together; Alt-drag copies them at the drop position. Ctrl+D also duplicates the selection. Drag the clip to move it, a free edge to trim, or a shared cut to roll. The cursor shows what will happen. Your gesture stays fixed until you release it.</p><div class="shortcut-grid"><span>Enable / disable selected clips</span><kbd>Ctrl Shift D</kbd><span>Ripple an edge</span><kbd>Shift + drag</kbd><span>Slip source inside a clip</span><kbd>Hold S + drag</kbd><span>Slide between touching neighbors</span><kbd>Hold D + drag</kbd><span>Nudge held S/D, or selected cut</span><kbd>, / .</kbd><span>Five-frame nudge</span><kbd>Shift + , / .</kbd><span>Compare / single viewer during edit</span><kbd>C</kbd><span>Compare takes / close compare</span><kbd>C</kbd><span>Fullscreen viewer / fit picture</span><kbd>F / Shift F</kbd><span>Timeline zoom / fit</span><kbd>+ / − / Shift Z</kbd><span>Snap</span><kbd>N</kbd><span>Play / pause</span><kbd>Space</kbd><span>Previous / next frame</span><kbd>Left / Right</kbd><span>Previous / next take or edit</span><kbd>Up / Down</kbd><span>Review take 1–9</span><kbd>1–9</kbd><span>Use take</span><kbd>Enter</kbd><span>Source / Edit</span><kbd>Q</kbd><span>Cancel edit</span><kbd>Esc</kbd><span>Split at playhead</span><kbd>B</kbd><span>Delete, leaving space / close selected gap</span><kbd>Delete</kbd><span>Ripple delete</span><kbd>Shift + Delete</kbd><span>Undo / Redo</span><kbd>Ctrl Z / Ctrl Shift Z</kbd></div><p>Wheel over the viewer to zoom around the pointer, then drag to pan. Double-click the picture, click Fit, or press Shift+F to reset. F toggles fullscreen; Esc exits it. Compare opens two synchronized takes; select A or B, then click a take to replace that pane. Only the active pane plays audio. Enter uses its take. The wheel over the timeline zooms around the pointer, also out past the clips; Shift+wheel or a middle-button drag pans, Alt+wheel scrolls tracks. +/− zoom too; Shift+Z fits.</p><p>A1 edits with its linked video; fade handles adjust fades. A2 moves and slips independently, and its shared cuts roll. A2 never ripples or slides with video edits.</p><p>Click a gap to select it, then Delete to close it. Drag dividers to resize panels or the timeline; double-click resets them.</p>',
       ),
     );
   let viewerExpanded = false,
@@ -3211,15 +3211,22 @@ async function startEditor(isFailed) {
     { passive: false },
   );
   interruptions.on(() => endTrackResize(true));
+  // The wheel zooms around the pointer. Shift+wheel and sideways scrolling pan, Alt+wheel
+  // scrolls the tracks, and a middle-button drag pans.
   $('timelineScroll').addEventListener(
     'wheel',
     e => {
-      if (!e.ctrlKey && !e.metaKey) return;
+      if (e.shiftKey || !e.deltaY || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       e.preventDefault();
       e.stopPropagation();
       const sc = $('timelineScroll'),
-        x = e.clientX - sc.getBoundingClientRect().left;
-      setTimelineZoom(state.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), (x + sc.scrollLeft) / ppf, x);
+        unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? sc.clientHeight : 1;
+      if (e.altKey) {
+        sc.scrollTop += e.deltaY * unit;
+        return;
+      }
+      const x = e.clientX - sc.getBoundingClientRect().left;
+      setTimelineZoom(state.zoom * Math.exp(-e.deltaY * unit * 0.0015), (x + sc.scrollLeft) / ppf, x);
     },
     { passive: false },
   );

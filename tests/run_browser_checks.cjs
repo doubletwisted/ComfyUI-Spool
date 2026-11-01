@@ -1808,6 +1808,24 @@ async function runTimelineInteractions(page, evaluate) {
   const panEnd = await probe();
   await pointer(p, { x: p.x - 60, y: p.y }, 'middle', true);
   const panCancel = await probe();
+  // Trusted wheel turns: plain zooms around the pointer, Shift pans instead.
+  const wheelAt = await point('#ruler'),
+    wheelProbe = () =>
+      evaluate(
+        `(()=>{const w=__timelineW,d=w.document,f=w===window?{left:0}:document.querySelector('#spool-dock iframe').getBoundingClientRect();return {zoom:w.spoolNative.state.zoom,left:d.querySelector('[data-clip="shot"]').getBoundingClientRect().left+f.left,scroll:d.getElementById('timelineScroll').scrollLeft};})()`,
+      ),
+    wheel = async (deltaY, modifiers = 0) => {
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseWheel', ...wheelAt, deltaX: 0, deltaY, modifiers });
+      await nextPaint(evaluate);
+    };
+  const wheelStart = await wheelProbe();
+  await wheel(-100);
+  const wheelIn = await wheelProbe();
+  await zoom(100);
+  for (let i = 0; i < 6; i++) await wheel(100);
+  const wheelOut = await wheelProbe();
+  await wheel(100, 8);
+  const wheelShift = await wheelProbe();
   await zoom(160);
   await evaluate(`__timelineW.spoolNative.selectClip('shot')`);
   const moveStart = await probe(),
@@ -1859,7 +1877,7 @@ async function runTimelineInteractions(page, evaluate) {
     `(async()=>{const w=__timelineW,end=Date.now()+20000;while(w.document.getElementById('editor').inert||!w.spoolNative.state.clips.some(c=>c.id!=='shot'&&c.takeId==='s15')){if(Date.now()>end)throw Error('Take drop failed: '+w.document.getElementById('toast').textContent);await new Promise(r=>setTimeout(r,50));}await w.spoolNative.flush();})()`,
   );
   await evaluate(
-    `window.__timelineGestures=${JSON.stringify({ panStart, panEnd, panCancel, moveStart, moveEnd, trustedTakeDrag: true })}`,
+    `window.__timelineGestures=${JSON.stringify({ panStart, panEnd, panCancel, wheelAt, wheelStart, wheelIn, wheelOut, wheelShift, moveStart, moveEnd, trustedTakeDrag: true })}`,
   );
 }
 

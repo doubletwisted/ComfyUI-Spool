@@ -37,6 +37,15 @@
   );
   check('Escape cancels a middle-mouse pan', g.panCancel.left === g.panEnd.left);
   check(
+    'The wheel zooms in and keeps the frame under the pointer in place',
+    g.wheelIn.zoom > g.wheelStart.zoom &&
+      Math.abs(
+        g.wheelIn.left - g.wheelAt.x - ((g.wheelStart.left - g.wheelAt.x) * g.wheelIn.zoom) / g.wheelStart.zoom,
+      ) < 3,
+  );
+  check('The wheel zooms out past the clips on the timeline', g.wheelOut.zoom < 50);
+  check('Shift+wheel pans instead of zooming', g.wheelShift.zoom === g.wheelOut.zoom);
+  check(
     'Ruler labels are sparse and omit full frame timecodes',
     [...d.querySelectorAll('#ruler .tick:not(.minor)')].every(
       (t, i, a) =>
