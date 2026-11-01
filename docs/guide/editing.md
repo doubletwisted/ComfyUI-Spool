@@ -59,6 +59,9 @@ saved project.
   (with Shift, five).
 - With snapping on (**N** toggles it), edges snap to the nearest cut within seven
   screen pixels. Drag further for an intentional overwrite.
+- Turn the **mouse wheel** over the timeline to zoom around the pointer. You can
+  zoom out past the end of the edit; **Shift+Z** fits it again. **Shift+wheel**
+  pans sideways and **Alt+wheel** scrolls the tracks.
 - Hold the **middle mouse button** and drag to pan the timeline. **Esc** during the
   pan returns to where you started.
 
