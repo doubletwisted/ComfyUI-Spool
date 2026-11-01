@@ -452,6 +452,16 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(self.store.get(self.project["id"])["document"]["tailGap"], 14)
         self.assertEqual(clip["workflowVersion"], version, "Choosing a take does not adopt its workflow")
 
+    def test_choose_take_starts_a_directed_clip_after_its_anchored_frames(self):
+        fixture = json.loads((Path(__file__).parent / "fixtures/directed_takes.json").read_text(encoding="utf-8"))
+        for case in fixture["cases"]:
+            with self.subTest(case["name"]):
+                clip, take = copy.deepcopy(fixture["clip"]), case["take"]
+                document = {"clips": [clip], "tailGap": 0}
+                request = {"request": {"workflowVersion": take["workflowVersion"]}} if take["generated"] else {}
+                operations.choose_take(document, clip, take["id"], take["frames"], {**take, **request})
+                self.assertEqual(clip["in"], case["in"])
+
     def test_apply_workflow_resets_target_seed_and_take_setup_like_the_library(self):
         document = self.project["document"]
         version = document["clips"][0]["workflowVersion"]

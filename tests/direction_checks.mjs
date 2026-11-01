@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as D from '../ui/direction.js';
+import * as T from '../ui/timeline.js';
 
 // The neighbour rule is shared with spool/requests.py (tests/test_queue_operations.py).
 const fixture = JSON.parse(fs.readFileSync(new URL('./fixtures/neighbours.json', import.meta.url), 'utf8'));
@@ -56,25 +57,34 @@ assert.deepEqual(
   ['f', 'l', ['r1', 'r2'], 'p', 'd', ['a']],
 );
 
-// Prompts carry the frame instruction, the preset and the user's direction.
-const smoke = D.TRANSITIONS.find(p => p.id === 'smoke');
+// Prompts say how the clip is anchored and carry the user's direction.
 assert.equal(
-  D.transitionPrompt(smoke, 'red smoke'),
-  'Use the provided start image as the first frame and the provided end image as the last frame. ' +
-    smoke.prompt +
-    ' red smoke. One smooth continuous motion over the whole clip, landing on the last frame only at the very end, with a soft whoosh of sound.',
+  D.transitionPrompt('red smoke'),
+  'Use the provided start image as the first frame and the provided end image as the last frame. Red smoke. One smooth continuous motion over the whole clip, landing on the last frame only at the very end. The sound carries on throughout.',
+);
+assert.equal(
+  D.transitionPrompt('she keeps running', { motion: true }),
+  'One continuous shot. It opens with the movement of the first scene, carries that movement on in one unbroken take and arrives naturally in the closing frames of the second scene. She keeps running. The sound carries on throughout.',
 );
 const extended = D.extendPrompt('Use the provided start image as the first frame. A diver swims.', 'she waves');
-assert.ok(extended.includes(' she waves.') && extended.endsWith('Earlier in this shot: A diver swims.'), extended);
+assert.ok(extended.includes(' She waves.') && extended.endsWith('Earlier in this shot: A diver swims.'), extended);
+assert.match(
+  D.extendPrompt('', '', { motion: true }),
+  /^Continue this shot from its opening frames in one unbroken take/,
+);
+assert.match(
+  D.retakePrompt('', 'he smiles', { motion: true }),
+  /arrives at the closing frames in one unbroken take\. He smiles\./,
+);
 assert.equal(D.toolFor('recast'), 'recast');
 assert.equal(D.toolFor('effect'), 'rework');
 assert.equal(D.toolFor('transition'), 'transition');
 assert.equal(
-  D.reworkPrompt('recast', null, '', { character: 'a knight', pictures: 2, place: 'riding through a forest.' }),
+  D.reworkPrompt('recast', '', '', { character: 'a knight', pictures: 2, place: 'riding through a forest.' }),
   'The character shown in <Picture 1> and <Picture 2> (a knight) is riding through a forest, performing exactly the movement of the pose guide. The plain background of the character pictures is not part of the scene. Natural ambient sound.',
 );
 assert.match(
-  D.reworkPrompt('recast', null, '', { style: 'plain' }),
+  D.reworkPrompt('recast', '', '', { style: 'plain' }),
   /^The character shown in Image 1 performing exactly/,
 );
 assert.equal(
@@ -82,10 +92,45 @@ assert.equal(
   'A diver swims in a cave',
 );
 assert.equal(D.placeFrom(''), '');
-assert.match(D.reworkPrompt('reangle', D.ANGLES[0]), /from a low angle/);
-assert.match(D.reworkPrompt('effect', D.EFFECTS[0]), /^Add heavy rain.* in <Video 1>\./);
+assert.match(
+  D.reworkPrompt('reangle', D.ANGLES[0].prompt),
+  /New camera: A low angle close to the ground, looking up\./,
+);
+assert.match(D.reworkPrompt('effect', 'make it snow'), /^Change <Video 1>: Make it snow\. Keep everything else/);
 for (const list of [D.TRANSITIONS, D.ANGLES, D.EFFECTS]) assert.equal(new Set(list.map(p => p.id)).size, list.length);
-assert.equal(D.directionLabel({ kind: 'transition', preset: 'smoke' }), 'Smoke');
+assert.equal(D.directionLabel({ kind: 'transition', preset: 'smoke' }), 'Transition');
 assert.equal(D.directionLabel({ kind: 'extend' }), 'Extension');
 assert.equal(D.directionLabel({ kind: 'unknown' }), '');
+
+// Motion inputs are found by the end of the clip they read.
+const motion = D.toolBindings([
+  { key: 'b', asset: true, slot: 'video', span: { edge: 'end', frames: 22 } },
+  { key: 'a', asset: true, slot: 'video', span: { edge: 'start', frames: 22 } },
+  { key: 'v', asset: true, slot: 'video' },
+]);
+assert.deepEqual([motion.before.key, motion.after.key, motion.video.key], ['b', 'a', 'v']);
+
+// Use take starts a directed clip after its anchored frames, as spool/operations.py does.
+const directed = JSON.parse(fs.readFileSync(new URL('./fixtures/directed_takes.json', import.meta.url), 'utf8'));
+for (const c of directed.cases) {
+  const clip = structuredClone(directed.clip),
+    t = c.take;
+  clip.takes = [
+    { id: 'none', placeholder: true, media: { frames: clip.out } },
+    {
+      id: t.id,
+      generated: t.generated,
+      media: { frames: t.frames },
+      ...(t.generated ? { summary: { workflowVersion: t.workflowVersion } } : {}),
+    },
+  ];
+  clip.takeId = 'none';
+  T.chooseTake({ clips: [clip] }, clip.id, t.id);
+  assert.equal(clip.in, c.in, c.name);
+}
+
+// A motion workflow's take is 17k + 5 frames long, and shows its middle.
+assert.deepEqual(D.motionLength(2, 22, 22), { total: 90, visible: 46, seconds: 90 / 24 });
+assert.deepEqual(D.motionLength(5, 22, 0), { total: 141, visible: 119, seconds: 141 / 24 });
+assert.equal(D.motionLength(0.1, 22, 22).visible >= 12, true);
 console.log('direction checks passed');

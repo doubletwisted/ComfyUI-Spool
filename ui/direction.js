@@ -2,170 +2,60 @@
 // Pure data and rules; ui/directing.js owns the dialogs and edits.
 import { tag } from './cast.js';
 
-/** @typedef {{ id: string, name: string, prompt: string, seconds?: number, colors: string[] }} Preset */
+/**
+ * Optional wording a dialog offers next to its prompt field. Choosing one adds its
+ * phrase to the field, where it can be edited like anything else the user writes.
+ * @typedef {{ id: string, name: string, prompt: string }} Suggestion
+ */
 
-/** @type {Preset[]} */
+/** @type {Suggestion[]} */
 export const TRANSITIONS = [
   {
-    id: 'morph',
-    name: 'Morph',
-    prompt:
-      'One continuous shot. The first image transforms fluidly into the second: shapes, colors and light flow and reshape without a cut.',
-    colors: ['#7c5cff', '#21d4fd'],
+    id: 'camera',
+    name: 'Camera move',
+    prompt: 'The camera travels on in one move from the first place to the second.',
   },
   {
-    id: 'smoke',
-    name: 'Smoke',
-    prompt:
-      'Thick billowing smoke rolls across the frame and fully hides the first scene, then drifts apart to reveal the second scene.',
-    seconds: 3,
-    colors: ['#3a3f47', '#c9ced6'],
+    id: 'match',
+    name: 'Match the motion',
+    prompt: 'A movement in the first shot carries straight into the same movement in the second.',
+  },
+  {
+    id: 'push',
+    name: 'Push through',
+    prompt: 'The camera pushes forward through the first scene and comes out in the second.',
   },
   {
     id: 'whip-pan',
     name: 'Whip pan',
-    prompt:
-      'The camera whips sideways very fast with strong horizontal motion blur, then settles precisely on the second scene.',
-    colors: ['#ff8a00', '#e52e71'],
+    prompt: 'The camera whips sideways with motion blur and settles on the second scene.',
   },
-  {
-    id: 'zoom-through',
-    name: 'Zoom through',
-    prompt:
-      'The camera pushes rapidly forward into the first scene, flies through it and emerges into the second scene.',
-    colors: ['#00c6ff', '#0072ff'],
-  },
-  {
-    id: 'light-flash',
-    name: 'Light flash',
-    prompt:
-      'A burst of warm light flares across the lens and floods the frame to white, then fades down onto the second scene.',
-    colors: ['#fff6b7', '#f6416c'],
-  },
-  {
-    id: 'ink',
-    name: 'Ink bloom',
-    prompt:
-      'Black ink blooms and spreads across the frame like ink in water, covering the first scene, then recedes to reveal the second scene.',
-    seconds: 3,
-    colors: ['#0f0c29', '#6a6a8a'],
-  },
-  {
-    id: 'water',
-    name: 'Water wave',
-    prompt:
-      'A wave of clear water washes across the frame, refracting the first scene, and as it passes the second scene is revealed.',
-    seconds: 3,
-    colors: ['#43cea2', '#185a9d'],
-  },
-  {
-    id: 'glitch',
-    name: 'Glitch',
-    prompt:
-      'Digital glitch: the first scene tears into RGB-shifted bands and datamosh blocks, then snaps cleanly into the second scene.',
-    colors: ['#f953c6', '#00f2fe'],
-  },
-  {
-    id: 'dissolve',
-    name: 'Dissolve',
-    prompt: 'A slow, soft cinematic cross dissolve from the first scene to the second scene.',
-    colors: ['#bdc3c7', '#2c3e50'],
-  },
+  { id: 'morph', name: 'Morph', prompt: 'The first scene reshapes into the second without a cut.' },
 ];
 
-/** @type {Preset[]} */
+/** @type {Suggestion[]} */
 export const ANGLES = [
-  {
-    id: 'low',
-    name: 'Low angle',
-    prompt: 'a low angle close to the ground, looking up',
-    colors: ['#f7971e', '#ffd200'],
-  },
-  { id: 'high', name: 'High angle', prompt: 'a high angle, looking down from above', colors: ['#56ccf2', '#2f80ed'] },
-  { id: 'close', name: 'Close-up', prompt: 'a tight close-up on the main subject', colors: ['#ee0979', '#ff6a00'] },
-  { id: 'wide', name: 'Wide shot', prompt: 'a wide shot that shows the whole scene', colors: ['#11998e', '#38ef7d'] },
-  {
-    id: 'side',
-    name: 'Side profile',
-    prompt: 'the side, ninety degrees from the original camera',
-    colors: ['#8e2de2', '#4a00e0'],
-  },
-  {
-    id: 'over-shoulder',
-    name: 'Over the shoulder',
-    prompt: 'over the shoulder of the main subject',
-    colors: ['#c94b4b', '#4b134f'],
-  },
-  {
-    id: 'orbit',
-    name: 'Slow orbit',
-    prompt: 'a camera slowly orbiting around the main subject',
-    colors: ['#00b4db', '#0083b0'],
-  },
-  {
-    id: 'top-down',
-    name: 'Top down',
-    prompt: 'directly overhead, looking straight down',
-    colors: ['#a8c0ff', '#3f2b96'],
-  },
+  { id: 'low', name: 'Low angle', prompt: 'a low angle close to the ground, looking up' },
+  { id: 'high', name: 'High angle', prompt: 'a high angle, looking down from above' },
+  { id: 'close', name: 'Close-up', prompt: 'a tight close-up on the main subject' },
+  { id: 'wide', name: 'Wide', prompt: 'a wide shot that shows the whole scene' },
+  { id: 'side', name: 'Side', prompt: 'the side, ninety degrees from the original camera' },
+  { id: 'over-shoulder', name: 'Over the shoulder', prompt: 'over the shoulder of the main subject' },
 ];
 
-/** @type {Preset[]} */
+/** @type {Suggestion[]} */
 export const EFFECTS = [
-  {
-    id: 'rain',
-    name: 'Heavy rain',
-    prompt: 'Add heavy rain falling through the scene, with wet reflective surfaces',
-    colors: ['#4b6cb7', '#182848'],
-  },
-  {
-    id: 'snow',
-    name: 'Snowfall',
-    prompt: 'Add soft snow falling through the scene and settling on surfaces',
-    colors: ['#e0eafc', '#cfdef3'],
-  },
-  {
-    id: 'night',
-    name: 'Neon night',
-    prompt: 'Turn the scene into night lit by colourful neon signs',
-    colors: ['#fc466b', '#3f5efb'],
-  },
-  {
-    id: 'golden',
-    name: 'Golden hour',
-    prompt: 'Relight the scene with low warm golden-hour sunlight and long shadows',
-    colors: ['#f12711', '#f5af19'],
-  },
-  {
-    id: 'fire',
-    name: 'Fire',
-    prompt: 'Add roaring flames and drifting embers burning in the background of the scene',
-    colors: ['#ff416c', '#ff4b2b'],
-  },
-  {
-    id: 'fog',
-    name: 'Fog',
-    prompt: 'Fill the scene with thick drifting fog and soft volumetric light beams',
-    colors: ['#757f9a', '#d7dde8'],
-  },
-  {
-    id: 'sparks',
-    name: 'Magic sparks',
-    prompt: 'Add glowing magical sparks and particles swirling around the main subject',
-    colors: ['#da22ff', '#9733ee'],
-  },
-  {
-    id: 'disintegrate',
-    name: 'Disintegrate',
-    prompt: 'Make the main subject slowly disintegrate into drifting dust particles',
-    colors: ['#614385', '#516395'],
-  },
+  { id: 'rain', name: 'Rain', prompt: 'heavy rain falls through the scene and the surfaces are wet' },
+  { id: 'snow', name: 'Snow', prompt: 'soft snow falls through the scene and settles on surfaces' },
+  { id: 'fog', name: 'Fog', prompt: 'thin fog drifts through the scene' },
+  { id: 'night', name: 'Night', prompt: 'it is night, lit by the practical lights in the scene' },
+  { id: 'golden', name: 'Golden hour', prompt: 'low warm evening sunlight with long shadows' },
 ];
 
 export const REWORKS = {
-  recast: { name: 'Recast', verb: 'Recast', presets: [] },
-  reangle: { name: 'Re-angle', verb: 'Re-angle', presets: ANGLES },
-  effect: { name: 'Effect', verb: 'Add effect to', presets: EFFECTS },
+  recast: { name: 'Recast', verb: 'Recast', suggestions: [] },
+  reangle: { name: 'Re-angle', verb: 'Re-angle', suggestions: ANGLES },
+  effect: { name: 'Effect', verb: 'Change', suggestions: EFFECTS },
 };
 
 export const KINDS = {
@@ -179,17 +69,21 @@ export const KINDS = {
 
 /**
  * Workflows each tool can use, best first. `min`/`max` are whole seconds; `options`
- * lists the only lengths a workflow accepts.
- * @type {Record<string, { id: string, label: string, target: string, min?: number, max?: number, options?: number[] }[]>}
+ * lists the only lengths a workflow accepts. `motion` workflows anchor the frames on
+ * each side of the gap as clips, so movement carries through instead of starting
+ * again from one still frame.
+ * @type {Record<string, { id: string, label: string, target: string, min?: number, max?: number, options?: number[], motion?: boolean }[]>}
  */
 export const WORKFLOWS = {
   transition: [
+    { id: 'video_minimax_h3_bridge', label: 'MiniMax H3 · Local', target: 'local', min: 1, max: 10, motion: true },
     { id: 'video_ltx2_5_flf2v', label: 'LTX 2.5 · Local', target: 'local', min: 1, max: 10 },
     { id: 'api_minimax_h3_flf2v', label: 'MiniMax H3 · Cloud', target: 'cloud', min: 4, max: 15 },
     { id: 'api_ltx2_5_flf2v', label: 'LTX 2.5 · Cloud', target: 'cloud', options: [2, 3, 4, 5, 6, 8, 10] },
   ],
   extend: [
-    { id: 'video_minimax_h3_i2v', label: 'MiniMax H3 · Local', target: 'local', min: 2, max: 15 },
+    { id: 'video_minimax_h3_bridge', label: 'MiniMax H3 · Local', target: 'local', min: 1, max: 12, motion: true },
+    { id: 'video_minimax_h3_i2v', label: 'MiniMax H3 · From last frame', target: 'local', min: 2, max: 15 },
     { id: 'video_ltx2_5_i2v', label: 'LTX 2.5 · Local', target: 'local', min: 1, max: 10 },
     { id: 'api_minimax_h3_max_i2v', label: 'MiniMax H3 Max · Cloud', target: 'cloud', min: 4, max: 15 },
     { id: 'api_ltx2_5_i2v', label: 'LTX 2.5 · Cloud', target: 'cloud', options: [2, 3, 4, 5, 6, 8, 10] },
@@ -228,13 +122,34 @@ export function durationValue(original, seconds) {
   return seconds;
 }
 
+/** MiniMax H3 renders 24 frames a second in lengths of 17k + 5 frames. */
+const H3_FPS = 24;
+
+/**
+ * Lengths for a workflow that anchors `head` frames of the clip before and `tail`
+ * frames of the clip after (both at 24 fps). The take repeats those frames, so the
+ * clip shows only the new middle: `visible` frames, close to `seconds`.
+ */
+export function motionLength(seconds, head = 0, tail = 0) {
+  const anchored = head + tail,
+    wanted = Math.round(Math.max(0.5, Number(seconds) || 1) * H3_FPS) + anchored,
+    lengths = k => 17 * k + 5;
+  let k = Math.max(0, Math.round((wanted - 5) / 17));
+  while (lengths(k) - anchored < 12) k++;
+  const total = lengths(k);
+  return { total, visible: total - anchored, seconds: total / H3_FPS };
+}
+
 /** Bindings a directing tool fills, found by slot and role. */
 export function toolBindings(bindings = []) {
   const find = test => bindings.find(test);
   return {
     first: find(b => b.asset && b.slot === 'firstFrame') || find(b => b.asset && b.slot === 'image'),
     last: find(b => b.asset && b.slot === 'lastFrame'),
-    video: find(b => b.asset && b.slot === 'video'),
+    // Motion inputs read a few frames at the end of the clip before and the start of the clip after.
+    before: find(b => b.asset && b.slot === 'video' && b.span?.edge === 'end'),
+    after: find(b => b.asset && b.slot === 'video' && b.span?.edge === 'start'),
+    video: find(b => b.asset && b.slot === 'video' && !b.span),
     references: bindings.filter(b => b.asset && b.slot === 'reference'),
     prompt: find(b => b.role === 'positive'),
     duration: find(b => b.role === 'duration'),
@@ -266,41 +181,52 @@ export function aspectValue(binding, current, width, height) {
   }, current);
 }
 
+/** The user's words as a sentence: capitalised and closed. */
 const sentence = text => {
   const value = String(text || '').trim();
-  return !value ? '' : /[.!?]$/.test(value) ? value : value + '.';
+  if (!value) return '';
+  const capital = value[0].toUpperCase() + value.slice(1);
+  return /[.!?]$/.test(capital) ? capital : capital + '.';
 };
 
-export function transitionPrompt(preset, detail = '') {
+const sound = 'The sound carries on throughout.';
+
+/** With `motion`, the clips on both sides are anchored as moving footage; otherwise as single frames. */
+export function transitionPrompt(detail = '', { motion = false } = {}) {
   return [
-    'Use the provided start image as the first frame and the provided end image as the last frame.',
-    preset.prompt,
+    motion
+      ? 'One continuous shot. It opens with the movement of the first scene, carries that movement on in one unbroken take and arrives naturally in the closing frames of the second scene.'
+      : 'Use the provided start image as the first frame and the provided end image as the last frame.',
     sentence(detail),
-    'One smooth continuous motion over the whole clip, landing on the last frame only at the very end, with a soft whoosh of sound.',
+    motion
+      ? sound
+      : 'One smooth continuous motion over the whole clip, landing on the last frame only at the very end. ' + sound,
   ]
     .filter(Boolean)
     .join(' ');
 }
 
-export function extendPrompt(sourcePrompt = '', detail = '') {
+export function extendPrompt(sourcePrompt = '', detail = '', { motion = false } = {}) {
   const action = sentence(detail);
   return [
-    'Use the provided start image as the first frame.',
-    'Continue the same shot from this exact moment: the same people, place, lighting and camera style.',
+    motion
+      ? 'Continue this shot from its opening frames in one unbroken take: the same people, place, lighting and camera style, and every movement carries on at the same speed.'
+      : 'Use the provided start image as the first frame. Continue the same shot from this exact moment: the same people, place, lighting and camera style.',
     action || 'The action carries on naturally from where it was.',
-    'The ambient sound carries on.',
+    sound,
     sourcePrompt ? 'Earlier in this shot: ' + sentence(stripFramePhrases(sourcePrompt)) : '',
   ]
     .filter(Boolean)
     .join(' ');
 }
 
-export function retakePrompt(sourcePrompt = '', detail = '') {
+export function retakePrompt(sourcePrompt = '', detail = '', { motion = false } = {}) {
   return [
-    'Use the provided start image as the first frame and the provided end image as the last frame.',
-    'Keep the same people, place, lighting and camera; join both frames in one continuous motion.',
+    motion
+      ? 'Keep the same people, place, lighting and camera. The movement of the opening frames carries on and arrives at the closing frames in one unbroken take.'
+      : 'Use the provided start image as the first frame and the provided end image as the last frame. Keep the same people, place, lighting and camera; join both frames in one continuous motion.',
     sentence(detail),
-    'The ambient sound carries on.',
+    sound,
     sourcePrompt ? 'Context: ' + sentence(stripFramePhrases(sourcePrompt)) : '',
   ]
     .filter(Boolean)
@@ -313,7 +239,7 @@ export function retakePrompt(sourcePrompt = '', detail = '') {
  */
 export function reworkPrompt(
   kind,
-  preset,
+  change = '',
   detail = '',
   { character = '', pictures = 1, style = 'angle', audio = true, place = '' } = {},
 ) {
@@ -340,7 +266,8 @@ export function reworkPrompt(
   }
   if (kind === 'reangle')
     return [
-      'Re-film the exact same moment as ' + video + ' from ' + (preset?.prompt || 'a new camera angle') + '.',
+      'Re-film the exact same moment as ' + video + '.',
+      'New camera: ' + sentence(change || 'a new camera angle'),
       'Same people, clothing, set, lighting, action and timing; only the camera position changes.',
       sentence(detail),
       keep,
@@ -348,7 +275,7 @@ export function reworkPrompt(
       .filter(Boolean)
       .join(' ');
   return [
-    sentence((preset?.prompt || 'Change the scene') + ' in ' + video),
+    'Change ' + video + ': ' + sentence(change || 'the light and weather of the scene'),
     'Keep everything else in ' + video + ' unchanged: the people, their performance, the camera, framing and timing.',
     sentence(detail),
     keep,
@@ -380,15 +307,9 @@ function stripFramePhrases(text) {
     .slice(0, 600);
 }
 
-function presetFor(direction) {
-  const list = direction?.kind === 'transition' ? TRANSITIONS : REWORKS[direction?.kind]?.presets || [];
-  return list.find(p => p.id === direction?.preset) || null;
-}
-
 /** Short label for a directed clip on the timeline and in the inspector. */
 export function directionLabel(direction) {
-  if (!direction?.kind || !KINDS[direction.kind]) return '';
-  return presetFor(direction)?.name || KINDS[direction.kind].name;
+  return (direction?.kind && KINDS[direction.kind]?.name) || '';
 }
 
 /** The clip beside a clip on its video track, as spool/requests.py:neighbor reads it. */

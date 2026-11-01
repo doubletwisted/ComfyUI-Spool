@@ -144,8 +144,10 @@ async function directingFixture() {
       audioClips: [],
       importedWorkflows: [],
       tailGap: 0,
+      // Five-second shots leave room to retake a part with a second of footage on each side.
       clips: timelineClips(3).map((c, i) => ({
         ...c,
+        out: 120,
         id: 'shot-' + 'abc'[i],
         name: 'Shot ' + 'ABC'[i],
         takes: c.takes.map(t => ({ ...t, media: { ...t.media, kind: 'video', name: 'shot-' + i + '.mp4' } })),

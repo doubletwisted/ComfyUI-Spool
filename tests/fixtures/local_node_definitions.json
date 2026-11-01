@@ -384,6 +384,32 @@
    ],
    "output_node": false
   },
+  "GetImageSize": {
+   "input": {
+    "required": {
+     "image": [
+      "IMAGE",
+      {}
+     ]
+    },
+    "hidden": {
+     "unique_id": [
+      "UNIQUE_ID"
+     ]
+    }
+   },
+   "output": [
+    "INT",
+    "INT",
+    "INT"
+   ],
+   "output_name": [
+    "width",
+    "height",
+    "batch_size"
+   ],
+   "output_node": false
+  },
   "GetVideoComponents": {
    "input": {
     "required": {
@@ -703,6 +729,74 @@
    ],
    "output_name": [
     "MODEL"
+   ],
+   "output_node": false
+  },
+  "MiniMaxH3ImageToVideo": {
+   "input": {
+    "required": {
+     "clip": [
+      "CLIP",
+      {}
+     ],
+     "vae": [
+      "VAE",
+      {}
+     ],
+     "prompt": [
+      "STRING",
+      {
+       "multiline": true,
+       "dynamicPrompts": true
+      }
+     ],
+     "width": [
+      "INT",
+      {
+       "default": 1344,
+       "min": 32,
+       "max": 16384,
+       "step": 32
+      }
+     ],
+     "height": [
+      "INT",
+      {
+       "default": 768,
+       "min": 32,
+       "max": 16384,
+       "step": 32
+      }
+     ],
+     "length": [
+      "INT",
+      {
+       "tooltip": "Frame count at 24 fps, snapped up to the model's 17k+5 grid (124 = ~5s; trained range is ~124-362, longer is untested)",
+       "default": 124,
+       "min": 5,
+       "max": 3600,
+       "step": 17
+      }
+     ]
+    },
+    "optional": {
+     "first_frame": [
+      "IMAGE",
+      {}
+     ],
+     "last_frame": [
+      "IMAGE",
+      {}
+     ]
+    }
+   },
+   "output": [
+    "CONDITIONING",
+    "LATENT"
+   ],
+   "output_name": [
+    "positive",
+    "LATENT"
    ],
    "output_node": false
   },

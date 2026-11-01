@@ -88,13 +88,20 @@ module contracts are in [architecture.md](architecture.md).
 ## Directing
 
 - **Direction**: `clip.direction`, how a directing tool made a clip (`kind`:
-  transition, extend, retake, recast, reangle or effect, with its preset). It only
-  drives the timeline badge and the inspector card; the clip's workflow and inputs
-  are ordinary. Owned by `ui/directing.js`; presets and prompts in `ui/direction.js`.
+  transition, extend, retake, recast, reangle or effect, and the user's words). It
+  drives the timeline label and the inspector card; the clip's workflow and inputs
+  are ordinary. `head` is where the clip's own takes start (after the anchored
+  frames) and a retake's `sourceIn` where its original footage starts; **Use take**
+  reads both (`ui/timeline.js:directedIn`, mirrored by
+  `spool/operations.py:directed_in`). Owned by `ui/directing.js`; suggestions and
+  prompts in `ui/direction.js`.
 - **Neighbour input**: a shot input with `source` `previous` or `next`. When a
   request is frozen it reads the selected take of the clip before or after on the
   same video track, with that clip's trim (`spool/requests.py:neighbor`, mirrored by
   `ui/direction.js:neighbor`).
+- **Motion input**: a video binding with `span` (`{edge, frames}`) reads only that
+  many frames at the start or end of its clip (`spool/requests.py:span_range`).
+  Continue Between Clips anchors them as moving footage on each side of a gap.
 - **Cast**: `document.cast`, named members with pictures. `@Name` in a positive
   prompt fills empty reference inputs when a request is frozen (`spool/cast.py`,
   mirrored by `ui/cast.js`); the request records `castMentions`.

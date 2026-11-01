@@ -7,12 +7,18 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Directing tools
 
-- **Add transition** at a cut (the ✦ button on the cut, the clip menu or **T**):
-  nine styles, each previewed between the two real frames, rendered by a first and
-  last frame workflow as a clip of its own.
-- **Extend shot** (**E**) adds the next moment of a shot, starting on its last frame.
+- **Add transition** at a cut (the button on the cut, the clip menu or **T**)
+  renders the move between two shots as a clip of its own. Optional suggestions add
+  wording to its prompt.
+- **Extend shot** (**E**) adds the next moment of a shot.
 - **Retake part** (**R**) splits a shot around a part you choose and renders a new
-  middle that joins the frames on either side; the original stays as a take.
+  middle that joins the footage on either side; the original stays as a take.
+- A new local workflow, **MiniMax H3 · Continue Between Clips**, anchors the last
+  second of the clip before and the first second of the clip after, with their
+  sound, so movement carries through transitions, extensions and retakes instead
+  of restarting from a still frame. It is the default for all three.
+- A workflow's video input can read only the start or end of its clip (`span`),
+  and **Use take** starts a directed clip's take after its anchored frames.
 - **Recast**, **Re-angle** and **Add effect** rerun one or more shots through
   MiniMax H3 Reference to Video with the shot as its reference.
 - A **Cast** tab keeps characters with pictures; `@Name` in a prompt fills the

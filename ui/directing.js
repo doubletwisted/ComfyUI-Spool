@@ -22,6 +22,7 @@ export function createDirecting({
   rowFor,
   addBuiltinShot,
   getTemplate,
+  getTemplateBindings,
   queueClips,
   showModal,
   closeModal,
@@ -35,7 +36,6 @@ export function createDirecting({
   getRecipe,
   flush,
 }) {
-  const remembered = { transition: 'smoke', reangle: 'low', effect: 'rain' };
   const choices = kind => (D.WORKFLOWS[kind] || []).filter(choice => getTemplate(choice.id));
 
   // ---- shared dialog parts -------------------------------------------------------
@@ -68,42 +68,24 @@ export function createDirecting({
       if (c) thumbnails.bind(img, take(c).media, Number(img.dataset.frame), getFps());
     });
   }
-  /** Style tiles; with `frames` each tile plays its effect between the two real frames. */
-  function presetGrid(presets, current, frames = null) {
-    const still = (clip, frame, cls) =>
-      clip
-        ? '<img class="' + cls + '" data-direct-thumb="' + esc(clip.id) + '" data-frame="' + frame + '" alt="">'
-        : '';
-    return (
-      '<div class="preset-grid' +
-      (frames ? ' with-preview' : '') +
-      '" role="radiogroup" aria-label="Style">' +
-      presets
-        .map(
-          p =>
-            '<button type="button" role="radio" class="preset-tile" data-preset="' +
-            esc(p.id) +
-            '" aria-checked="' +
-            (p.id === current) +
-            '" style="--a:' +
-            p.colors[0] +
-            ';--b:' +
-            p.colors[1] +
-            '"><span class="preset-swatch fx-' +
-            esc(p.id) +
-            '" aria-hidden="true">' +
-            (frames
-              ? still(frames.left, frames.leftFrame, 'fx-a') +
-                still(frames.right, frames.rightFrame, 'fx-b') +
-                '<i></i>'
-              : '') +
-            '</span><span class="preset-name">' +
-            esc(p.name) +
-            '</span></button>',
-        )
-        .join('') +
-      '</div>'
-    );
+  /** Optional wording for the prompt field: each adds its phrase to `#directDetail`. */
+  function suggestions(list) {
+    return list.length
+      ? '<div class="direct-suggestions"><span>Suggestions</span>' +
+          list
+            .map(
+              p =>
+                '<button type="button" data-suggest="' +
+                esc(p.prompt) +
+                '" title="' +
+                esc(p.prompt) +
+                '">' +
+                esc(p.name) +
+                '</button>',
+            )
+            .join('') +
+          '</div>'
+      : '';
   }
   function workflowPicker(kind, current) {
     const list = choices(kind);
@@ -157,9 +139,6 @@ export function createDirecting({
     const root = $('modal');
     bindThumbs(root);
     const refresh = () => {
-      root
-        .querySelectorAll('[data-preset]')
-        .forEach(b => b.setAttribute('aria-checked', b.dataset.preset === state.preset));
       root.querySelectorAll('[data-direct-workflow]').forEach(b => {
         const on = b.dataset.directWorkflow === state.workflow;
         b.setAttribute('aria-checked', on);
@@ -172,15 +151,16 @@ export function createDirecting({
       }
       onChange(state, root);
     };
-    root.querySelectorAll('[data-preset]').forEach(
-      b =>
-        (b.onclick = () => {
-          state.preset = b.dataset.preset;
-          const preset = state.presets?.find(p => p.id === state.preset);
-          if (preset?.seconds && !state.lengthTouched) state.seconds = preset.seconds;
-          refresh();
-        }),
-    );
+    // Delegated, so suggestions in a body drawn again later still work.
+    root.querySelector('.direct-dialog').addEventListener('click', e => {
+      const b = e.target.closest('[data-suggest]'),
+        field = $('directDetail');
+      if (!b || !field) return;
+      const before = field.value.trim();
+      field.value = (before ? before.replace(/[.!?]?$/, '. ') : '') + b.dataset.suggest;
+      state.detail = field.value;
+      field.focus();
+    });
     root.querySelectorAll('[data-direct-workflow]').forEach(
       b =>
         (b.onclick = () => {
@@ -192,7 +172,6 @@ export function createDirecting({
       b =>
         (b.onclick = () => {
           const choice = choices(kind).find(c => c.id === state.workflow);
-          state.lengthTouched = true;
           if (choice?.options) {
             const at = choice.options.indexOf(D.fitSeconds(choice, state.seconds));
             state.seconds =
@@ -220,7 +199,7 @@ export function createDirecting({
     $('directAdd').onclick = run(false);
     $('directGenerate').onclick = run(true);
     refresh();
-    (root.querySelector('[aria-checked="true"][data-preset]') || detail || $('directGenerate'))?.focus();
+    (detail || $('directGenerate'))?.focus();
   }
 
   // ---- building a directed clip ----------------------------------------------------
@@ -240,16 +219,52 @@ export function createDirecting({
     });
     if (frames) {
       // A generated take repeats the anchored frames; the slot skips them, so the
-      // clip joins its neighbours without a held frame.
+      // clip joins its neighbours without a held frame or a repeated movement.
       const t = c.takes.find(t => t.id === c.takeId);
       if (t?.placeholder) {
         t.media.frames = frames + trimHead + trimTail;
         c.in = trimHead;
         c.out = trimHead + frames;
       }
+      if (c.direction) c.direction.head = trimHead;
     }
     c.seedMode = 'randomize';
     c.revision++;
+  }
+  /**
+   * Links and lengths for a clip between `previous` and/or `next`. A motion workflow
+   * reads the last second of the clip before and the first second of the clip after;
+   * others read one frame on each side.
+   */
+  function joining(b, seconds, { previous = false, next = false }) {
+    const fps = getFps(),
+      motion = !!((!previous || b.before) && (!next || b.after) && (b.before || b.after));
+    if (motion) {
+      const head = previous ? b.before.span.frames : 0,
+        tail = next ? b.after.span.frames : 0,
+        length = D.motionLength(seconds, head, tail),
+        scale = fps / 24,
+        link = (binding, source) => ({ key: binding.key, source, ...(binding.audio ? { audio: true } : {}) });
+      return {
+        motion,
+        seconds: length.seconds,
+        frames: Math.round(length.visible * scale),
+        trimHead: Math.round(head * scale),
+        trimTail: Math.round(tail * scale),
+        links: [...(previous ? [link(b.before, 'previous')] : []), ...(next ? [link(b.after, 'next')] : [])],
+      };
+    }
+    return {
+      motion,
+      seconds,
+      frames: Math.round(seconds * fps),
+      trimHead: previous ? 1 : 0,
+      trimTail: next ? 1 : 0,
+      links: [
+        ...(previous ? [{ key: b.first?.key, source: 'previous' }] : []),
+        ...(next ? [{ key: b.last?.key, source: 'next' }] : []),
+      ],
+    };
   }
   async function place(kind, workflow, target, setup) {
     let made = null;
@@ -282,7 +297,26 @@ export function createDirecting({
   }
 
   // ---- transitions -------------------------------------------------------------------
-  function transitionDialog(leftId, rightId, existing = null) {
+  /** One line under the frames saying what the chosen model sees. */
+  function seesLine(choice, before, after) {
+    const name = c => '<strong>' + esc(c.name) + '</strong>';
+    if (choice?.motion)
+      return (
+        'The model sees ' +
+        [before && 'the last second of ' + name(before), after && 'the first second of ' + name(after)]
+          .filter(Boolean)
+          .join(' and ') +
+        ', with their sound, so movement carries through the new clip.'
+      );
+    return (
+      'The model sees ' +
+      [before && 'the last frame of ' + name(before), after && 'the first frame of ' + name(after)]
+        .filter(Boolean)
+        .join(' and ') +
+      '. Movement starts again from a still frame.'
+    );
+  }
+  function transitionDialog(leftId, rightId) {
     const doc = getState(),
       left = doc.clips.find(c => c.id === leftId),
       right = doc.clips.find(c => c.id === rightId);
@@ -292,37 +326,33 @@ export function createDirecting({
       toast('No first and last frame workflow is available.');
       return;
     }
-    const preset = D.TRANSITIONS.find(p => p.id === remembered.transition) || D.TRANSITIONS[0];
-    const state = {
-      presets: D.TRANSITIONS,
-      preset: preset.id,
-      detail: '',
-      seconds: preset.seconds || 2,
-      workflow: list[0].id,
-    };
+    const state = { detail: '', seconds: 2, workflow: list[0].id };
     openDialog(
       'Add transition',
       '<div class="direct-hero">' +
-        frameThumb(left, 'last', 'Leaves from') +
+        frameThumb(left, 'last', 'Out of') +
         '<span class="direct-bridge" aria-hidden="true">' +
         svg('transition') +
         '</span>' +
-        frameThumb(right, 'first', 'Lands on') +
-        '</div><p class="direct-lede">A video model renders the move between the last frame of one shot and the first frame of the next. Each take is a clip of its own; the shots around it stay as they are.</p><h3 class="direct-heading">Style</h3>' +
-        presetGrid(D.TRANSITIONS, state.preset, {
-          left: take(left).placeholder ? null : left,
-          leftFrame: Math.max(left.in, left.out - 1),
-          right: take(right).placeholder ? null : right,
-          rightFrame: right.in,
-        }) +
-        '<label class="direct-field"><span>Direction <em>optional</em></span><input id="directDetail" type="text" placeholder="e.g. the smoke is red; keep the camera low"></label><div class="direct-row">' +
+        frameThumb(right, 'first', 'Into') +
+        '</div><p class="direct-lede" id="directSees"></p><label class="direct-field"><span>What happens in between <em>optional</em></span><textarea id="directDetail" rows="3" placeholder="e.g. she keeps running and the camera follows her through the doorway"></textarea></label>' +
+        suggestions(D.TRANSITIONS) +
+        '<div class="direct-row">' +
         lengthField(state.seconds, list[0]) +
         workflowPicker('transition', state.workflow) +
         '</div>',
       'Add transition',
       state,
       (s, generate) => addTransition(leftId, rightId, s, generate),
-      { kind: 'transition' },
+      {
+        kind: 'transition',
+        onChange: s =>
+          ($('directSees').innerHTML = seesLine(
+            list.find(c => c.id === s.workflow),
+            left,
+            right,
+          )),
+      },
     );
   }
   async function addTransition(leftId, rightId, options, generate = false) {
@@ -330,34 +360,21 @@ export function createDirecting({
       left = doc.clips.find(c => c.id === leftId),
       right = doc.clips.find(c => c.id === rightId);
     if (!left || !right) throw Error('Both shots must still be on the timeline.');
-    const preset = D.TRANSITIONS.find(p => p.id === options.preset) || D.TRANSITIONS[0],
-      choice = choices('transition').find(c => c.id === options.workflow) || choices('transition')[0],
-      seconds = D.fitSeconds(choice, options.seconds),
+    const choice = choices('transition').find(c => c.id === options.workflow) || choices('transition')[0],
       row = rowFor(left.id);
-    remembered.transition = preset.id;
     const clip = await place(
       'transition',
       choice.id,
       { index: doc.clips.indexOf(right), placement: { track: T.videoTrack(left), start: row.end } },
       c => {
-        const b = D.toolBindings(c.bindings);
-        c.name = preset.name + ' transition';
-        c.direction = { kind: 'transition', preset: preset.id, detail: options.detail || '' };
-        fill(c, {
-          prompt: D.transitionPrompt(preset, options.detail),
-          seconds,
-          links: [
-            { key: b.first?.key, source: 'previous' },
-            { key: b.last?.key, source: 'next' },
-          ],
-          frames: Math.round(seconds * getFps()),
-          trimHead: 1,
-          trimTail: 1,
-          shape: left,
-        });
+        const b = D.toolBindings(c.bindings),
+          join = joining(b, D.fitSeconds(choice, options.seconds), { previous: true, next: true });
+        c.name = 'Transition';
+        c.direction = { kind: 'transition', detail: options.detail || '' };
+        fill(c, { ...join, prompt: D.transitionPrompt(options.detail, join), shape: left });
       },
     );
-    await finish([clip], generate, preset.name + ' transition added');
+    await finish([clip], generate, 'Transition added');
   }
 
   // ---- extend ------------------------------------------------------------------------
@@ -377,7 +394,7 @@ export function createDirecting({
       toast('No image to video workflow is available.');
       return;
     }
-    const state = { detail: '', seconds: 5, workflow: list[0].id };
+    const state = { detail: '', seconds: 4, workflow: list[0].id };
     openDialog(
       'Extend shot',
       '<div class="direct-hero single">' +
@@ -388,14 +405,22 @@ export function createDirecting({
         svg('spark') +
         '</span><figcaption>New shot<small>Added after ' +
         esc(c.name) +
-        '</small></figcaption></figure></div><p class="direct-lede">The new clip starts on this shot’s last frame, as it is trimmed in the edit, so the cut is seamless.</p><label class="direct-field"><span>What happens next</span><textarea id="directDetail" rows="3" placeholder="e.g. she turns to the window and the camera pushes in slowly"></textarea></label><div class="direct-row">' +
+        '</small></figcaption></figure></div><p class="direct-lede" id="directSees"></p><label class="direct-field"><span>What happens next</span><textarea id="directDetail" rows="3" placeholder="e.g. she turns to the window and the camera pushes in slowly"></textarea></label><div class="direct-row">' +
         lengthField(state.seconds, list[0]) +
         workflowPicker('extend', state.workflow) +
         '</div>',
       'Extend shot',
       state,
       (s, generate) => extendClip(clipId, s, generate),
-      { kind: 'extend' },
+      {
+        kind: 'extend',
+        onChange: s =>
+          ($('directSees').innerHTML = seesLine(
+            list.find(x => x.id === s.workflow),
+            c,
+            null,
+          )),
+      },
     );
   }
   async function extendClip(clipId, options, generate = false) {
@@ -414,17 +439,10 @@ export function createDirecting({
         placement: { track: T.videoTrack(source), start: row.end },
       },
       c => {
-        const b = D.toolBindings(c.bindings);
+        const join = joining(D.toolBindings(c.bindings), seconds, { previous: true });
         c.name = source.name + ' · continued';
         c.direction = { kind: 'extend', detail: options.detail || '' };
-        fill(c, {
-          prompt: D.extendPrompt(sourcePrompt(source), options.detail),
-          seconds,
-          links: [{ key: b.first?.key, source: 'previous' }],
-          frames: Math.round(seconds * getFps()),
-          trimHead: 1,
-          shape: source,
-        });
+        fill(c, { ...join, prompt: D.extendPrompt(sourcePrompt(source), options.detail, join), shape: source });
       },
     );
     await finish([clip], generate, 'Extension added after ' + source.name);
@@ -451,40 +469,65 @@ export function createDirecting({
       toast('Retake needs a shot of at least 2 seconds.');
       return;
     }
+    // A motion workflow keeps a second of footage on each side to anchor; others keep a few frames.
+    const plan = s => {
+      const choice = list.find(x => x.id === s.workflow),
+        b = D.toolBindings(choice?.motion ? getTemplateBindings(choice.id) : []),
+        head = b.before?.span.frames || 0,
+        tail = b.after?.span.frames || 0,
+        scale = fps / 24;
+      return choice?.motion
+        ? {
+            span: Math.round(D.motionLength(s.seconds, head, tail).visible * scale),
+            margin: Math.round(Math.max(head, tail) * scale),
+          }
+        : { span: s.seconds * fps, margin: 6 };
+    };
+    const clampStart = (s, start) => {
+      const { span, margin } = plan(s);
+      return Math.round(Math.max(margin, Math.min(length - span - margin, start)));
+    };
     const playhead = Math.round(getState().frame) - row.start,
-      seconds = Math.max(1, Math.min(3, Math.floor(length / fps) - 1)),
-      span = seconds * fps,
-      start = Math.max(
-        6,
-        Math.min(length - span - 6, (playhead > 0 && playhead < length ? playhead : length / 2) - span / 2),
-      );
-    const state = { detail: '', seconds, workflow: list[0]?.id, start: Math.round(start) };
+      state = { detail: '', seconds: Math.max(1, Math.min(2, Math.floor(length / fps) - 2)), workflow: list[0]?.id };
+    state.start = clampStart(state, (playhead > 0 && playhead < length ? playhead : length / 2) - plan(state).span / 2);
     const strip = Array.from({ length: 8 }, (_, i) => {
       const frame = Math.round(c.in + ((i + 0.5) / 8) * length);
       return '<img data-direct-thumb="' + esc(c.id) + '" data-frame="' + Math.min(c.out - 1, frame) + '" alt="">';
     }).join('');
+    const show = () => {
+      const { span } = plan(state),
+        range = $('retakeRange');
+      if (!range) return;
+      range.style.left = (state.start / length) * 100 + '%';
+      range.style.width = (span / length) * 100 + '%';
+      $('retakeLabel').textContent =
+        (state.start / fps).toFixed(1) + '–' + ((state.start + span) / fps).toFixed(1) + ' s';
+    };
     openDialog(
       'Retake part of ' + c.name,
       '<div class="retake-strip" id="retakeStrip"><div class="retake-film">' +
         strip +
-        '</div><div class="retake-range" id="retakeRange" role="slider" tabindex="0" aria-label="Part to retake"><span class="retake-label" id="retakeLabel"></span></div></div><p class="direct-lede">Drag the highlighted part. Spool splits the shot there and renders a new middle that starts and ends on the frames around it. The original stays as a take you can switch back to.</p><label class="direct-field"><span>What should change</span><textarea id="directDetail" rows="2" placeholder="e.g. he smiles instead of frowning"></textarea></label><div class="direct-row">' +
+        '</div><div class="retake-range" id="retakeRange" role="slider" tabindex="0" aria-label="Part to retake"><span class="retake-label" id="retakeLabel"></span></div></div><p class="direct-lede" id="directSees"></p><label class="direct-field"><span>What should change</span><textarea id="directDetail" rows="2" placeholder="e.g. he smiles instead of frowning"></textarea></label><div class="direct-row">' +
         lengthField(state.seconds, list[0], 'Part length') +
         workflowPicker('retake', state.workflow) +
         '</div>',
       'Retake part',
       state,
-      (s, generate) => retakeRange(clipId, s.start, s.start + s.seconds * fps, s, generate),
+      (s, generate) => retakeRange(clipId, s.start, s.start + plan(s).span, s, generate),
       {
         kind: 'retake',
         onChange: s => {
-          const span = s.seconds * fps;
-          s.start = Math.max(6, Math.min(length - span - 6, s.start));
-          const range = $('retakeRange');
-          if (!range) return;
-          range.style.left = (s.start / length) * 100 + '%';
-          range.style.width = (span / length) * 100 + '%';
-          $('retakeLabel').textContent = (s.start / fps).toFixed(1) + '–' + ((s.start + span) / fps).toFixed(1) + ' s';
-          s.problem = () => (span > length - 12 ? 'Choose a shorter part; keep a few frames on both sides.' : null);
+          const { span, margin } = plan(s);
+          s.start = clampStart(s, s.start);
+          show();
+          const choice = list.find(x => x.id === s.workflow);
+          $('directSees').innerHTML =
+            'Drag the highlighted part. Spool splits the shot there and renders a new middle; the original stays as a take you can switch back to. ' +
+            (choice?.motion
+              ? 'The model sees a second of the shot on each side, so the movement carries through.'
+              : 'The model sees one frame on each side.');
+          s.problem = () =>
+            span > length - 2 * margin ? 'Choose a shorter part; keep some of the shot on both sides.' : null;
         },
       },
     );
@@ -497,26 +540,16 @@ export function createDirecting({
         first = state.start,
         width = track.getBoundingClientRect().width;
       range.onpointermove = move => {
-        state.start = Math.round(first + ((move.clientX - origin) / width) * length);
-        const span = state.seconds * fps;
-        state.start = Math.max(6, Math.min(length - span - 6, state.start));
-        range.style.left = (state.start / length) * 100 + '%';
-        $('retakeLabel').textContent =
-          (state.start / fps).toFixed(1) + '–' + ((state.start + span) / fps).toFixed(1) + ' s';
+        state.start = clampStart(state, first + ((move.clientX - origin) / width) * length);
+        show();
       };
       range.onpointerup = () => (range.onpointermove = null);
     };
     range.onkeydown = e => {
       if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
       e.preventDefault();
-      const span = state.seconds * fps;
-      state.start = Math.max(
-        6,
-        Math.min(length - span - 6, state.start + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? fps : 4)),
-      );
-      range.style.left = (state.start / length) * 100 + '%';
-      $('retakeLabel').textContent =
-        (state.start / fps).toFixed(1) + '–' + ((state.start + span) / fps).toFixed(1) + ' s';
+      state.start = clampStart(state, state.start + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? fps : 4));
+      show();
     };
   }
   async function retakeRange(clipId, start, end, options, generate = false) {
@@ -539,19 +572,12 @@ export function createDirecting({
       middleId = middle.id;
     });
     if (!middleId) return;
-    const seconds = D.fitSeconds(choice, (end - start) / getFps());
+    const seconds = choice.motion ? options.seconds : D.fitSeconds(choice, (end - start) / getFps());
     const clip = await place('retake', choice.id, { clipId: middleId }, m => {
-      const b = D.toolBindings(m.bindings);
-      m.direction = { kind: 'retake', detail: options.detail || '' };
-      fill(m, {
-        prompt: D.retakePrompt(prompt, options.detail),
-        seconds,
-        links: [
-          { key: b.first?.key, source: 'previous' },
-          { key: b.last?.key, source: 'next' },
-        ],
-        shape: m,
-      });
+      const join = joining(D.toolBindings(m.bindings), seconds, { previous: true, next: true });
+      // The original footage stays a take; Use take returns it to where it was cut.
+      m.direction = { kind: 'retake', detail: options.detail || '', sourceIn: m.in };
+      fill(m, { ...join, prompt: D.retakePrompt(prompt, options.detail, join), shape: m });
     });
     await finish([clip], generate, 'Retake ready on ' + c.name);
   }
@@ -580,7 +606,6 @@ export function createDirecting({
     }
     const state = {
       kind,
-      preset: remembered[kind] || null,
       detail: '',
       workflow: list[0].id,
       castId: castList()[0]?.id || null,
@@ -613,7 +638,7 @@ export function createDirecting({
       '</div><div class="rework-shots">' +
       strip +
       (clips.length > 6 ? '<span class="rework-more">+' + (clips.length - 6) + '</span>' : '') +
-      '</div><div id="reworkBody"></div><label class="direct-field"><span>Direction <em>optional</em></span><input id="directDetail" type="text" placeholder="e.g. keep her red scarf"></label><div id="reworkModels"></div>';
+      '</div><div id="reworkBody"></div><div id="reworkModels"></div>';
     const title = n => D.REWORKS[state.kind].verb + ' ' + (n === 1 ? clips[0].name : n + ' shots');
     openDialog(
       title(clips.length),
@@ -637,7 +662,7 @@ export function createDirecting({
           b.classList.toggle('active', on);
           b.setAttribute('aria-selected', on);
         });
-      const presets = D.REWORKS[state.kind].presets;
+      const list = D.REWORKS[state.kind].suggestions;
       if (state.kind === 'recast') {
         $('reworkBody').innerHTML =
           '<h3 class="direct-heading">Character</h3><div class="cast-pick" role="radiogroup">' +
@@ -659,7 +684,9 @@ export function createDirecting({
           svg('plus') +
           '</span><span>New from picture</span></label></div><label class="direct-field"><span>Where</span><input id="recastPlace" type="text" value="' +
           esc(state.place) +
-          '" placeholder="e.g. swimming underwater through a sunlit coral palace"></label><p class="direct-lede">The main person in each shot becomes this character and moves exactly as before. Say where it happens; the new take has its own sound.</p>';
+          '" placeholder="e.g. swimming underwater through a sunlit coral palace"></label><label class="direct-field"><span>Direction <em>optional</em></span><input id="directDetail" type="text" value="' +
+          esc(state.detail) +
+          '" placeholder="e.g. keep her red scarf"></label><p class="direct-lede">The main person in each shot becomes this character and moves exactly as before. Say where it happens; the new take has its own sound.</p>';
         $('recastPlace').oninput = e => (state.place = e.target.value);
         $('reworkBody')
           .querySelectorAll('[data-cast-pick]')
@@ -682,28 +709,23 @@ export function createDirecting({
           }
         };
       } else {
-        state.preset = presets.some(p => p.id === state.preset) ? state.preset : presets[0].id;
+        const angle = state.kind === 'reangle';
         $('reworkBody').innerHTML =
-          '<h3 class="direct-heading">' +
-          (state.kind === 'reangle' ? 'New camera' : 'Effect') +
-          '</h3>' +
-          presetGrid(presets, state.preset) +
+          '<label class="direct-field"><span>' +
+          (angle ? 'New camera' : 'What changes') +
+          '</span><textarea id="directDetail" rows="2" placeholder="' +
+          (angle ? 'e.g. low and close to the ground, looking up at her' : 'e.g. it is raining and the street is wet') +
+          '">' +
+          esc(state.detail) +
+          '</textarea></label>' +
+          suggestions(list) +
           '<p class="direct-lede">' +
-          (state.kind === 'reangle'
+          (angle
             ? 'The same moment, filmed again from another camera position. Performance and sound stay.'
-            : 'The effect is added to the shot; people, camera and timing stay as they are.') +
+            : 'People, performance, camera and timing stay as they are; sound stays too.') +
           '</p>';
-        $('reworkBody')
-          .querySelectorAll('[data-preset]')
-          .forEach(
-            b =>
-              (b.onclick = () => {
-                state.preset = b.dataset.preset;
-                remembered[state.kind] = state.preset;
-                renderBody();
-              }),
-          );
       }
+      $('directDetail').oninput = e => (state.detail = e.target.value);
       bindThumbs($('reworkBody'));
       // Each tool has its own models: recast runs on pose control, the others on reference to video.
       const models = choices(D.toolFor(state.kind));
@@ -726,8 +748,9 @@ export function createDirecting({
       .forEach(
         b =>
           (b.onclick = () => {
+            if (state.kind === b.dataset.reworkKind) return;
             state.kind = b.dataset.reworkKind;
-            state.preset = remembered[state.kind] || null;
+            state.detail = '';
             renderBody();
           }),
       );
@@ -738,7 +761,9 @@ export function createDirecting({
       list = choices(D.toolFor(kind)),
       choice = list.find(c => c.id === options.workflow) || list[0],
       member = kind === 'recast' ? castList().find(m => m.id === options.castId) : null,
-      preset = D.REWORKS[kind].presets.find(p => p.id === options.preset) || null;
+      // A recast's text is extra direction; for the others it is the change itself.
+      change = kind === 'recast' ? '' : options.detail || '',
+      detail = kind === 'recast' ? options.detail || '' : '';
     if (kind === 'recast' && !member) throw Error('Choose a cast member to recast with.');
     const done = [];
     for (const id of ids) {
@@ -749,14 +774,14 @@ export function createDirecting({
       done.push(
         await place(kind, choice.id, { clipId: id }, c => {
           const b = D.toolBindings(c.bindings);
-          c.direction = { kind, preset: preset?.id, detail: options.detail || '', castId: member?.id };
+          c.direction = { kind, detail: options.detail || '', castId: member?.id };
           if (kind === 'recast') c.direction.place = options.place || '';
           const recipe = getRecipe(c),
             style = tagStyle(b.prompt && recipe?.prompt?.[b.prompt.nodeId]?.inputs?.[b.prompt.input]),
             pictures = member ? Math.min(member.images.length, Math.max(1, b.references.length)) : 0,
             place = kind === 'recast' ? options.place || D.placeFrom(sourcePrompt(source)) : '';
           fill(c, {
-            prompt: D.reworkPrompt(kind, preset, options.detail, {
+            prompt: D.reworkPrompt(kind, change, detail, {
               character: member?.description || '',
               pictures,
               style,
@@ -975,18 +1000,17 @@ export function createDirecting({
           ? '<span class="direct-bridge" aria-hidden="true">' + svg(D.KINDS[d.kind].icon) + '</span>'
           : '') +
         (links.includes('next') ? frameThumb(next, 'first', 'To') : '');
-    const presets = d.kind === 'transition' ? D.TRANSITIONS : D.REWORKS[d.kind]?.presets || [];
-    const member = d.castId && castList().find(m => m.id === d.castId);
+    const member = d.castId && castList().find(m => m.id === d.castId),
+      bindings = D.toolBindings(c.bindings),
+      motion = (bindings.before || bindings.after) && links.some(l => l === 'previous' || l === 'next');
     return (
-      '<section class="direction-card kind-' +
-      esc(d.kind) +
-      '"><div class="direction-head">' +
+      '<section class="direction-card"><div class="direction-head">' +
       svg(D.KINDS[d.kind].icon) +
       '<strong>' +
       esc(D.KINDS[d.kind].name) +
-      '</strong><span>' +
-      esc(D.directionLabel(d) !== D.KINDS[d.kind].name ? D.directionLabel(d) : '') +
-      '</span></div>' +
+      '</strong>' +
+      (motion ? '<span>Anchored on a second of footage each side</span>' : '') +
+      '</div>' +
       (frames ? '<div class="direction-frames">' + frames + '</div>' : '') +
       (member
         ? '<div class="direction-cast"><img src="' +
@@ -994,26 +1018,6 @@ export function createDirecting({
           '" alt=""><span>@' +
           esc(member.name) +
           '</span></div>'
-        : '') +
-      (presets.length
-        ? '<div class="direction-presets" role="radiogroup" aria-label="Style">' +
-          presets
-            .map(
-              p =>
-                '<button type="button" role="radio" data-direction-preset="' +
-                esc(p.id) +
-                '" aria-checked="' +
-                (p.id === d.preset) +
-                '" style="--a:' +
-                p.colors[0] +
-                ';--b:' +
-                p.colors[1] +
-                '">' +
-                esc(p.name) +
-                '</button>',
-            )
-            .join('') +
-          '</div>'
         : '') +
       '</section>'
     );
@@ -1197,42 +1201,7 @@ export function createDirecting({
           }),
       );
     const card = $('inspectorContent').querySelector('.direction-card');
-    if (!card) return;
-    bindThumbs(card);
-    card.querySelectorAll('[data-direction-preset]').forEach(
-      b =>
-        (b.onclick = () => {
-          const d = c.direction,
-            presets = d.kind === 'transition' ? D.TRANSITIONS : D.REWORKS[d.kind].presets,
-            preset = presets.find(p => p.id === b.dataset.directionPreset),
-            member = d.castId && castList().find(m => m.id === d.castId),
-            bindings = D.toolBindings(c.bindings);
-          if (!preset || preset.id === d.preset) return;
-          edits.apply(
-            'Change ' + D.KINDS[d.kind].name.toLowerCase(),
-            () => {
-              d.preset = preset.id;
-              if (d.kind === 'transition') c.name = preset.name + ' transition';
-              if (bindings.prompt)
-                c.inputValues[bindings.prompt.key] =
-                  d.kind === 'transition'
-                    ? D.transitionPrompt(preset, d.detail)
-                    : D.reworkPrompt(d.kind, preset, d.detail, {
-                        character: member?.description || '',
-                        pictures: member ? Math.min(member.images.length, Math.max(1, bindings.references.length)) : 0,
-                        style: tagStyle(
-                          bindings.prompt &&
-                            getRecipe(c)?.prompt?.[bindings.prompt.nodeId]?.inputs?.[bindings.prompt.input],
-                        ),
-                        audio: !!bindings.video?.audio,
-                        place: d.place || '',
-                      });
-              c.revision++;
-            },
-            'inspector',
-          );
-        }),
-    );
+    if (card) bindThumbs(card);
   }
 
   // ---- entry points ---------------------------------------------------------------------------

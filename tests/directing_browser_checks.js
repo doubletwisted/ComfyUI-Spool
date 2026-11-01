@@ -28,50 +28,52 @@
   check('Every touching cut offers a transition', d.querySelectorAll('.cut-transition').length === 2);
   const afterStart = rows().find(r => r.id === 'shot-b').start;
   d.querySelector('.cut-transition[data-cut-left="shot-a"]').click();
-  await wait('transition dialog', () => d.querySelector('.direct-modal .preset-grid'));
-  check('The dialog shows nine styles', d.querySelectorAll('.direct-modal [data-preset]').length === 9);
+  await wait('transition dialog', () => $('directSees')?.textContent);
   check(
-    'Style tiles preview the two frames around the cut',
-    d.querySelectorAll('.direct-modal .preset-swatch img.fx-a').length === 9 &&
-      d.querySelectorAll('.direct-modal .preset-swatch img.fx-b').length === 9,
+    'The motion model is the default and the dialog says what it sees',
+    d.querySelector('.direct-modal [data-direct-workflow="video_minimax_h3_bridge"]').getAttribute('aria-checked') ===
+      'true' && /last second of Shot A and the first second of Shot B/.test($('directSees').textContent),
   );
-  d.querySelector('.direct-modal [data-preset="whip-pan"]').click();
-  check(
-    'Choosing a style marks it',
-    d.querySelector('.direct-modal [data-preset="whip-pan"]').getAttribute('aria-checked') === 'true',
-  );
+  check('Style suggestions are plain text', !d.querySelector('.direct-modal img.fx-a, .direct-modal [data-preset]'));
+  d.querySelector('.direct-modal [data-suggest*="whips"]').click();
+  check('A suggestion adds its words to the prompt field', /whips sideways/.test($('directDetail').value));
   $('directAdd').click();
   await wait('transition clip', () => find('transition'));
-  const transition = find('transition');
+  const transition = find('transition'),
+    anchored = Math.round((22 * (n.state.fps || 24)) / 24);
   check(
     'The transition is inserted at the cut and the next shot moves later',
     clips().indexOf(transition) === 1 &&
       rows().find(r => r.id === 'shot-b').start === afterStart + transition.out - transition.in,
   );
   check(
-    'Its first and last frames read the clips beside it',
-    JSON.stringify((transition.shotInputs || []).map(s => s.source)) === '["previous","next"]',
+    'It reads a second of the clips beside it, with their sound',
+    JSON.stringify((transition.shotInputs || []).map(s => [s.source, !!s.audio])) ===
+      '[["previous",true],["next",true]]',
+  );
+  check('It keeps the direction in its prompt', /whips sideways/.test(JSON.stringify(transition.inputValues)));
+  check(
+    'Its slot skips the anchored second of footage',
+    transition.in === anchored && transition.direction.head === anchored,
   );
   check(
-    'It remembers its style',
-    transition.direction.preset === 'whip-pan' && /whips/.test(JSON.stringify(transition.inputValues)),
-  );
-  check('Its slot skips the repeated first frame', transition.in === 1);
-  check(
-    'A transition clip is marked on the timeline',
-    d.querySelector('[data-clip="' + transition.id + '"].directed-transition .direction-badge'),
+    'A transition clip carries a quiet label on the timeline',
+    d.querySelector('[data-clip="' + transition.id + '"].directed-transition .direction-badge')?.textContent ===
+      'Transition',
   );
   check('No cut offers a second transition beside it', d.querySelectorAll('.cut-transition').length === 1);
   await n.flush();
   n.selectClip(transition.id);
   await wait('direction card', () => $('inspectorContent').querySelector('.direction-card'));
-  $('inspectorContent').querySelector('[data-direction-preset="dissolve"]').click();
-  await wait('style change', () => find('transition').direction.preset === 'dissolve');
   check(
-    'The inspector card changes the style and its prompt',
-    /cross dissolve/.test(JSON.stringify(find('transition').inputValues)) &&
-      find('transition').name === 'Dissolve transition',
+    'The inspector card says the clip is anchored on footage',
+    /Anchored on a second of footage/.test($('inspectorContent').querySelector('.direction-card').textContent),
   );
+  d.querySelector('.cut-transition').click();
+  await wait('second transition dialog', () => $('directSees')?.textContent);
+  d.querySelector('.direct-modal [data-direct-workflow="video_ltx2_5_flf2v"]').click();
+  check('A frame model says it sees single frames', /last frame of/.test($('directSees').textContent));
+  $('directCancel').click();
 
   // Extend adds the next moment after a shot.
   n.selectClip('shot-c');
@@ -83,10 +85,11 @@
   await wait('extension', () => find('extend'));
   const extension = find('extend');
   check(
-    'Extend adds a clip after the shot that starts on its last frame',
+    'Extend adds a clip after the shot that carries on from its last second',
     clips().indexOf(extension) === clips().findIndex(c => c.id === 'shot-c') + 1 &&
-      extension.shotInputs?.[0]?.source === 'previous' &&
-      /she waves/.test(JSON.stringify(extension.inputValues)),
+      JSON.stringify(extension.shotInputs.map(s => s.source)) === '["previous"]' &&
+      extension.in === anchored &&
+      /She waves/.test(JSON.stringify(extension.inputValues)),
   );
 
   // Cast members come from pictures and are mentioned with @Name.
@@ -122,7 +125,9 @@
   prompt.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   await wait('mention inserted', () => prompt.value === 'masterpiece, @Nova ');
   check('Enter inserts the mention', true);
-  await wait('findings', () => $('inspectorContent').querySelector('.prompt-findings'));
+  await wait('findings', () =>
+    /masterpiece/.test($('inspectorContent').querySelector('.prompt-findings')?.textContent || ''),
+  );
   check(
     'The prompt checks name the quality tag',
     /masterpiece/.test($('inspectorContent').querySelector('.prompt-findings').textContent),
@@ -146,6 +151,10 @@
     clips().length === before + 2 &&
       JSON.stringify(retake.shotInputs.map(s => s.source)) === '["previous","next"]' &&
       retake.takes.some(t => !t.placeholder),
+  );
+  check(
+    'The retake remembers where its own takes and the original footage start',
+    retake.direction.head === anchored && retake.direction.sourceIn === retake.in,
   );
 
   // Draft mode is a view preference shown on Generate.

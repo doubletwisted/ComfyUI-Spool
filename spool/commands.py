@@ -464,7 +464,7 @@ def execute(store, media, project_id, data):
             take = next((t for t in choices if t["id"] == arguments["takeId"] and not t.get("placeholder")), None)
             if not take:
                 raise ValueError("Take is unavailable for this shot")
-            operations.choose_take(document, clip, take["id"], take["media"]["frames"])
+            operations.choose_take(document, clip, take["id"], take["media"]["frames"], take)
         elif action == "feedback":
             take_id = arguments["takeId"]
             projected = ledger.attach(copy.deepcopy(document), store.project_attempts(project_id, db))

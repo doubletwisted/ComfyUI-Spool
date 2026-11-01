@@ -3511,6 +3511,7 @@ async function startEditor(isFailed) {
     rowFor,
     addBuiltinShot,
     getTemplate: id => (builtinCaptures[id] ? workflowLibrary?.template(id) || { id } : null),
+    getTemplateBindings: id => builtinCaptures[id]?.bindings || [],
     queueClips,
     showModal,
     closeModal,
@@ -3591,8 +3592,8 @@ async function startEditor(isFailed) {
     experimentRetry = JSON.parse(sessionStorage.getItem(experimentRetryKey) || 'null');
   } catch (error) {}
 
-  function generationSourceLabel(setting) {
-    return renderQueueOwner.generationSourceLabel(setting);
+  function generationSourceLabel(setting, binding) {
+    return renderQueueOwner.generationSourceLabel(setting, binding);
   }
   function reviewGeneration(clips) {
     return renderQueueOwner.reviewGeneration(clips);

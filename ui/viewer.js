@@ -80,17 +80,14 @@ export function createViewer({
     '</span><div class="placeholder-direct" id="placeholderDirect" hidden></div><strong id="placeholderTitle"></strong><p id="placeholderHint"></p>';
   $('emptyStage').after(placeholderState);
   let directPreview = '';
-  // An ungenerated transition or retake previews its style between the frames around it.
+  // An ungenerated transition or retake shows the frames it joins.
   function renderDirectPreview(c) {
     const kind = c?.direction?.kind,
       before = kind && neighbor(getState(), c, 'previous'),
       after = kind && neighbor(getState(), c, 'next'),
       usable = x => x && !T.takeOf(x).placeholder,
       show = ['transition', 'retake'].includes(kind) && usable(before) && usable(after),
-      fx = kind === 'transition' ? c.direction.preset || 'dissolve' : 'morph',
-      signature = show
-        ? [c.id, fx, before.id, before.takeId, before.out, after.id, after.takeId, after.in].join('|')
-        : '';
+      signature = show ? [c.id, before.id, before.takeId, before.out, after.id, after.takeId, after.in].join('|') : '';
     $('placeholderDirect').hidden = !show;
     placeholderState.classList.toggle('directed', show);
     if (signature === directPreview) return;
@@ -100,9 +97,7 @@ export function createViewer({
       return;
     }
     $('placeholderDirect').innerHTML =
-      '<span class="preset-swatch fx-' +
-      fx +
-      '"><img class="fx-a" alt=""><img class="fx-b" alt=""><i></i></span><em>' +
+      '<span class="direct-pair"><img alt=""><img alt=""></span><em>' +
       svg(KINDS[kind].icon) +
       directionLabel(c.direction) +
       '</em>';

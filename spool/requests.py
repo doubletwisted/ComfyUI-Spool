@@ -133,6 +133,16 @@ def draft_values(bindings, values):
     return values
 
 
+def span_range(owner, binding):
+    """The part of a clip a video input reads: all of it, or a few frames at one end
+    when the workflow anchors motion there."""
+    span = binding.get("span") if binding.get("slot") == "video" else None
+    if not span:
+        return owner["in"], owner["out"]
+    frames = min(span["frames"], owner["out"] - owner["in"])
+    return (owner["out"] - frames, owner["out"]) if span["edge"] == "end" else (owner["in"], owner["in"] + frames)
+
+
 def neighbor(document, clip, side):
     """The clip just before or after this one on its video track, in sequence order."""
     track = clip.get("videoTrack", 1)
@@ -333,15 +343,17 @@ def prepare(store, media, project, items, freeze=True):
                         if owner is not clip
                         else "This shot has no usable original or selected take"
                     )
+                start, end = span_range(owner, binding)
                 key = encode(
                     [owner["id"], take["id"], binding["slot"], frame, bool(setting.get("audio", False))]
                     + ([owner["in"], owner["out"]] if owner is not clip else [])
+                    + ([start, end] if binding.get("span") else [])
                 )
                 if key not in shot_bakes:
                     shot_bakes[key] = media.bake_shot(
                         take["media"],
-                        owner["in"],
-                        owner["out"],
+                        start,
+                        end,
                         project["document"].get("fps", 24),
                         binding["slot"],
                         frame,

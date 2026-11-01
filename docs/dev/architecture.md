@@ -237,6 +237,7 @@ Comfy templates without touching the user's graph.
 | Bridge messages | — | `ui/bridge.js` | `tests/bridge_checks.mjs` |
 | Neighbour inputs | `spool/requests.py` | `ui/direction.js` | `tests/fixtures/neighbours.json` |
 | Cast mentions | `spool/cast.py` | `ui/cast.js` | `tests/fixtures/cast_mentions.json` |
+| Directed take start | `spool/operations.py` | `ui/timeline.js` | `tests/fixtures/directed_takes.json` |
 
 ## Directing tools
 
@@ -244,7 +245,9 @@ Transitions, extensions, retakes and reworks are ordinary clips with built-in
 workflows, so execution, takes and Edit in Comfy need no new paths. What they add
 is resolved when a request is frozen, never stored as baked files: neighbour inputs
 read the clips beside the shot, cast mentions fill reference inputs, and draft
-quality lowers resolution. A request records what each resolved to
+quality lowers resolution. Joining footage is anchored as a short clip (a video
+binding's `span`) rather than a frame where the workflow allows, because one frame
+restarts any movement under way at the cut. A request records what each resolved to
 (`shotInputs[].clipId`, `castMentions`, `quality`), so a take stays explainable
 after the edit changes. The command API exposes the same pieces on existing clips
 (`set_shot_inputs`, `set_cast`, draft variants); creating the clips stays a studio

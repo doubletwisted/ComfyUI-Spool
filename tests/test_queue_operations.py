@@ -15,7 +15,7 @@ from spool import attempts, requests
 from spool.execution import LocalExecutor
 from spool.media import Media
 from spool.ownership import ExecutorLock
-from spool.store import Conflict, Store, empty_project
+from spool.store import Conflict, Store, empty_project, validate_capture
 
 
 class QueueOperationTests(unittest.TestCase):
@@ -268,6 +268,25 @@ class QueueOperationTests(unittest.TestCase):
         project = self.store.save(project["id"], project["revision"], document)
         with self.assertRaisesRegex(ValueError, "needs a clip before it"):
             requests.prepare(self.store, self.media, project, [{"clipId": "shot", "count": 1, "shotInputs": links}])
+
+    def test_motion_inputs_read_only_the_frames_beside_the_cut(self):
+        owner = {"in": 10, "out": 70}
+        video = {"slot": "video", "span": {"edge": "end", "frames": 22}}
+        self.assertEqual(requests.span_range(owner, video), (48, 70))
+        self.assertEqual(requests.span_range(owner, {**video, "span": {"edge": "start", "frames": 22}}), (10, 32))
+        self.assertEqual(requests.span_range({"in": 0, "out": 9}, video), (0, 9), "A short clip gives what it has")
+        self.assertEqual(requests.span_range(owner, {"slot": "video"}), (10, 70))
+        recipe = {
+            **self.recipe,
+            "prompt": {**self.recipe["prompt"], "clip": {"class_type": "LoadVideo", "inputs": {"file": ""}}},
+            "bindings": [{**video, "key": "clip", "nodeId": "clip", "input": "file", "asset": True}],
+        }
+        validate_capture(recipe)
+        for span in ({"edge": "middle", "frames": 22}, {"edge": "end", "frames": 0}, {"edge": "end", "frames": 1.5}):
+            with self.assertRaisesRegex(ValueError, "240 frames"):
+                validate_capture({**recipe, "bindings": [{**recipe["bindings"][0], "span": span}]})
+        with self.assertRaisesRegex(ValueError, "240 frames"):
+            validate_capture({**recipe, "bindings": [{**recipe["bindings"][0], "slot": "image"}]})
 
     def test_concurrent_duplicate_operations_accept_once(self):
         with ThreadPoolExecutor(max_workers=4) as pool:

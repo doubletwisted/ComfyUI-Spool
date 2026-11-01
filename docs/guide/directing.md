@@ -4,13 +4,13 @@ Directing tools make new shots from the edit itself: a transition between two
 shots, the next moment of a shot, a new middle for part of a shot, or the same
 shot with another actor, camera or effect. Each tool makes an ordinary clip with
 an ordinary workflow, so its takes, seeds and **Edit in Comfy** work as for any
-other clip. A clip made this way carries a coloured badge on the timeline and a
-card at the top of the inspector that offers the same choices again.
+other clip. A clip made this way carries a small label on the timeline and a
+card at the top of the inspector that shows what it joins.
 
 | Tool | Where | Shortcut | Workflows |
 | --- | --- | --- | --- |
-| Add transition | The ✦ button on a cut, or the clip menu | **T** at the nearest cut | LTX 2.5 First-Last Frame (local), MiniMax H3 and LTX 2.5 First-Last Frame (Cloud) |
-| Extend shot | The clip menu | **E** | MiniMax H3 or LTX 2.5 Image to Video (local), MiniMax H3 Max or LTX 2.5 Image to Video (Cloud) |
+| Add transition | The button on a cut, or the clip menu | **T** at the nearest cut | MiniMax H3 Continue Between Clips or LTX 2.5 First-Last Frame (local), MiniMax H3 and LTX 2.5 First-Last Frame (Cloud) |
+| Extend shot | The clip menu or the inspector | **E** | MiniMax H3 Continue Between Clips, MiniMax H3 or LTX 2.5 Image to Video (local), MiniMax H3 Max or LTX 2.5 Image to Video (Cloud) |
 | Retake part | The clip menu | **R** | The transition workflows |
 | Recast | The clip menu or the inspector, also for several selected clips | – | MiniMax H3 ControlNet Union (local) |
 | Re-angle, Add effect | The clip menu or the inspector, also for several selected clips | – | MiniMax H3 Reference to Video (local or Cloud) |
@@ -18,46 +18,62 @@ card at the top of the inspector that offers the same choices again.
 Every dialog has **Add**, which only changes the edit, and **Add and generate**,
 which also queues one take. Generating never chooses a take for you.
 
-## Frames from the clips beside a shot
+## Footage from the clips beside a shot
 
-Transitions, extensions and retakes read their start and end frames from the clips
-around them when you press **Generate**, not when you add them. Choosing another
-take, trimming or reordering the neighbouring shots therefore changes what the
-next take starts and ends on. The inspector shows these inputs as **Last frame of
-the clip before** and **First frame of the clip after**, with a preview of the
-frame. A tool that needs a neighbour refuses to generate until that neighbour has
-a take. **Use take** on a directed clip keeps its workflow and these links, so
-the next take still follows the edit.
+Transitions, extensions and retakes read the clips around them when you press
+**Generate**, not when you add them. Choosing another take, trimming or reordering
+the neighbouring shots therefore changes what the next take joins. A tool that
+needs a neighbour refuses to generate until that neighbour has a take. **Use
+take** on a directed clip keeps its workflow and these links, so the next take
+still follows the edit.
+
+The first local model in each dialog, **MiniMax H3 · Local**, uses Spool's
+**Continue Between Clips** workflow. It anchors the last second of the clip before
+and the first second of the clip after, with their sound, at the two ends of the
+new clip, so a movement that is under way at the cut carries on instead of starting
+again from a still frame. The inspector shows these inputs as **Last second of the
+clip before** and **First second of the clip after**. The take repeats those
+anchored seconds; the clip skips them, so the edit shows only the new middle and
+the cut lands on the next frame of the movement.
+
+The other models read single frames: **Last frame of the clip before** and
+**First frame of the clip after**. Each dialog says which the chosen model sees.
 
 The new clip uses the picture shape of the shot it joins, so a workflow whose
-default is square still matches widescreen footage. Generated takes start on the
-neighbour's frame; the clip skips that repeated frame so the cut stays clean.
+default is square still matches widescreen footage.
+
+MiniMax H3 renders 24 frames a second in fixed steps, so a transition or retake
+with motion is a little shorter or longer than the length you asked for (2 s gives
+1.9 s). Continue Between Clips expects a 24 fps edit.
 
 ## Transitions
 
-Hover a cut between two touching shots on the same track and press ✦, or press
-**T** to use the cut nearest the playhead. Each style tile plays its effect between
-the two real frames. Choose a style, optionally add a direction ("the smoke is
-red"), a length and a model. The transition is inserted at the cut and the shots
-after it move later.
+Hover a cut between two touching shots on the same track and press its button, or
+press **T** to use the cut nearest the playhead. Say what happens in between, set
+a length and a model. The transition is inserted at the cut and the shots after it
+move later.
 
-Styles: Morph, Smoke, Whip pan, Zoom through, Light flash, Ink bloom, Water wave,
-Glitch and Dissolve. The inspector card switches the style of an existing
-transition and rewrites its prompt; the prompt stays editable below.
+Under the field are a few suggestions (camera move, match the motion, push
+through, whip pan, morph); each adds its wording to the field, where you can edit
+it. When the two shots are very different, MiniMax H3 may cut to the second shot
+near one end instead of moving between them; describe a path from one place to the
+other, or give it more length.
 
 ## Extend a shot
 
-**Extend shot** adds a clip after the selected shot that starts on its last frame,
-as trimmed in the edit. Describe what happens next. The shot's own prompt, if it
-has one, is added as context.
+**Extend shot** adds a clip after the selected shot that carries on from its end,
+as trimmed in the edit: from its last second with MiniMax H3 Continue Between
+Clips, or from its last frame with the other models. Describe what happens next.
+The shot's own prompt, if it has one, is added as context.
 
 ## Retake part of a shot
 
 **Retake part** shows the shot as a filmstrip. Drag the highlighted part (or use
-the arrow keys) and set its length in whole seconds. Spool splits the shot around
-that part and gives the middle a first-and-last-frame workflow joining the frames
-on either side. The middle keeps its original footage as a take, so you can switch
-back at any time.
+the arrow keys) and set its length. Spool splits the shot around that part and
+gives the middle a workflow that joins the footage on either side; with motion it
+keeps a second of the shot on each side to anchor. The middle keeps its original
+footage as a take, so you can switch back at any time, and **Use take** puts either
+take back where it belongs in the shot.
 
 ## Recast, re-angle and effects
 
@@ -72,10 +88,11 @@ own clip workflow and keeps its footage as a take.
 
 - **Recast** replaces the main person with a cast member. It runs on local ComfyUI
   or Deadline; Comfy Cloud has no pose-control workflow in Spool yet.
-- **Re-angle** films the same moment from another camera: low, high, close-up,
-  wide, side, over the shoulder, a slow orbit or top down.
-- **Add effect** adds rain, snow, neon night, golden hour, fire, fog, magic
-  sparks or a disintegration, and keeps the rest of the shot.
+- **Re-angle** films the same moment from another camera. Describe the camera;
+  suggestions such as low angle, close-up or over the shoulder fill in the words.
+- **Add effect** changes the weather, light or surroundings and keeps the rest of
+  the shot. Describe the change; rain, snow, fog, night and golden hour are
+  offered as suggestions.
 
 Reference to video is heavy: a seven-second shot takes many minutes on one GPU.
 Use **Draft** (below) or the workflow's **Turbo (4 steps)** control to try ideas

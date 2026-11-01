@@ -34,8 +34,27 @@ def fit_to_take(document, clip, frames):
         tails[str(track)] = tails.get(str(track), 0) + length - new_length
 
 
-def choose_take(document, clip, take_id, frames):
+def directed_in(clip, take):
+    """Where a directed clip's take starts, as ui/timeline.js:directedIn decides. Its own
+    takes repeat the anchored frames of the clips beside it, so they start after them;
+    a retake's original footage starts where it was cut."""
+    direction = clip.get("direction") or {}
+    # The studio sees a take's summary; commands see the attempt's request.
+    made_with = (take.get("summary") or take.get("request") or {}).get("workflowVersion")
+    if take.get("generated") and made_with == clip.get("workflowVersion"):
+        head = direction.get("head")
+    else:
+        head = direction.get("sourceIn") if not take.get("generated") else None
+    return head if type(head) is int else None
+
+
+def choose_take(document, clip, take_id, frames, take=None):
     """Put a take in the edit. Its workflow is not adopted; see Store.capture for Use take."""
+    start = directed_in(clip, take) if take else None
+    if start is not None:
+        length = clip["out"] - clip["in"]
+        clip["in"] = max(0, min(start, frames - min(length, frames)))
+        clip["out"] = clip["in"] + length
     fit_to_take(document, clip, frames)
     clip["takeId"] = take_id
 
