@@ -26,6 +26,8 @@ All notable changes to Spool are recorded here. Versions follow
   becomes who.
 - **MiniMax H3 · Regenerate**, a built-in workflow, refines any clip at a higher
   resolution with the Open-H3-Regenerate refiner.
+- A workflow dropped on a clip that takes the clip as video no longer also puts a
+  frame of it in a reference input.
 - A **Cast** tab keeps characters with pictures; `@Name` in a prompt fills the
   workflow's reference inputs and becomes the tag the model reads.
 - Prompt checks under the prompt, and `@` suggestions from the cast. Editing

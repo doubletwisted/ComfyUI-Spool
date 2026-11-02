@@ -20,7 +20,8 @@ export function matchClipInputs(target, source, recipe, definitions, fps) {
     settings = [],
     number = value => Number(isExactInt(value) ? value.__spool_int__ : value),
     integer = value => BigInt(isExactInt(value) ? value.__spool_int__ : value);
-  let reference = false,
+  // A workflow that reads the shot as video gets it there; its references show someone or something else.
+  let reference = media.kind === 'video' && target.bindings.some(b => b.asset && !b.draft && b.slot === 'video'),
     grouped = false;
   for (const b of target.bindings) {
     const node = recipe.prompt[b.nodeId],
