@@ -14,6 +14,7 @@
   const copy = value => structuredClone(value);
   let replies = {},
     project = null,
+    generated = [],
     tokens = 0;
 
   const loaded = originalFetch(base + 'replies.json')
@@ -25,6 +26,15 @@
       replies = value;
       project = copy(value['GET ' + PROJECT]);
       project.syncToken = 'demo-' + tokens++;
+      // Generated takes live outside the document on the host, as attempts: a save
+      // leaves them out and every reply attaches them again (ledger.attach).
+      const seen = new Set();
+      for (const clip of project.document.clips)
+        for (const take of clip.takes)
+          if (take.generated && !seen.has(take.id)) {
+            seen.add(take.id);
+            generated.push({ takeId: take.id, clipId: clip.id, take: copy(take) });
+          }
     });
 
   const reply = (status, value) =>
@@ -49,6 +59,24 @@
     project.syncToken = 'demo-' + tokens++;
   }
 
+  // ledger.owns: the clip a generated take belongs to, after splits and copies.
+  const owns = (clip, a) =>
+    (clip.takeSourceTakeIds || []).includes(a.takeId) ||
+    clip.id === a.clipId ||
+    (clip.takeSourceIds || []).includes(a.clipId) ||
+    clip.takeOwnerId === a.clipId ||
+    clip.takeId === a.takeId;
+  function attach(document) {
+    const deleted = new Set(document.deletedTakeIds || []);
+    for (const clip of document.clips)
+      clip.takes = [
+        ...clip.takes.filter(t => !t.generated),
+        ...generated.filter(a => !deleted.has(a.takeId) && owns(clip, a)).map(a => copy(a.take)),
+      ];
+    return document;
+  }
+  const files = media => [media?.originalFile, media?.file, media?.poster].filter(Boolean);
+
   // Delete takes as the host does: never the take in the edit, then record the
   // deletion so the takes stay gone. Nothing is on disk to remove.
   function deleteTakes(clipId, body) {
@@ -62,6 +90,19 @@
     if (ids.includes(clip.takeId))
       return reply(400, { error: 'The take in the edit is kept. Choose another take before deleting it.' });
     const document = project.document;
+    // A file another take or timeline audio still uses stays: a split shares its takes.
+    const selected = new Set(ids.flatMap(id => files(available.get(id).media)));
+    for (const other of document.clips)
+      for (const take of other.takes || [])
+        if (!(other.id === clipId && ids.includes(take.id)) && files(take.media).some(f => selected.has(f)))
+          return reply(400, {
+            error:
+              'A selected file is also used by another take in ' +
+              (other.name || 'this clip') +
+              '. Archive it instead.',
+          });
+    if ((document.audioClips || []).some(a => files(a.media).some(f => selected.has(f))))
+      return reply(400, { error: 'A selected file is used by timeline audio. Archive it instead.' });
     document.deletedTakeIds = [...new Set([...(document.deletedTakeIds || []), ...ids])].sort();
     document.deletedMediaIds = [
       ...new Set([...(document.deletedMediaIds || []), ...ids.map(id => available.get(id).media?.id).filter(Boolean)]),
@@ -123,7 +164,7 @@
       const value = JSON.parse(body);
       if (value.revision !== project.revision) return conflict();
       // The studio leaves out jobs, which the host owns and adds back to every reply.
-      project.document = { ...value.document, jobs: project.document.jobs };
+      project.document = attach({ ...value.document, jobs: project.document.jobs });
       changed();
       return reply(200, copy(project));
     }
@@ -143,6 +184,15 @@
     const version = method === 'GET' && path.match(/^workflows\/([^/]+)$/);
     if (version && project.recipes?.[decodeURIComponent(version[1])])
       return reply(200, project.recipes[decodeURIComponent(version[1])]);
+    // A take's setup is recorded under the clip it was on; a split or copied clip
+    // asks under its own id for the same take.
+    const setup = method === 'GET' && path.match(/^projects\/[^/]+\/take-workflow\/([^/]+)\/([^/]+)$/);
+    if (setup && !replies['GET ' + path]) {
+      const clip = project.document.clips.find(c => c.id === decodeURIComponent(setup[1]));
+      const prefix = 'GET ' + PROJECT + '/take-workflow/';
+      const other = Object.keys(replies).find(k => k.startsWith(prefix) && k.endsWith('/' + setup[2]));
+      if (other && clip?.takes.some(t => t.id === decodeURIComponent(setup[2]))) return recorded('GET', other.slice(4));
+    }
     // Recorded reads, and playback copies whose size the recording already chose.
     if (method === 'GET' || (method === 'POST' && path.endsWith('/preview')))
       return recorded(method, path) || declined(method, path);
