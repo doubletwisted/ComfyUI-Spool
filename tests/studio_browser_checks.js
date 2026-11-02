@@ -26,7 +26,7 @@
       if (!b) throw Error('Missing ' + selector);
       b.click();
     };
-  await wait(() => document.querySelectorAll('[data-builtin]').length === 24, 'Curated templates');
+  await wait(() => document.querySelectorAll('[data-builtin]').length === 25, 'Curated templates');
   check(
     'Compact URL opens the full studio',
     !$('#editor').classList.contains('compact') && !new URL(location.href).searchParams.has('mode'),
@@ -34,8 +34,8 @@
   check('Workflows is the primary sidebar tab', $('#mediaPanel').dataset.tab === 'workflows');
   const catalog = await (await fetch('/spool/api/templates')).json();
   check(
-    'Catalog has ten local and fourteen cloud workflows',
-    catalog.filter(t => t.section === 'local').length === 10 &&
+    'Catalog has eleven local and fourteen cloud workflows',
+    catalog.filter(t => t.section === 'local').length === 11 &&
       catalog.filter(t => t.section === 'cloud').length === 14,
   );
   if (innerWidth <= 1100) click('#workflowLibraryToggle');

@@ -69,6 +69,7 @@
   "workflowVersion",
   "inputValues",
   "bindings",
-  "quality"
+  "quality",
+  "finishes"
  ]
 }

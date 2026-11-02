@@ -222,7 +222,7 @@ export function createTakeRenderer({
                 : '') +
               fresh +
               (t.summary?.quality === 'draft'
-                ? '<span class="take-badge draft" title="Low-resolution draft">Draft</span>'
+                ? '<span class="take-badge draft" title="Quick low-resolution draft; Make final refines it">Draft</span>'
                 : '') +
               '</div><button class="take-thumb" data-view="' +
               t.id +
@@ -240,10 +240,15 @@ export function createTakeRenderer({
                   esc(getDecimal()(t.seed)) +
                   '</span>'
                 : '') +
-              (t.summary?.quality === 'draft'
+              (t.summary?.finishes
+                ? '<span class="take-badge final" title="Refined to full size from take ' +
+                  (c.takes.findIndex(d => d.id === t.summary.finishes) + 1) +
+                  '">Final</span>'
+                : '') +
+              (t.summary?.quality === 'draft' && G.canDraft(c)
                 ? '<button class="make-final" data-final="' +
                   t.id +
-                  '" title="Render again at full quality with this seed">Make final</button>'
+                  '" title="Refine this draft to full size; it keeps its motion and framing">Make final</button>'
                 : '') +
               (!setupChosen ? '<button class="use-take" data-use="' + t.id + '">Use take</button>' : '') +
               '</div>';

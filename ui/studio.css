@@ -8513,6 +8513,11 @@ input[type='range'] {
   color: #0d2a2e;
   background: var(--preview);
 }
+.take-badge.final {
+  color: var(--dim);
+  border: 1px solid #ffffff33;
+  background: transparent;
+}
 .make-final {
   border: 1px solid #62d0e077;
   border-radius: 6px;

@@ -28,8 +28,10 @@ All notable changes to Spool are recorded here. Versions follow
   workflow's reference inputs and becomes the tag the model reads.
 - Prompt checks under the prompt, and `@` suggestions from the cast. Editing
   instructions such as "no cuts" are not flagged as negative phrasing.
-- **Draft** renders quick takes at 0.4 megapixels; **Make final** on a draft renders it
-  again at full quality with the same seed.
+- **Draft** renders quick takes for workflows that can finish their own drafts, such
+  as the new **MiniMax H3 · Draft and Final**. **Make final** refines the chosen
+  draft to full size with the Open-H3-Regenerate refiner, so the final keeps the
+  draft's motion and framing. Other workflows offer no Draft.
 - Image and video inputs can read the clip before or after a shot when it is
   queued (`previous` and `next` shot inputs), also through `set_shot_inputs`.
 - The local MiniMax H3 Reference to Video workflow shows its **Turbo (4 steps)**

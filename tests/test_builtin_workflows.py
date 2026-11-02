@@ -59,6 +59,7 @@ class OwnWorkflowTests(unittest.TestCase):
                 "api_minimax_h3_max_r2v",
                 "api_minimax_h3_r2v",
                 "video_minimax_h3_bridge",
+                "video_minimax_h3_draft",
                 "video_minimax_h3_fun_controlnet_union",
                 "video_minimax_h3_multiframe_reference",
                 "video_minimax_h3_r2v",

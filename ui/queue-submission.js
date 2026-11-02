@@ -63,8 +63,11 @@ export function createQueueActions({
           : 'Requests saved; waiting for Comfy.',
     );
   }
-  // Draft takes are a request setting; the server lowers resolution the same way for agents.
-  const withQuality = items => (getQuality() === 'draft' ? items.map(i => ({ ...i, quality: 'draft' })) : items);
+  // Draft takes are a request setting, only for workflows that can finish a draft.
+  const withQuality = items =>
+    getQuality() === 'draft'
+      ? items.map(i => (G.canDraft(getClips().find(c => c.id === i.clipId)) ? { ...i, quality: 'draft' } : i))
+      : items;
   function queueClips(clips, reviewed = null) {
     return (
       queueSubmission
@@ -101,7 +104,7 @@ export function createQueueActions({
         })
     );
   }
-  /** Re-render a draft take at full quality with its seed and the clip's current settings. */
+  /** Refine a draft take to full size with the clip's workflow; the final keeps the draft's motion. */
   function queueFinal(c, take) {
     return queueSubmission
       .start(async () => {
@@ -109,16 +112,11 @@ export function createQueueActions({
         if (reason) throw Error(c.name + ': ' + reason);
         if (take.summary?.workflowVersion && take.summary.workflowVersion !== c.workflowVersion)
           throw Error('This draft came from another workflow. Use it again before making it final.');
+        if (!G.canDraft(c)) throw Error('This workflow cannot finish drafts.');
         await flushNative();
-        const seeds = Object.fromEntries(
-          (c.bindings || [])
-            .filter(b => b.role === 'seed')
-            .map(b => [b.key, take.summary?.inputValues?.[b.key] ?? take.seed])
-            .filter(([, value]) => value != null),
-        );
         return {
           revision: projectEdit.revision,
-          items: [{ clipId: c.id, count: 1, values: seeds }],
+          items: [{ clipId: c.id, count: 1, finish: take.id }],
           operationId: crypto.randomUUID(),
         };
       })

@@ -135,8 +135,10 @@ export function createInspectorRenderer({
     $('generate').hidden = false;
     $('generate').disabled = !!reason;
     $('generate').title = reason || 'Generate new takes with these settings';
+    const drafting = bindings.some(b => b.draft);
+    if ($('draftToggle')) $('draftToggle').hidden = !drafting;
     $('generateLabel').textContent =
-      $('draftToggle')?.getAttribute('aria-pressed') === 'true' ? 'Generate drafts' : 'Generate';
+      drafting && $('draftToggle')?.getAttribute('aria-pressed') === 'true' ? 'Generate drafts' : 'Generate';
     getCountLabel().hidden = !!reason;
     $('nativeCount').value = c.count || 1;
     $('nativeCount').onchange = e => {

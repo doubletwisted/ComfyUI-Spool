@@ -45,6 +45,8 @@ export function createQueueSubmission({ storage, key, submit }) {
   };
 }
 
+/** A workflow that can finish a draft (refine the draft take itself to full size) offers Draft. */
+export const canDraft = clip => (clip?.bindings || []).some(b => b.draft);
 export const seedControls = clip =>
   (clip.bindings || []).filter(b => b.role === 'seed' && !b.asset && isIntegerValue(clip.inputValues?.[b.key]));
 export const hasDeadlineLauncher = recipe =>

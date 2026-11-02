@@ -157,7 +157,20 @@
     retake.direction.head === anchored && retake.direction.sourceIn === retake.in,
   );
 
-  // Draft mode is a view preference shown on Generate.
+  // Drafts exist only for a workflow that can refine a draft into its final.
+  check('A workflow that cannot finish drafts offers no Draft', $('draftToggle').hidden);
+  d.querySelector('[data-bin-tab="workflows"]')?.click();
+  await wait('draft workflow in the library', () => d.querySelector('[data-builtin="video_minimax_h3_draft"]'));
+  const count = clips().length;
+  d.querySelector('[data-builtin="video_minimax_h3_draft"]').click();
+  await wait('draft clip', () => clips().length === count + 1 && clips().at(-1).workflowVersion);
+  await n.flush();
+  n.selectClip(clips().at(-1).id);
+  await wait('draft clip inspector', () => !$('draftToggle').hidden);
+  check(
+    'MiniMax H3 Draft and Final offers Draft and keeps its draft input out of the inspector',
+    !$('draftToggle').hidden && !/Draft to finish/.test($('inspectorContent').textContent),
+  );
   $('draftToggle').click();
   check(
     'Draft mode marks the toggle and Generate',

@@ -193,27 +193,70 @@ class QueueOperationTests(unittest.TestCase):
         self.assertEqual(request["castMentions"], [{"id": "cast-mara", "name": "Mara", "pictures": [1]}])
         self.assertEqual([a["source"] for a in request["assets"]], ["mara.png"])
 
-    def test_draft_takes_render_fewer_pixels_in_the_same_shape(self):
+    def test_drafts_only_for_workflows_that_finish_them(self):
         bindings = [
             {"key": "mp", "role": "resolution", "contract": {"inputType": "FLOAT"}},
-            {"key": "size", "role": "resolution", "options": ["1280x720", "720x1280", "1920x1080", "1080x1920"]},
-            {"key": "tier", "role": "resolution", "options": ["768P", "2K", "1080P"]},
             {"key": "ratio", "role": "resolution", "options": ["16:9 (Widescreen)", "1:1 (Square)"]},
+            {"key": "draft", "role": "draftSize"},
             {"key": "seed", "role": "seed"},
             {"key": "turbo", "role": "speed"},
         ]
-        values = {"mp": 0.9, "size": "1080x1920", "tier": "1080P", "ratio": "1:1 (Square)", "seed": 4, "turbo": False}
+        values = {"mp": 0.9, "ratio": "1:1 (Square)", "draft": 0.3, "seed": 4, "turbo": False}
         self.assertEqual(
             requests.draft_values(bindings, values),
-            {"mp": 0.4, "size": "720x1280", "tier": "768P", "ratio": "1:1 (Square)", "seed": 4, "turbo": True},
+            {"mp": 0.3, "ratio": "1:1 (Square)", "draft": 0.3, "seed": 4, "turbo": True},
         )
-        self.assertEqual(requests.draft_values(bindings, {**values, "mp": 0.1})["mp"], 0.1)
-        _, request = requests.prepare(
-            self.store, self.media, self.project, [{"clipId": "shot", "count": 1, "quality": "draft"}]
-        )[0]
-        self.assertEqual(request["quality"], "draft")
+        # An ordinary workflow cannot refine a draft into its final, so it makes no drafts.
+        with self.assertRaisesRegex(ValueError, "cannot make drafts"):
+            requests.prepare(self.store, self.media, self.project, [{"clipId": "shot", "count": 1, "quality": "draft"}])
         with self.assertRaisesRegex(ValueError, "draft or final"):
             requests.prepare(self.store, self.media, self.project, [{"clipId": "shot", "count": 1, "quality": "best"}])
+
+        draft = {
+            "key": "draftFile/file",
+            "nodeId": "draftFile",
+            "input": "file",
+            "slot": "video",
+            "asset": True,
+            "optional": True,
+            "draft": True,
+            "omit": ["draftFile"],
+        }
+        recipe = {
+            **self.recipe,
+            "prompt": {**self.recipe["prompt"], "draftFile": {"class_type": "LoadVideo", "inputs": {"file": ""}}},
+            "bindings": [draft],
+        }
+        validate_capture(recipe)
+        for wrong in ({"draft": "yes"}, {"slot": "image"}, {"optional": False}, {"span": {"edge": "end", "frames": 5}}):
+            with self.assertRaisesRegex(ValueError, "draft input|240 frames"):
+                validate_capture({**recipe, "bindings": [{**draft, **wrong}]})
+        project = self.store.capture(self.project["id"], self.project["revision"], "shot", recipe)
+        _, request = requests.prepare(
+            self.store, self.media, project, [{"clipId": "shot", "count": 1, "quality": "draft"}]
+        )[0]
+        self.assertEqual(request["quality"], "draft")
+        self.assertNotIn("draftFile", request["prompt"], "Without a take to finish, the finish is left out")
+
+        take = {"id": "draft-take", "generated": True, "media": {"kind": "video", "frames": 141}}
+        project = copy.deepcopy(project)
+        project["document"]["clips"][0]["takes"].append(take)
+        (self.root / "input" / "baked.mp4").write_bytes(b"draft")
+        with patch.object(self.media, "bake_shot", return_value={"file": "baked.mp4"}) as bake:
+            _, request = requests.prepare(
+                self.store, self.media, project, [{"clipId": "shot", "count": 1, "finish": "draft-take"}]
+            )[0]
+        bake.assert_called_once_with(take["media"], 0, 141, 24, "video", None, True)
+        self.assertEqual(request["finishes"], "draft-take")
+        self.assertNotIn("quality", request)
+        self.assertIn("baked.mp4", [a["source"] for a in request["assets"]])
+        for item in (
+            {"clipId": "shot", "count": 1, "finish": "missing"},
+            {"clipId": "shot", "count": 2, "finish": "draft-take"},
+            {"clipId": "shot", "count": 1, "finish": "draft-take", "quality": "draft"},
+        ):
+            with self.assertRaisesRegex(ValueError, "draft take of this clip"):
+                requests.prepare(self.store, self.media, project, [item])
 
     def test_neighbour_rule_matches_the_studio(self):
         fixture = json.loads((Path(__file__).parent / "fixtures" / "neighbours.json").read_text(encoding="utf-8"))

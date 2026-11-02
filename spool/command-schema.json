@@ -151,6 +151,10 @@
                   "draft",
                   "final"
                 ]
+              },
+              "finish": {
+                "type": "string",
+                "description": "A draft take of this clip to refine to full size; the workflow must be able to finish drafts."
               }
             }
           }

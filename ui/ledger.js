@@ -68,6 +68,7 @@ export const TAKE_SUMMARY_FIELDS = Object.freeze([
   'inputValues',
   'bindings',
   'quality',
+  'finishes',
 ]);
 export const UNDO_SKIPS = Object.freeze([...RECORD_FIELDS, 'zoom', 'snap', 'muted', 'loop']);
 // What the editor saves, in its established order; the server owns jobs' recoverable results.

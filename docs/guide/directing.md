@@ -140,12 +140,25 @@ advice; they never block **Generate**.
 
 ## Drafts
 
-**Draft** beside **Generate** renders quick takes: at most 0.4 megapixels, the
-smallest size of the same shape for Cloud models, and a workflow's turbo switch
-on. Draft takes carry a **Draft** badge. **Make final** on a draft renders again
-with that take's seed and the clip's current settings at full quality. The
-picture can change between draft and final, because resolution changes what a
-seed produces.
+**Draft** beside **Generate** is offered for workflows that can finish their own
+drafts. In Spool's built-ins that is **MiniMax H3 · Draft and Final**, image or
+text to video with an optional first and last frame.
+
+A draft renders quickly at the workflow's **Draft resolution** (0.4 megapixels
+unless you change it) with its turbo switch on, and carries a **Draft** badge.
+**Make final** on a draft does not render the shot again: it upscales that draft
+to the **Final resolution**, encodes it and refines it in three steps with the
+Open-H3-Regenerate refiner, the way NVIDIA's Open-H3-Regenerate-2K does. The final
+keeps the draft's motion, framing and timing, gains detail, keeps the draft's
+sound, and arrives as a new take with a **Final** badge. A different resolution
+with the same seed would give a different video, which is why other workflows
+offer no Draft.
+
+The finish needs `minimax_h3_open_regenerate_2k_refiner_rank_384_bf16.safetensors`
+in `models/loras` ([Kijai/MiniMax-H3-experimental](https://huggingface.co/Kijai/MiniMax-H3-experimental/tree/main/loras),
+under the MiniMax H3 Community License). It starts from sigma 0.8, which stays
+closer to the draft than the reference 0.909. A 5-second final at 1344 x 768 took
+about five minutes on one RTX 4090.
 
 ## Where it runs
 

@@ -105,9 +105,14 @@ module contracts are in [architecture.md](architecture.md).
 - **Cast**: `document.cast`, named members with pictures. `@Name` in a positive
   prompt fills empty reference inputs when a request is frozen (`spool/cast.py`,
   mirrored by `ui/cast.js`); the request records `castMentions`.
-- **Draft take**: a take queued with `quality: "draft"`. Freezing lowers the
-  resolution controls and turns on `speed` switches (`requests.draft_values`); the
-  take summary keeps `quality`.
+- **Draft take**: a take queued with `quality: "draft"`, only for a workflow with a
+  draft input. Freezing sets its float resolution to the `draftSize` control and
+  turns on `speed` switches (`requests.draft_values`); the take summary keeps
+  `quality`.
+- **Draft input**: a workflow's optional video input flagged `draft`. It is never
+  set by hand: Make final queues the clip with `finish: TAKE_ID`, the take is baked
+  whole into that input, and the workflow refines it instead of generating. The
+  final take's summary records `finishes`.
 
 ## Integration
 

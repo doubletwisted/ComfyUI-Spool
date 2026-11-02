@@ -93,8 +93,10 @@ request records what each mention became in `castMentions`.
 `set_shot_inputs` accepts `{"key": KEY, "source": "previous"}` or `"next"` for an
 image or video input: the last frame of the clip before, or the first frame of the
 clip after, read when the request is queued. Add `"frame": "first" | "middle" |
-"last"` to choose another frame. An experiment variant with `"quality": "draft"`
-renders a draft take, as the studio's **Draft** does.
+"last"` to choose another frame. For a workflow that can finish drafts, an
+experiment variant with `"quality": "draft"` renders a draft take, as the studio's
+**Draft** does, and `"finish": TAKE_ID` refines that draft take to full size, as
+**Make final** does. Other workflows refuse both.
 
 `rename_clip` takes `{clipId,name}`. `trim_clip` takes `{clipId,edge:"in"|"out",frame}`
 in absolute project/source frames. These commands target video clips. Trims use

@@ -163,6 +163,7 @@ def own_capture(template_id):
                     **({"optional": True, **removal} if entry.get("optional") else {}),
                     **({"audio": True} if entry.get("audio") else {}),
                     **({"span": entry["span"]} if "span" in entry else {}),
+                    **({"draft": True} if entry.get("draft") else {}),
                 )
             )
         else:

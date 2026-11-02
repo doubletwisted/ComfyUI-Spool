@@ -105,32 +105,15 @@ def validate_shot_input(binding, setting):
         raise ValueError("Choose an audio track to align with this shot")
 
 
-# MiniMax H3 loses the shot below 0.4 megapixels.
-DRAFT_MEGAPIXELS = 0.4
-
-
 def draft_values(bindings, values):
-    """Cheaper settings for a draft take: fewer pixels, same shape, everything else unchanged."""
+    """Settings for a draft take: the workflow's own draft size and its speed switch on."""
     values = dict(values)
+    size = next((b for b in bindings if b.get("role") == "draftSize" and b["key"] in values), None)
     for b in bindings:
-        # A workflow's own speed switch, such as a turbo LoRA, is on for drafts.
         if b.get("role") == "speed" and type(values.get(b["key"])) is bool:
             values[b["key"]] = True
-        if b.get("role") != "resolution" or b.get("asset") or b["key"] not in values:
-            continue
-        value = values[b["key"]]
-        if type(value) is float or (type(value) is int and b.get("contract", {}).get("inputType") == "FLOAT"):
-            values[b["key"]] = min(float(value), DRAFT_MEGAPIXELS)
-            continue
-        options = [o for o in b.get("options") or [] if isinstance(o, str)]
-        sizes = {o: tuple(map(int, o.split("x"))) for o in options if re.fullmatch(r"\d+x\d+", o)}
-        tiers = {o: int(o[:-1]) for o in options if re.fullmatch(r"\d+[pP]", o)}
-        if value in sizes:
-            w, h = sizes[value]
-            same = [o for o, (x, y) in sizes.items() if x * h == y * w]
-            values[b["key"]] = min(same, key=lambda o: sizes[o][0] * sizes[o][1])
-        elif value in tiers:
-            values[b["key"]] = min(tiers, key=tiers.get)
+        if size and b.get("role") == "resolution" and b.get("contract", {}).get("inputType") == "FLOAT":
+            values[b["key"]] = float(values[size["key"]])
     return values
 
 
@@ -256,6 +239,20 @@ def prepare(store, media, project, items, freeze=True):
         if clip.get("generationBase") and clip["generationBase"]["takeId"] != clip.get("takeId"):
             raise ValueError("Use the take again to update generation settings before queueing")
         capture = store.workflow(clip.get("workflowVersion"))
+        # Drafts exist only where the workflow can finish one: it refines the draft take
+        # itself to full size, so the final keeps the draft's motion and framing.
+        drafting = next((b for b in capture.get("bindings", []) if b.get("draft")), None)
+        finish = item.get("finish")
+        if quality == "draft" and not drafting:
+            raise ValueError("This workflow cannot make drafts")
+        draft_take = None
+        if finish is not None:
+            draft_take = next(
+                (t for t in clip.get("takes", []) if t["id"] == finish and t.get("generated") and t.get("media")),
+                None,
+            )
+            if not drafting or quality == "draft" or count != 1 or draft_take is None:
+                raise ValueError("Choose one draft take of this clip to make final")
         launchers = [node_id for node_id, node in capture["prompt"].items() if node["class_type"] in LAUNCHERS]
         if len(launchers) > 1:
             raise ValueError("Choose a workflow with one explicit Deadline submit node")
@@ -287,6 +284,14 @@ def prepare(store, media, project, items, freeze=True):
             bindings = capture.get("bindings", [])
             if quality == "draft":
                 values = draft_values(bindings, values)
+            if drafting:
+                # The draft input only ever holds the take being finished, never a chosen file.
+                values[drafting["key"]] = ""
+                if draft_take:
+                    metadata = draft_take["media"]
+                    values[drafting["key"]] = media.bake_shot(
+                        metadata, 0, metadata["frames"], project["document"].get("fps", 24), "video", None, True
+                    )["file"]
             for binding in bindings:
                 if binding.get("asset"):
                     values.setdefault(binding["key"], capture["prompt"][binding["nodeId"]]["inputs"][binding["input"]])
@@ -440,6 +445,7 @@ def prepare(store, media, project, items, freeze=True):
                         "shotInputs": shot_inputs,
                         **({"castMentions": cast_mentions} if cast_mentions else {}),
                         **({"quality": "draft"} if quality == "draft" else {}),
+                        **({"finishes": finish} if finish is not None else {}),
                         "variantValues": overrides,
                         "variantIndex": variant_index,
                         "repeatIndex": repeat_index,

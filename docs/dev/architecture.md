@@ -245,10 +245,14 @@ Transitions, extensions, retakes and reworks are ordinary clips with built-in
 workflows, so execution, takes and Edit in Comfy need no new paths. What they add
 is resolved when a request is frozen, never stored as baked files: neighbour inputs
 read the clips beside the shot, cast mentions fill reference inputs, and draft
-quality lowers resolution. Joining footage is anchored as a short clip (a video
+quality lowers resolution. A draft is offered only where the workflow can finish it
+from the draft take itself (a `draft` video input feeding an Open-H3-Regenerate
+style refine behind a lazy switch): rendering again at another resolution with the
+same seed gives a different video, so a draft that cannot be refined is a preview
+of nothing. Joining footage is anchored as a short clip (a video
 binding's `span`) rather than a frame where the workflow allows, because one frame
 restarts any movement under way at the cut. A request records what each resolved to
-(`shotInputs[].clipId`, `castMentions`, `quality`), so a take stays explainable
+(`shotInputs[].clipId`, `castMentions`, `quality`, `finishes`), so a take stays explainable
 after the edit changes. The command API exposes the same pieces on existing clips
 (`set_shot_inputs`, `set_cast`, draft variants); creating the clips stays a studio
 action, as other clip creation is.

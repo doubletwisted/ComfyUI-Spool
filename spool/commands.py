@@ -114,6 +114,7 @@ def validate_envelope(data):
             require(type(variant.get("count", 1)) is int and 1 <= variant.get("count", 1) <= 16)
             require(isinstance(variant.get("values", {}), dict))
             require(variant.get("quality", "final") in ("draft", "final"))
+            require(isinstance(variant.get("finish", ""), str))
             require(isinstance(variant.get("shotInputs", []), list))
             require(all(isinstance(v, dict) and isinstance(v.get("key"), str) for v in variant.get("shotInputs", [])))
     scope = data.get("scope")
@@ -284,6 +285,8 @@ def prepare_experiment(store, project_id, revision, arguments):
             item["shotInputs"] = copy.deepcopy(variant["shotInputs"])
         if variant.get("quality") == "draft":
             item["quality"] = "draft"
+        if variant.get("finish"):
+            item["finish"] = variant["finish"]
         items.append(item)
         resolved.append(
             {
