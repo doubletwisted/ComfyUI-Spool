@@ -59,7 +59,15 @@ export function createTakeRenderer({
         ? new Date(job.createdAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : '';
     let summary = 'Generated';
-    if (previous) {
+    // A final is the draft it finishes, refined; its settings differ from the draft's by design.
+    const draftOf =
+      t.summary?.finishes &&
+      getState()
+        .clips.flatMap(c => c.takes || [])
+        .find(d => d.id === t.summary.finishes);
+    if (draftOf) summary = 'Final of ' + takeName(draftOf);
+    else if (t.summary?.quality === 'draft') summary = previous ? 'Drafts' : 'Draft';
+    else if (previous) {
       const labels = new Map(
           (t.summary?.bindings || t.request?.capture?.bindings || []).map(b => [b.key, b.label || b.key]),
         ),
