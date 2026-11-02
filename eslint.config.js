@@ -17,6 +17,8 @@ export default [
   { ignores: ['node_modules/', '.native-test/', 'docs/', 'promo/', 'demo/'] },
   js.configs.recommended,
   { files: ['ui/**/*.js', 'web/**/*.js'], languageOptions: { sourceType: 'module', globals: globals.browser } },
+  // The online demo's in-page API is a classic script that runs before the studio.
+  { files: ['pages/**/*.js'], languageOptions: { sourceType: 'script', globals: globals.browser } },
   { files: ['eslint.config.js', 'tests/**/*.mjs'], languageOptions: { sourceType: 'module', globals: globals.node } },
   { files: ['tests/**/*.cjs'], languageOptions: { sourceType: 'commonjs', globals: { ...globals.node, ...page } } },
   { files: ['tests/**/*.js'], languageOptions: { sourceType: 'script', globals: page } },

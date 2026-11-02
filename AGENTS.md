@@ -23,6 +23,10 @@ elsewhere. Before calling a change done, say which of these applied:
 - **Python and JavaScript.** A shared format changes on both sides and in its
   fixture.
 - **Docs.** The user guide and the CHANGELOG.
+- **The online demo.** `pages/demo-api.js` stands in for the host on GitHub
+  Pages. A change to the project, save, poll, delete-takes or use-take replies
+  changes it too; a new project schema or startup route means recording the
+  demo again ([docs/dev/demo.md](docs/dev/demo.md)).
 
 ## Verifying
 
