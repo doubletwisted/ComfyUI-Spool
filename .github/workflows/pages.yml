@@ -47,6 +47,8 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ runner.temp }}/site
+          # Takes' review copies and posters live in the project's .spool folder.
+          include-hidden-files: true
 
   deploy:
     name: Deploy to GitHub Pages
