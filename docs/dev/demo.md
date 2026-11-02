@@ -48,7 +48,10 @@ The recording is data, not code. It stays out of Git and is published as
    project still names (the recorder lists them as unavailable).
 2. Start a standalone Spool on a free port with its own storage, using a Python
    that has `comfyui_workflow_templates` installed (ComfyUI's own does), and open
-   the folder with `POST /spool/api/open-project`.
+   the folder with `POST /spool/api/open-project`. Give it an `--input-root`
+   that holds the source pictures the takes' workflows load (for the coral
+   project, a copy of ComfyUI's `input/coral-video-src`), or those takes'
+   workflows cannot be read.
 3. Record:
 
    ```powershell
@@ -63,8 +66,13 @@ The recording is data, not code. It stays out of Git and is published as
    ```powershell
    python pages/build.py record --host http://127.0.0.1:PORT --project ID --data DIR --name "Coral Palace" `
      --leave-out "Film v14 · to the drop" --leave-out "Film v14 · export and end card" `
-     --leave-out "Launch film v14 soundtrack" --move-to-end c11 --close-gaps
+     --leave-out "Launch film v14 soundtrack" --move-to-end c11 --close-gaps --inputs-like c26
    ```
+
+   Only five coral shots were set up for generation. `--inputs-like c26` gives
+   the others the workflow of the take in their edit, as Use take would, with
+   c26's inputs (First frame, Prompt, Seed, Duration) filled from that
+   workflow, so every shot shows its inputs in the demo.
 
    These change only the recording, never the project. `--keep-media` records
    the replies again and reuses media already in DIR.
@@ -108,7 +116,7 @@ root redirects to `demo/`.
 
 ## Size
 
-The coral demo records to about 235 MB: playback copies, review copies, input
+The coral demo records to about 240 MB: playback copies, review copies, input
 pictures and posters, for 11 shots and their takes. Pages allows 1 GB per site
 and about 100 GB of traffic a month. The browser loads media only when the
 studio shows it, so a visit usually costs far less than the whole project.

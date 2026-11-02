@@ -10,6 +10,7 @@ studio's requests in the page. See docs/dev/demo.md.
 """
 
 import argparse
+import copy
 import json
 import re
 import shutil
@@ -19,6 +20,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -174,6 +176,51 @@ def demo_edit(document, leave_out, move_to_end, close_gaps):
     document["exportRange"] = {"start": 0, "end": length}
 
 
+def give_inputs(current, replies, project, model_name):
+    """Set up shots that have no inputs the way `model_name` is set up.
+
+    Each shot takes the workflow of the take in its edit, as Use take would, and
+    the model shot's inputs where its own workflow has the same nodes. Values
+    come from the shot's own workflow. The demo shows these shots ready to
+    generate; the recorded project is not changed.
+    """
+    document, recipes = current["document"], current.setdefault("recipes", {})
+    model = next((c for c in document["clips"] if c["name"] == model_name), None)
+    if not model or not model.get("bindings"):
+        raise SystemExit("--inputs-like needs a clip with inputs: " + model_name)
+    model_prompt = recipes[model["workflowVersion"]]["prompt"]
+    for clip in document["clips"]:
+        if clip.get("bindings"):
+            continue
+        path = f"projects/{project}/take-workflow/{urllib.parse.quote(clip['id'])}/{urllib.parse.quote(clip['takeId'])}"
+        capture = replies.get(key("GET", path))
+        if not isinstance(capture, dict) or "__demoStatus" in capture or not capture.get("prompt"):
+            print("No workflow to set up", clip["name"], file=sys.stderr)
+            continue
+        prompt = capture["prompt"]
+        bindings = [
+            copy.deepcopy(b)
+            for b in model["bindings"]
+            if prompt.get(b["nodeId"], {}).get("class_type") == model_prompt[b["nodeId"]]["class_type"]
+            and b["input"] in prompt[b["nodeId"]].get("inputs", {})
+        ]
+        if len(bindings) != len(model["bindings"]):
+            print("Different workflow, left as is:", clip["name"], file=sys.stderr)
+            continue
+        version = str(uuid.uuid5(uuid.NAMESPACE_URL, "spool-demo/" + clip["id"] + "/" + clip["takeId"]))
+        capture = {**capture, "bindings": bindings}
+        recipes[version] = capture
+        replies[key("GET", "workflows/" + version)] = capture
+        clip.update(
+            workflowVersion=version,
+            bindings=bindings,
+            inputValues={b["key"]: prompt[b["nodeId"]]["inputs"][b["input"]] for b in bindings},
+            generationBase=(capture.get("provenance") or {}).get("takeBase")
+            or {"takeId": clip["takeId"], "source": "Embedded take metadata"},
+        )
+        print("Set up", clip["name"], "like", model_name, flush=True)
+
+
 def record(args):
     host, project, data = args.host.rstrip("/"), args.project, Path(args.data)
     if data.exists() and not args.keep_media:
@@ -206,6 +253,8 @@ def record(args):
     for version in sorted(v for v in versions if v):
         path = "workflows/" + urllib.parse.quote(version)
         keep("GET", path, get_or_error(host, path))
+    if args.inputs_like:
+        give_inputs(current, replies, project, args.inputs_like)
 
     size = {**document["resolution"], "fps": document["fps"]}
     records = {m["id"]: m for m in media_records(document) if m.get("id")}
@@ -437,6 +486,7 @@ def main():
     rec.add_argument("--name", help="project name shown in the demo")
     rec.add_argument("--leave-out", action="append", default=[], metavar="CLIP", help="remove a clip by name")
     rec.add_argument("--move-to-end", action="append", default=[], metavar="CLIP", help="append a clip to V1")
+    rec.add_argument("--inputs-like", metavar="CLIP", help="give shots without inputs the inputs of this clip")
     rec.add_argument("--close-gaps", action="store_true", help="remove every gap and hear the shots' own audio")
     rec.add_argument("--video-width", type=int, default=960)
     rec.add_argument("--keep-video", action="store_true", help="copy video without re-encoding")
