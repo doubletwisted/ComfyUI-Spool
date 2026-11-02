@@ -9,6 +9,8 @@ All notable changes to Spool are recorded here. Versions follow
 
 - The mouse wheel zooms the timeline around the pointer, without Ctrl, and zooms
   out past the end of the edit. Shift+wheel pans; Alt+wheel scrolls the tracks.
+- Adding, removing or trimming clips no longer changes the timeline's zoom; clips
+  stay the same size on screen. During a clip drag the wheel scrolls the tracks.
 
 ## 0.1.0 (2026-10-30)
 
