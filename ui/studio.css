@@ -2175,21 +2175,6 @@ input[type='range'] {
 .music-clip .trim-handle {
   width: 8px;
 }
-.music-empty {
-  position: absolute;
-  inset: 5px 12px;
-  border: 1px dashed #315044;
-  border-radius: 4px;
-  background: transparent;
-  color: #75978a;
-  text-align: left;
-  font-size: 10px;
-  padding: 0 12px;
-}
-.music-empty:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
 .inspector-tabs {
   display: flex;
   border: 1px solid var(--line);
@@ -7428,14 +7413,6 @@ input[type='range'] {
 }
 .full-editor .audio-clip.no-audio .no-audio-label {
   color: var(--faint);
-}
-.full-editor .music-empty {
-  border-color: var(--line2);
-  color: var(--faint);
-}
-.full-editor .music-empty:hover {
-  border-color: var(--dim);
-  color: var(--text);
 }
 /* A narrow viewer drops the duration readout and shortens the preview menu so the transport never overlaps. */
 .full-editor .viewer {

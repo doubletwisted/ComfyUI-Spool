@@ -180,11 +180,7 @@ export function createAudioEditor({
             ? startFadeDrag(e, n.dataset.linkedAudio, false)
             : startClipDrag(e, n.dataset.linkedAudio);
       });
-    draw(
-      'musicLane',
-      independent('music') ||
-        '<button class="music-empty" id="musicEmpty">+ Add audio - or drop an audio or video file here</button>',
-    );
+    draw('musicLane', independent('music'));
     for (const lane of ['audioLane', 'musicLane'])
       $(lane)
         .querySelectorAll('[data-audio]')
@@ -200,7 +196,6 @@ export function createAudioEditor({
             }
           };
         });
-    if ($('musicEmpty')) $('musicEmpty').onclick = () => $('audioFiles').click();
     syncTimelineSelection();
     if (refresh) refreshGestureHints();
   }
