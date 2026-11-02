@@ -248,6 +248,12 @@ class QueueOperationTests(unittest.TestCase):
             )[0]
         bake.assert_called_once_with(take["media"], 0, 141, 24, "video", None, True)
         self.assertEqual(request["finishes"], "draft-take")
+        # A link to the selected take cannot replace the draft being finished.
+        linked = copy.deepcopy(project)
+        linked["document"]["clips"][0]["shotInputs"] = [{"key": "draftFile/file", "source": "selected"}]
+        with patch.object(self.media, "bake_shot", return_value={"file": "baked.mp4"}) as bake:
+            requests.prepare(self.store, self.media, linked, [{"clipId": "shot", "count": 1, "finish": "draft-take"}])
+        bake.assert_called_once_with(take["media"], 0, 141, 24, "video", None, True)
         self.assertNotIn("quality", request)
         self.assertIn("baked.mp4", [a["source"] for a in request["assets"]])
         for item in (

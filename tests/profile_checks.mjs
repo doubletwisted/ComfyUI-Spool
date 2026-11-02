@@ -586,6 +586,10 @@ check(
     applied.shotInputs.some(s => s.key === 'source5'),
 );
 check('Duration respects the target node maximum', applied.inputValues.seconds === 10);
+applied = target();
+applied.bindings.find(b => b.key === 'source4').draft = true;
+matchClipInputs(applied, videoSource, recipe, defs, 24);
+check('The hidden draft input is never linked to the shot', !applied.shotInputs.some(s => s.key === 'source4'));
 const placeholder = structuredClone(source);
 placeholder.takes[0].placeholder = true;
 applied = target();

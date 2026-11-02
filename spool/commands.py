@@ -374,6 +374,11 @@ def execute(store, media, project_id, data):
         # Resolve replay before preparing inputs or consulting a possibly changed take.
         if store.operation(identity, project_id, data) is not None:
             return operations.use_take(store, project_id, revision, clip_id, arguments["takeId"], command=data)
+        clip = store.clip(project_id, clip_id)
+        take = next((t for t in clip["takes"] if t["id"] == arguments["takeId"]), None)
+        if take and operations.keeps_recipe(clip, take, store.recipe(project_id, clip.get("workflowVersion"))):
+            action = "choose_take"
+    if action == "use_take":
         capture = arguments["capture"]
         if capture is None:
             from . import take_workflow

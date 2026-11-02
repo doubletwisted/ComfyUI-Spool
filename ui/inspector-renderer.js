@@ -162,6 +162,7 @@ export function createInspectorRenderer({
       getNativeRecipes()[c.workflowVersion],
       definitionsFor(c),
       embedded,
+      getState().cast,
     );
     const workflowLabel = c.generationBase
       ? 'Workflow from take'

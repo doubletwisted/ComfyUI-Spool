@@ -1,4 +1,5 @@
 import * as T from './timeline.js';
+import { canDraft } from './generation.js';
 
 // Live getters and narrow actions keep this owner independent of editor initialization.
 export function createClipTools({
@@ -59,9 +60,10 @@ export function createClipTools({
     const c = getState().clips.find(c => c.id === clipId),
       t = c && T.realTakes(c).find(t => t.id === id);
     if (!t) return;
-    // A directed clip's take came from its own recipe; using it keeps that recipe and the
-    // links to the clips beside it instead of capturing the take's frozen inputs.
-    if (c.direction && t.generated && t.summary?.workflowVersion === c.workflowVersion) {
+    // A directed clip's take, or a draft or final, came from the clip's own recipe; using it keeps
+    // that recipe, the links to the clips beside it and the final resolution instead of capturing
+    // the take's frozen inputs. Mirrored by spool/operations.py:keeps_recipe.
+    if ((c.direction || canDraft(c)) && t.generated && t.summary?.workflowVersion === c.workflowVersion) {
       edits.apply('Use take', () => {
         T.chooseTake(getState(), clipId, id);
       });

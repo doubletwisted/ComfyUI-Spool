@@ -295,7 +295,10 @@ def prepare(store, media, project, items, freeze=True):
             for binding in bindings:
                 if binding.get("asset"):
                     values.setdefault(binding["key"], capture["prompt"][binding["nodeId"]]["inputs"][binding["input"]])
-            values, settings = compact_groups(bindings, values, item.get("shotInputs", clip.get("shotInputs", [])))
+            settings = item.get("shotInputs", clip.get("shotInputs", []))
+            if drafting:
+                settings = [s for s in settings if s.get("key") != drafting["key"]]
+            values, settings = compact_groups(bindings, values, settings)
             positive = next((b for b in bindings if b.get("role") == "positive"), None)
             values, cast_mentions = cast.resolve(
                 project["document"].get("cast", []),

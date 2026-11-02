@@ -10,6 +10,7 @@ import {
 import { isExactInt } from './wire.js';
 import { builtinInputs, controlnetInputs, dynamicSchema } from './builtin-workflows.js';
 import { inputProblem } from './input-groups.js';
+import { resolveMentions } from './cast.js';
 
 export function matchClipInputs(target, source, recipe, definitions, fps) {
   const take = source.takes.find(t => t.id === source.takeId);
@@ -27,6 +28,8 @@ export function matchClipInputs(target, source, recipe, definitions, fps) {
       schema =
         inputSchema(definitions, node.class_type, b.input) || dynamicSchema(definition?.input, b.input, node.inputs),
       options = b.options || (Array.isArray(schema?.[0]) ? schema[0] : schema?.[1]?.options);
+    // The draft input only carries the take Make final refines.
+    if (b.asset && b.draft) continue;
     if (b.asset) {
       const image =
           ['image', 'firstFrame', 'lastFrame', 'reference'].includes(b.slot) && ['image', 'video'].includes(media.kind),
@@ -95,7 +98,7 @@ export function matchClipInputs(target, source, recipe, definitions, fps) {
   if (settings.length) target.shotInputs = settings;
 }
 
-export function workflowStatus(clip, workflow, recipe, definitions = {}, embedded = false) {
+export function workflowStatus(clip, workflow, recipe, definitions = {}, embedded = false, cast = []) {
   const name =
     recipe?.provenance?.workflowName ||
     workflow?.name ||
@@ -115,7 +118,11 @@ export function workflowStatus(clip, workflow, recipe, definitions = {}, embedde
             : clip.inputValues?.[b.key],
         ]),
     );
-  const missing = recipe && inputProblem(clip.bindings || [], values, clip.shotInputs || [], recipe.inputRules);
+  // `@Name` mentions fill empty reference inputs when the request is frozen (spool/cast.py).
+  const resolved =
+    recipe &&
+    resolveMentions(cast, clip.bindings || [], { ...clip.inputValues, ...values }, clip.shotInputs || []).values;
+  const missing = recipe && inputProblem(clip.bindings || [], resolved, clip.shotInputs || [], recipe.inputRules);
   const reason =
     clip?.generationBase && clip.generationBase.takeId !== clip.takeId
       ? 'Use the take again to update generation settings.'

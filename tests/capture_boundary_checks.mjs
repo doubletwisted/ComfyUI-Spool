@@ -405,6 +405,23 @@ check(
   'Captured workflow readiness does not depend on a library row',
   ready.ready && ready.name === 'CPU image noise' && ready.note === 'Ready to generate',
 );
+const castClip = {
+  workflowVersion: 'saved',
+  bindings: [
+    { key: 'load/image', nodeId: 'load', input: 'image', asset: true, slot: 'reference', label: 'Reference' },
+    { key: 'text/value', nodeId: 'text', input: 'value', role: 'positive' },
+  ],
+  inputValues: { 'load/image': '', 'text/value': '@Mara walks in.' },
+};
+const castRecipe = {
+  ...capture(),
+  prompt: { ...capture().prompt, text: { class_type: 'PrimitiveString', inputs: { value: '' } } },
+};
+check(
+  'A cast mention fills an empty reference before the studio calls it missing',
+  !!workflowStatus(castClip, null, castRecipe).reason &&
+    workflowStatus(castClip, null, castRecipe, {}, false, [{ id: 'm', name: 'Mara', images: ['mara.png'] }]).ready,
+);
 check(
   'Missing recipe has an actionable persistent reason',
   !!workflowStatus({ workflowVersion: 'missing' }, null, null).reason,

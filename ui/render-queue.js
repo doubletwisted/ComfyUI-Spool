@@ -668,7 +668,7 @@ export function createRenderQueue({
   function queueReason(c) {
     const recipe = getNativeRecipes()[c?.workflowVersion];
     return (
-      workflowStatus(c, workflows[c?.workflow], recipe, definitionsFor(c)).reason ||
+      workflowStatus(c, workflows[c?.workflow], recipe, definitionsFor(c), false, getState().cast).reason ||
       (c?.executionTarget === 'deadline' &&
       !G.hasDeadlineLauncher(recipe) &&
       productCapabilities.deadlineExecution !== true

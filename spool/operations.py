@@ -34,6 +34,16 @@ def fit_to_take(document, clip, frames):
         tails[str(track)] = tails.get(str(track), 0) + length - new_length
 
 
+def keeps_recipe(clip, take, capture):
+    """Whether Use take only chooses this take, as ui/clip-tools.js decides: a directed clip's
+    take, or a draft or final, made with the clip's own recipe keeps that recipe and its links."""
+    made_with = (take.get("summary") or take.get("request") or {}).get("workflowVersion")
+    drafting = any(b.get("draft") for b in (capture or {}).get("bindings", []))
+    return bool(
+        (clip.get("direction") or drafting) and take.get("generated") and made_with == clip.get("workflowVersion")
+    )
+
+
 def directed_in(clip, take):
     """Where a directed clip's take starts, as ui/timeline.js:directedIn decides. Its own
     takes repeat the anchored frames of the clips beside it, so they start after them;

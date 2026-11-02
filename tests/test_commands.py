@@ -462,6 +462,18 @@ class CommandTests(unittest.TestCase):
                 operations.choose_take(document, clip, take["id"], take["frames"], {**take, **request})
                 self.assertEqual(clip["in"], case["in"])
 
+    def test_use_take_only_chooses_a_clips_own_directed_or_draft_take(self):
+        own = {"generated": True, "summary": {"workflowVersion": "v2"}}
+        directed = {"workflowVersion": "v2", "direction": {"kind": "extend", "head": 22}}
+        self.assertTrue(operations.keeps_recipe(directed, own, {"bindings": []}))
+        self.assertTrue(
+            operations.keeps_recipe(directed, {"generated": True, "request": {"workflowVersion": "v2"}}, {})
+        )
+        self.assertFalse(operations.keeps_recipe(directed, {**own, "summary": {"workflowVersion": "v1"}}, {}))
+        self.assertFalse(operations.keeps_recipe(directed, {"generated": False}, {}))
+        self.assertFalse(operations.keeps_recipe({"workflowVersion": "v2"}, own, {"bindings": []}))
+        self.assertTrue(operations.keeps_recipe({"workflowVersion": "v2"}, own, {"bindings": [{"draft": True}]}))
+
     def test_apply_workflow_resets_target_seed_and_take_setup_like_the_library(self):
         document = self.project["document"]
         version = document["clips"][0]["workflowVersion"]
