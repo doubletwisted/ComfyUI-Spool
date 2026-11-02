@@ -71,7 +71,11 @@ whether the take holds:
 - Give the move time: about 4 seconds for a turn and a reveal, 3 for a small
   change of framing.
 
-If a take still cuts, make another take or say more about the path. Under the
+Even with a good path, MiniMax H3 often holds the take until the last moment and
+then jumps into the opening footage of the next shot. Which takes hold depends on
+the seed more than on the wording, so generate three or four takes (the **Takes**
+field beside Generate) and use the one that holds. In our tests on shots that
+connect, about one take in three held. Under the
 field are a few suggestions (camera move, match the motion, push through, whip
 pan, morph); each adds its wording to the field, where you can edit it.
 
