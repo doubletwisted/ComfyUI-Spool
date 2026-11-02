@@ -395,6 +395,11 @@ def record(args):
             shrink(target, args.video_width)
         print(f"Media {index}/{len(found)}: {relative} {target.stat().st_size // 1024} KiB", flush=True)
 
+    short = short_videos(current["document"], replies, project, media_root)
+    for line in short:
+        print("Video shorter than its take:", line, file=sys.stderr)
+    if short:
+        raise SystemExit("Recorded videos are cut short; rebuild them on the host and record again")
     record_static(host, current, replies, data / "static")
     (data / "api" / "replies.json").write_text(json.dumps(replies, separators=(",", ":")), encoding="utf-8")
     manifest = {
@@ -486,6 +491,34 @@ def small_poster(body, width=320):
         out = io.BytesIO()
         frames[0].save(out, "WEBP", save_all=True, append_images=frames[1:], duration=durations, loop=0, quality=55)
         return out.getvalue() if out.tell() < len(body) else body
+
+
+def short_videos(document, replies, project, media_root):
+    """Takes whose review or playback copy in the data has fewer frames than the
+    take: a damaged source survives re-encoding as a shorter, clean video."""
+    found = []
+    for clip in document["clips"]:
+        for take in clip.get("takes", []):
+            media = take.get("media") or {}
+            if media.get("kind") != "video" or not media.get("frames"):
+                continue
+            preview = replies.get(key("POST", f"projects/{project}/media/{urllib.parse.quote(media['id'])}/preview"))
+            for relative in {media.get("file"), (preview or {}).get("file")} - {None}:
+                path = media_root / relative
+                if not path.is_file():
+                    continue
+                probe = subprocess.run(
+                    ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets"]
+                    + ["-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", str(path)],
+                    capture_output=True,
+                    text=True,
+                )
+                frames = int(probe.stdout.strip() or 0) if probe.stdout.strip().isdigit() else 0
+                if frames < media["frames"]:
+                    found.append(
+                        f"{clip['name']} take {take.get('number')}: {relative} has {frames} of {media['frames']} frames"
+                    )
+    return found
 
 
 def shrink(path, width):
