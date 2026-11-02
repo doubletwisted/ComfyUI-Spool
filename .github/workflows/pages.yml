@@ -1,0 +1,60 @@
+name: Online demo
+
+# Builds the studio at this commit over the recorded demo project and deploys it
+# to GitHub Pages. The project's replies and media are not in the repository:
+# they are `spool-demo-data.zip` on the `demo-data` release, made by
+# `pages/build.py record` (see docs/dev/demo.md). Runs for each Spool release and
+# by hand after the data changes.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build the demo
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Download the demo project
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download demo-data --pattern spool-demo-data.zip --dir "$RUNNER_TEMP"
+          unzip -q "$RUNNER_TEMP/spool-demo-data.zip" -d "$RUNNER_TEMP/demo-data"
+      - name: Assemble the site
+        run: |
+          base="/${{ github.event.repository.name }}/demo/"
+          python pages/build.py assemble --data "$RUNNER_TEMP/demo-data" --out "$RUNNER_TEMP/site/demo" --base "$base"
+          cp pages/index.html "$RUNNER_TEMP/site/index.html"
+          touch "$RUNNER_TEMP/site/.nojekyll"
+      - name: Check that the studio loads
+        run: python pages/smoke.py --site "$RUNNER_TEMP/site/demo" --base "/${{ github.event.repository.name }}/demo/"
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}demo/
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

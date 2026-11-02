@@ -1,0 +1,171 @@
+// The online demo's backend. It answers the studio's /spool/api requests inside
+// the page: recorded replies for reads, an in-memory project for edits, and a
+// plain "not in the demo" reply for everything that needs Spool on a computer
+// (generation, Comfy, import, export, files). Reloading resets the project.
+// Loaded as a classic script before the studio, so the studio's own fetch calls
+// reach it. See docs/dev/demo.md.
+(() => {
+  const { base, project: projectId, studio = base + 'spool/ui/' } = window.SPOOL_DEMO;
+  const API = base + 'spool/api/';
+  const PROJECT = 'projects/' + projectId;
+  const MESSAGE =
+    'Not in the online demo: this needs Spool running with ComfyUI. Install it from github.com/doubletwisted/ComfyUI-Spool.';
+  const originalFetch = window.fetch.bind(window);
+  const copy = value => structuredClone(value);
+  let replies = {},
+    project = null,
+    tokens = 0;
+
+  const loaded = originalFetch(base + 'replies.json')
+    .then(reply => {
+      if (!reply.ok) throw Error('Demo project unavailable (' + reply.status + ')');
+      return reply.json();
+    })
+    .then(value => {
+      replies = value;
+      project = copy(value['GET ' + PROJECT]);
+      project.syncToken = 'demo-' + tokens++;
+    });
+
+  const reply = (status, value) =>
+    new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
+  // Declined requests are listed on the page, so the smoke check can tell when the
+  // studio starts asking for something the demo does not answer.
+  const declinedRequests = new Set();
+  function declined(method, path) {
+    declinedRequests.add(method + ' ' + path.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, '{id}'));
+    if (document.body) document.body.dataset.demoDeclined = [...declinedRequests].join(', ');
+    return reply(403, { error: MESSAGE, code: 'demo_unavailable' });
+  }
+  const conflict = () =>
+    reply(409, { error: 'This project changed. Reload to see it.', code: 'revision_conflict', current: copy(project) });
+  function recorded(method, path) {
+    const value = replies[method + ' ' + path];
+    if (value === undefined) return null;
+    return value && value.__demoStatus ? reply(value.__demoStatus, value.body) : reply(200, value);
+  }
+  function changed() {
+    project.revision++;
+    project.syncToken = 'demo-' + tokens++;
+  }
+
+  // Delete takes as the host does: never the take in the edit, then record the
+  // deletion so the takes stay gone. Nothing is on disk to remove.
+  function deleteTakes(clipId, body) {
+    const clip = project.document.clips.find(c => c.id === clipId),
+      ids = body.takeIds;
+    if (!clip || !Array.isArray(ids) || !ids.length) return reply(400, { error: 'Select the takes to delete' });
+    const hidden = new Set(clip.hiddenTakeIds || []);
+    const available = new Map(clip.takes.filter(t => !t.placeholder && !hidden.has(t.id)).map(t => [t.id, t]));
+    if (!ids.every(id => available.has(id)))
+      return reply(400, { error: 'Some selected takes are no longer available' });
+    if (ids.includes(clip.takeId))
+      return reply(400, { error: 'The take in the edit is kept. Choose another take before deleting it.' });
+    const document = project.document;
+    document.deletedTakeIds = [...new Set([...(document.deletedTakeIds || []), ...ids])].sort();
+    document.deletedMediaIds = [
+      ...new Set([...(document.deletedMediaIds || []), ...ids.map(id => available.get(id).media?.id).filter(Boolean)]),
+    ].sort();
+    clip.takes = clip.takes.filter(t => !ids.includes(t.id));
+    changed();
+    return reply(200, { project: copy(project), deleted: ids, pendingFiles: 0 });
+  }
+
+  // Use take as Store.capture does it: put the take in the edit with the studio's
+  // own refit, then adopt the setup read from the take (or clear it). The host
+  // also freezes input files and writes sidecars; the demo has none.
+  async function useTake(clipId, body) {
+    const timeline = await import(studio + 'timeline.js');
+    const clip = project.document.clips.find(c => c.id === clipId),
+      { takeId, capture } = body;
+    if (!clip) return reply(404, { error: 'Clip not found' });
+    const take = clip.takes.find(t => t.id === takeId && !t.placeholder);
+    if (!take || ((clip.hiddenTakeIds || []).includes(takeId) && takeId !== clip.takeId))
+      return reply(400, { error: 'This take is no longer available for the shot' });
+    const takeBase = capture?.provenance?.takeBase;
+    if (capture && takeBase?.takeId !== takeId)
+      return reply(400, { error: 'Generation setup must belong to the chosen take' });
+    timeline.chooseTake(project.document, clipId, takeId);
+    clip.generationBase = takeBase || { takeId, source: 'No executable metadata' };
+    for (const field of ['workflow', 'shotInputs', 'seedKey']) delete clip[field];
+    clip.seedMode = 'same';
+    if (capture) {
+      const version = crypto.randomUUID();
+      clip.workflowVersion = version;
+      clip.bindings = capture.bindings || [];
+      clip.inputValues = Object.fromEntries(clip.bindings.map(b => [b.key, capture.prompt[b.nodeId].inputs[b.input]]));
+      project.recipes = { ...project.recipes, [version]: capture };
+    } else {
+      delete clip.workflowVersion;
+      clip.bindings = [];
+      clip.inputValues = {};
+    }
+    clip.revision = (clip.revision || 0) + 1;
+    changed();
+    return reply(200, copy(project));
+  }
+
+  async function answer(method, path, body, headers) {
+    await loaded;
+    if (method === 'GET' && path === 'projects')
+      return reply(200, [{ id: projectId, revision: project.revision, name: project.document.project, folder: '' }]);
+    if (method === 'GET' && path === PROJECT) {
+      // Unchanged since the studio's last read: only job progress, as the host replies.
+      if (headers.get('X-Spool-Since') === project.syncToken)
+        return reply(200, {
+          revision: project.revision,
+          syncToken: project.syncToken,
+          jobs: project.document.jobs || [],
+        });
+      return reply(200, copy(project));
+    }
+    if (method === 'PUT' && path === PROJECT) {
+      const value = JSON.parse(body);
+      if (value.revision !== project.revision) return conflict();
+      // The studio leaves out jobs, which the host owns and adds back to every reply.
+      project.document = { ...value.document, jobs: project.document.jobs };
+      changed();
+      return reply(200, copy(project));
+    }
+    if (method === 'POST' && path.startsWith(PROJECT + '/focus/')) return reply(200, { ok: true });
+    const deletion = method === 'POST' && path.match(/^projects\/[^/]+\/delete-takes\/([^/]+)$/);
+    if (deletion) {
+      const value = JSON.parse(body);
+      if (value.revision !== project.revision) return conflict();
+      return deleteTakes(decodeURIComponent(deletion[1]), value);
+    }
+    const use = method === 'POST' && path.match(/^projects\/[^/]+\/use-take\/([^/]+)$/);
+    if (use) {
+      const value = JSON.parse(body);
+      if (value.revision !== project.revision) return conflict();
+      return useTake(decodeURIComponent(use[1]), value);
+    }
+    const version = method === 'GET' && path.match(/^workflows\/([^/]+)$/);
+    if (version && project.recipes?.[decodeURIComponent(version[1])])
+      return reply(200, project.recipes[decodeURIComponent(version[1])]);
+    // Recorded reads, and playback copies whose size the recording already chose.
+    if (method === 'GET' || (method === 'POST' && path.endsWith('/preview')))
+      return recorded(method, path) || declined(method, path);
+    return declined(method, path);
+  }
+
+  window.fetch = (input, init = {}) => {
+    const address = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.href);
+    if (address.origin !== location.origin || !address.pathname.startsWith(API)) return originalFetch(input, init);
+    const method = (init.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    return answer(method, address.pathname.slice(API.length), init.body, new Headers(init.headers));
+  };
+
+  function banner() {
+    const bar = document.createElement('div');
+    bar.id = 'spool-demo-banner';
+    bar.setAttribute('role', 'note');
+    bar.innerHTML =
+      '<strong>Spool online demo</strong><span>Edits reset when you reload. Generating takes needs ComfyUI.</span>' +
+      '<a href="https://github.com/doubletwisted/ComfyUI-Spool" target="_blank" rel="noopener">Install Spool</a>';
+    document.body.prepend(bar);
+    document.body.classList.add('spool-demo');
+  }
+  if (document.body) banner();
+  else document.addEventListener('DOMContentLoaded', banner, { once: true });
+})();

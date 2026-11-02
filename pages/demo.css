@@ -1,0 +1,39 @@
+/* The online demo's banner, above the unchanged studio. */
+body.spool-demo {
+  --demo-banner: 30px;
+}
+#spool-demo-banner {
+  height: var(--demo-banner);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  overflow: hidden;
+  white-space: nowrap;
+  background: #1b2a2d;
+  border-bottom: 1px solid #2c4246;
+  color: #cfe6ea;
+  font:
+    12px Inter,
+    'Segoe UI',
+    system-ui,
+    sans-serif;
+}
+#spool-demo-banner span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #9fbcc1;
+}
+#spool-demo-banner a {
+  margin-left: auto;
+  color: #62d0e0;
+  font-weight: 600;
+  text-decoration: none;
+}
+#spool-demo-banner a:hover {
+  text-decoration: underline;
+}
+body.spool-demo .editor {
+  height: calc(100vh - var(--demo-banner));
+}
