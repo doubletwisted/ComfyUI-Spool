@@ -3186,11 +3186,11 @@ async function startEditor(isFailed) {
   );
   interruptions.on(() => endTrackResize(true));
   // The wheel zooms around the pointer. Shift+wheel and sideways scrolling pan, Alt+wheel
-  // scrolls the tracks, and a middle-button drag pans.
+  // scrolls the tracks, and a middle-button drag pans. During a drag the wheel scrolls the tracks.
   $('timelineScroll').addEventListener(
     'wheel',
     e => {
-      if (e.shiftKey || !e.deltaY || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (pointerBusy() || e.shiftKey || !e.deltaY || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       e.preventDefault();
       e.stopPropagation();
       const sc = $('timelineScroll'),
