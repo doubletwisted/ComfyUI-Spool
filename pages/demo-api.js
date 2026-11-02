@@ -27,14 +27,17 @@
       project = copy(value['GET ' + PROJECT]);
       project.syncToken = 'demo-' + tokens++;
       // Generated takes live outside the document on the host, as attempts: a save
-      // leaves them out and every reply attaches them again (ledger.attach).
-      const seen = new Set();
+      // leaves them out and every reply attaches them again (ledger.attach). The
+      // recording does not name the clip that rendered a take, so every clip that
+      // held it then counts as its owner.
+      const byTake = new Map();
       for (const clip of project.document.clips)
         for (const take of clip.takes)
-          if (take.generated && !seen.has(take.id)) {
-            seen.add(take.id);
-            generated.push({ takeId: take.id, clipId: clip.id, take: copy(take) });
+          if (take.generated) {
+            if (!byTake.has(take.id)) byTake.set(take.id, { takeId: take.id, clipIds: new Set(), take: copy(take) });
+            byTake.get(take.id).clipIds.add(clip.id);
           }
+      generated = [...byTake.values()];
     });
 
   const reply = (status, value) =>
@@ -62,9 +65,9 @@
   // ledger.owns: the clip a generated take belongs to, after splits and copies.
   const owns = (clip, a) =>
     (clip.takeSourceTakeIds || []).includes(a.takeId) ||
-    clip.id === a.clipId ||
-    (clip.takeSourceIds || []).includes(a.clipId) ||
-    clip.takeOwnerId === a.clipId ||
+    a.clipIds.has(clip.id) ||
+    (clip.takeSourceIds || []).some(id => a.clipIds.has(id)) ||
+    a.clipIds.has(clip.takeOwnerId) ||
     clip.takeId === a.takeId;
   function attach(document) {
     const deleted = new Set(document.deletedTakeIds || []);

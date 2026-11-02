@@ -32,6 +32,24 @@ const project = {
         takeId: 'g',
         takes: [take('d'), { ...take('g'), generated: true }],
       },
+      // A split half recorded before its original: both own the generated take k.
+      {
+        id: 'clip-5',
+        videoTrack: 3,
+        in: 0,
+        out: 48,
+        takeSourceIds: ['clip-4'],
+        takeId: 'k',
+        takes: [{ ...take('k'), generated: true }],
+      },
+      {
+        id: 'clip-4',
+        videoTrack: 3,
+        in: 0,
+        out: 48,
+        takeId: 'e',
+        takes: [take('e'), { ...take('k'), generated: true }],
+      },
     ],
   },
 };
@@ -75,12 +93,16 @@ const send = (method, path, value, headers) => api(path, { method, body: JSON.st
   delete document.jobs;
   document.clips[0].out = 40;
   // The studio saves the authored edit, without generated takes (ledger.authored).
-  document.clips[1].takes = document.clips[1].takes.filter(t => !t.generated);
+  for (const clip of document.clips) clip.takes = clip.takes.filter(t => !t.generated);
   const [status, saved] = await send('PUT', 'projects/' + ID, { revision: 5, document });
   check('A save raises the revision', status === 200 && saved.revision === 6 && saved.document.clips[0].out === 40);
   check('A save keeps the jobs the host owns', saved.document.jobs.length === 1);
   const generatedTakes = saved.document.clips[1].takes.filter(t => t.generated);
   check('A save attaches the generated takes', generatedTakes.length === 1 && generatedTakes[0].id === 'g');
+  check(
+    'A generated take stays on every clip that held it',
+    saved.document.clips.find(c => c.id === 'clip-4').takes.some(t => t.id === 'k'),
+  );
   check('A stale save conflicts', (await send('PUT', 'projects/' + ID, { revision: 5, document }))[0] === 409);
 }
 {
@@ -126,7 +148,7 @@ const send = (method, path, value, headers) => api(path, { method, body: JSON.st
   const [, saved] = await send('PUT', 'projects/' + ID, { revision: current.revision, document });
   check(
     'A split half gets the generated takes',
-    saved.document.clips[2].takes.some(t => t.id === 'g'),
+    saved.document.clips.find(c => c.id === 'clip-3').takes.some(t => t.id === 'g'),
   );
   const [status, setup] = await api('projects/' + ID + '/take-workflow/clip-3/d');
   check('A split half reads the recorded setup of its take', status === 200 && Array.isArray(setup.bindings));
