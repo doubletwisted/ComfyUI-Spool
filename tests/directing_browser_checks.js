@@ -138,24 +138,18 @@
   );
   check('Only one set of prompt tools is shown', $('inspectorContent').querySelectorAll('.prompt-tools').length === 1);
 
-  // Retake splits a shot and renders a new middle between its frames.
-  const before = clips().length;
+  // A shot offers only the tools that keep its footage: Extend and Recast.
   n.selectClip('shot-a');
+  await wait('directing tools', () => $('inspectorContent').querySelector('[data-direct-tool]'));
+  check(
+    'A video shot offers Extend and Recast only',
+    JSON.stringify([...$('inspectorContent').querySelectorAll('[data-direct-tool]')].map(b => b.dataset.directTool)) ===
+      '["extend","recast"]',
+  );
+  const closedBefore = $('modalOverlay').hidden;
   press('r');
-  await wait('retake dialog', () => $('retakeRange'));
-  $('directAdd').click();
-  await wait('retake', () => find('retake'));
-  const retake = find('retake');
-  check(
-    'Retake splits the shot into three and links the middle to both sides',
-    clips().length === before + 2 &&
-      JSON.stringify(retake.shotInputs.map(s => s.source)) === '["previous","next"]' &&
-      retake.takes.some(t => !t.placeholder),
-  );
-  check(
-    'The retake remembers where its own takes and the original footage start',
-    retake.direction.head === anchored && retake.direction.sourceIn === retake.in,
-  );
+  await new Promise(resolve => setTimeout(resolve, 150));
+  check('R opens no directing dialog', closedBefore && $('modalOverlay').hidden);
 
   // Drafts exist only for a workflow that can refine a draft into its final.
   check('A workflow that cannot finish drafts offers no Draft', $('draftToggle').hidden);

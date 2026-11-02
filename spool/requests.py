@@ -328,7 +328,7 @@ def prepare(store, media, project, items, freeze=True):
                     continue
                 owner, frame = clip, setting.get("frame")
                 if source in ("previous", "next"):
-                    # Transitions, extensions and retakes read the clip beside them when queued,
+                    # Transitions and extensions read the clip beside them when queued,
                     # so they follow the edit: a new take, trim or order on the neighbour counts.
                     owner = neighbor(project["document"], clip, source)
                     if owner is None:

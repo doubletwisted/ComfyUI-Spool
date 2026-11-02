@@ -92,11 +92,7 @@ async function startEditor(isFailed) {
     warning: '<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.3"/>',
     transition: '<path d="M3 5v14l9-7zM21 5v14l-9-7z"/>',
     extend: '<path d="M3 5h8v14H3zM14 12h7M18 8l4 4-4 4"/>',
-    retake: '<path d="M3 5h18v14H3zM9 5v14M15 5v14"/><path d="m10.5 10 3 2-3 2z" fill="currentColor"/>',
     recast: '<circle cx="8" cy="8" r="3"/><path d="M3 20a5 5 0 0 1 10 0M16 4l3 3-3 3M19 7h-4M16 14l3 3-3 3M19 17h-4"/>',
-    reangle: '<path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/>',
-    effect:
-      '<path d="m12 3 1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
     cast: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14a5 5 0 0 1 6.5 5"/>',
   };
   let diagnosticsTimer = 0;
@@ -2579,14 +2575,13 @@ async function startEditor(isFailed) {
       $('snap').click();
       return;
     }
-    if (['t', 'e', 'r'].includes(key) && !e.shiftKey && !e.repeat) {
+    if (['t', 'e'].includes(key) && !e.shiftKey && !e.repeat) {
       e.preventDefault();
       e.stopPropagation();
       const c = selectedAudio() ? null : selected();
       if (key === 't') directing.transitionAtPlayhead(c ? T.videoTrack(c) : activeVideoTrack);
       else if (!c) toast('Select a shot first.');
-      else if (key === 'e') directing.extendDialog(c.id);
-      else directing.retakeDialog(c.id);
+      else directing.extendDialog(c.id);
       return;
     }
     if (

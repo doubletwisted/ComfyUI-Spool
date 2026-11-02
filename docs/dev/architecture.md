@@ -241,7 +241,7 @@ Comfy templates without touching the user's graph.
 
 ## Directing tools
 
-Transitions, extensions, retakes and reworks are ordinary clips with built-in
+Transitions, extensions and recasts are ordinary clips with built-in
 workflows, so execution, takes and Edit in Comfy need no new paths. What they add
 is resolved when a request is frozen, never stored as baked files: neighbour inputs
 read the clips beside the shot, cast mentions fill reference inputs, and draft

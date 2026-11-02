@@ -1,4 +1,4 @@
-// Directing tools: transitions, extensions, retakes and reworks of a shot.
+// Directing tools: transitions, extensions and recasts.
 // Pure data and rules; ui/directing.js owns the dialogs and edits.
 import { tag } from './cast.js';
 
@@ -33,38 +33,10 @@ export const TRANSITIONS = [
   { id: 'morph', name: 'Morph', prompt: 'The first scene reshapes into the second without a cut.' },
 ];
 
-/** @type {Suggestion[]} */
-export const ANGLES = [
-  { id: 'low', name: 'Low angle', prompt: 'a low angle close to the ground, looking up' },
-  { id: 'high', name: 'High angle', prompt: 'a high angle, looking down from above' },
-  { id: 'close', name: 'Close-up', prompt: 'a tight close-up on the main subject' },
-  { id: 'wide', name: 'Wide', prompt: 'a wide shot that shows the whole scene' },
-  { id: 'side', name: 'Side', prompt: 'the side, ninety degrees from the original camera' },
-  { id: 'over-shoulder', name: 'Over the shoulder', prompt: 'over the shoulder of the main subject' },
-];
-
-/** @type {Suggestion[]} */
-export const EFFECTS = [
-  { id: 'rain', name: 'Rain', prompt: 'heavy rain falls through the scene and the surfaces are wet' },
-  { id: 'snow', name: 'Snow', prompt: 'soft snow falls through the scene and settles on surfaces' },
-  { id: 'fog', name: 'Fog', prompt: 'thin fog drifts through the scene' },
-  { id: 'night', name: 'Night', prompt: 'it is night, lit by the practical lights in the scene' },
-  { id: 'golden', name: 'Golden hour', prompt: 'low warm evening sunlight with long shadows' },
-];
-
-export const REWORKS = {
-  recast: { name: 'Recast', verb: 'Recast', suggestions: [] },
-  reangle: { name: 'Re-angle', verb: 'Re-angle', suggestions: ANGLES },
-  effect: { name: 'Effect', verb: 'Change', suggestions: EFFECTS },
-};
-
 export const KINDS = {
   transition: { name: 'Transition', icon: 'transition' },
   extend: { name: 'Extension', icon: 'extend' },
-  retake: { name: 'Retake', icon: 'retake' },
   recast: { name: 'Recast', icon: 'recast' },
-  reangle: { name: 'Re-angle', icon: 'reangle' },
-  effect: { name: 'Effect', icon: 'effect' },
 };
 
 /**
@@ -85,10 +57,6 @@ export const WORKFLOWS = {
     { id: 'video_minimax_h3_i2v', label: 'MiniMax H3 · From last frame', target: 'local', min: 2, max: 15 },
     { id: 'api_minimax_h3_max_i2v', label: 'MiniMax H3 Max · Cloud', target: 'cloud', min: 4, max: 15 },
   ],
-  rework: [
-    { id: 'video_minimax_h3_r2v', label: 'MiniMax H3 · Local', target: 'local', min: 2, max: 15 },
-    { id: 'api_minimax_h3_r2v', label: 'MiniMax H3 · Cloud', target: 'cloud', min: 4, max: 15 },
-  ],
   // Recast transfers the shot's motion through pose control, which only runs locally.
   recast: [
     {
@@ -100,10 +68,6 @@ export const WORKFLOWS = {
     },
   ],
 };
-
-/** The workflow list a kind of directed clip chooses from. */
-export const toolFor = kind => (kind === 'recast' ? 'recast' : ['reangle', 'effect'].includes(kind) ? 'rework' : kind);
-WORKFLOWS.retake = WORKFLOWS.transition;
 
 /** The nearest length a workflow accepts, in whole seconds. */
 export function fitSeconds(choice, seconds) {
@@ -236,65 +200,22 @@ export function extendPrompt(sourcePrompt = '', detail = '', { motion = false } 
     .join(' ');
 }
 
-export function retakePrompt(sourcePrompt = '', detail = '', { motion = false } = {}) {
+/** A recast's prompt. MiniMax H3 numbers the character pictures <Picture 1>, <Picture 2>. */
+export function recastPrompt(detail = '', { character = '', pictures = 1, style = 'angle', place = '' } = {}) {
+  const shown = Array.from({ length: Math.max(1, pictures) }, (_, i) => tag(style, 'Image', i + 1)).join(' and ');
+  // A frame of the shot as a reference brings back its old actor, so the place is described in words.
+  const where = String(place || '')
+    .trim()
+    .replace(/[.!?]+$/, '');
   return [
-    motion
-      ? 'Keep the same people, place, lighting and camera. The movement of the opening frames carries on and arrives at the closing frames in one unbroken take.'
-      : 'Use the provided start image as the first frame and the provided end image as the last frame. Keep the same people, place, lighting and camera; join both frames in one continuous motion.',
+    'The character shown in ' +
+      shown +
+      (character ? ' (' + character + ')' : '') +
+      (where ? ' is ' + where + ',' : '') +
+      ' performing exactly the movement of the pose guide.',
+    'The plain background of the character pictures is not part of the scene.',
     sentence(detail),
-    sound,
-    sourcePrompt ? 'Context: ' + sentence(stripFramePhrases(sourcePrompt)) : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-}
-
-/**
- * MiniMax H3 numbers references by type: <Picture i> for images and <Video k> for
- * videos, with a video's soundtrack labelled <Audio j>.
- */
-export function reworkPrompt(
-  kind,
-  change = '',
-  detail = '',
-  { character = '', pictures = 1, style = 'angle', audio = true, place = '' } = {},
-) {
-  const video = tag(style, 'Video', 1),
-    keep = audio ? 'Keep ' + tag(style, 'Audio', 1) + ' exactly as it is.' : '';
-  if (kind === 'recast') {
-    const shown = Array.from({ length: Math.max(1, pictures) }, (_, i) => tag(style, 'Image', i + 1)).join(' and ');
-    // A frame of the shot as a reference brings back its old actor, so the place is described in words.
-    const where = String(place || '')
-      .trim()
-      .replace(/[.!?]+$/, '');
-    return [
-      'The character shown in ' +
-        shown +
-        (character ? ' (' + character + ')' : '') +
-        (where ? ' is ' + where + ',' : '') +
-        ' performing exactly the movement of the pose guide.',
-      'The plain background of the character pictures is not part of the scene.',
-      sentence(detail),
-      'Natural ambient sound.',
-    ]
-      .filter(Boolean)
-      .join(' ');
-  }
-  if (kind === 'reangle')
-    return [
-      'Re-film the exact same moment as ' + video + '.',
-      'New camera: ' + sentence(change || 'a new camera angle'),
-      'Same people, clothing, set, lighting, action and timing; only the camera position changes.',
-      sentence(detail),
-      keep,
-    ]
-      .filter(Boolean)
-      .join(' ');
-  return [
-    'Change ' + video + ': ' + sentence(change || 'the light and weather of the scene'),
-    'Keep everything else in ' + video + ' unchanged: the people, their performance, the camera, framing and timing.',
-    sentence(detail),
-    keep,
+    'Natural ambient sound.',
   ]
     .filter(Boolean)
     .join(' ');

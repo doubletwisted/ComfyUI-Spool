@@ -37,14 +37,11 @@ def fit_to_take(document, clip, frames):
 def directed_in(clip, take):
     """Where a directed clip's take starts, as ui/timeline.js:directedIn decides. Its own
     takes repeat the anchored frames of the clips beside it, so they start after them;
-    a retake's original footage starts where it was cut."""
+    other takes keep the trim."""
     direction = clip.get("direction") or {}
     # The studio sees a take's summary; commands see the attempt's request.
     made_with = (take.get("summary") or take.get("request") or {}).get("workflowVersion")
-    if take.get("generated") and made_with == clip.get("workflowVersion"):
-        head = direction.get("head")
-    else:
-        head = direction.get("sourceIn") if not take.get("generated") else None
+    head = direction.get("head") if take.get("generated") and made_with == clip.get("workflowVersion") else None
     return head if type(head) is int else None
 
 

@@ -1,8 +1,8 @@
 # Directing tools
 
 Directing tools make new shots from the edit itself: a transition between two
-shots, the next moment of a shot, a new middle for part of a shot, or the same
-shot with another actor, camera or effect. Each tool makes an ordinary clip with
+shots, the next moment of a shot, or the same shot with another actor. Each tool
+makes an ordinary clip with
 an ordinary workflow, so its takes, seeds and **Edit in Comfy** work as for any
 other clip. A clip made this way carries a small label on the timeline and a
 card at the top of the inspector that shows what it joins.
@@ -11,16 +11,14 @@ card at the top of the inspector that shows what it joins.
 | --- | --- | --- | --- |
 | Add transition | The button on a cut, or the clip menu | **T** at the nearest cut | MiniMax H3 Continue Between Clips (local), MiniMax H3 First-Last Frame (Cloud) |
 | Extend shot | The clip menu or the inspector | **E** | MiniMax H3 Continue Between Clips or MiniMax H3 Image to Video (local), MiniMax H3 Max Image to Video (Cloud) |
-| Retake part | The clip menu | **R** | The transition workflows |
 | Recast | The clip menu or the inspector, also for several selected clips | – | MiniMax H3 ControlNet Union (local) |
-| Re-angle, Add effect | The clip menu or the inspector, also for several selected clips | – | MiniMax H3 Reference to Video (local or Cloud) |
 
 Every dialog has **Add**, which only changes the edit, and **Add and generate**,
 which also queues one take. Generating never chooses a take for you.
 
 ## Footage from the clips beside a shot
 
-Transitions, extensions and retakes read the clips around them when you press
+Transitions and extensions read the clips around them when you press
 **Generate**, not when you add them. Choosing another take, trimming or reordering
 the neighbouring shots therefore changes what the next take joins. A tool that
 needs a neighbour refuses to generate until that neighbour has a take. **Use
@@ -44,7 +42,7 @@ language model and holds one take where other models cut or dissolve.
 The new clip uses the picture shape of the shot it joins, so a workflow whose
 default is square still matches widescreen footage.
 
-MiniMax H3 renders 24 frames a second in fixed steps, so a transition or retake
+MiniMax H3 renders 24 frames a second in fixed steps, so a transition or extension
 with motion is a little shorter or longer than the length you asked for (4 s gives
 4.04 s). Continue Between Clips expects a 24 fps edit.
 
@@ -88,37 +86,18 @@ as trimmed in the edit: from its last second with MiniMax H3 Continue Between
 Clips, or from its last frame with the other models. Describe what happens next.
 The shot's own prompt, if it has one, is added as context.
 
-## Retake part of a shot
+## Recast
 
-**Retake part** shows the shot as a filmstrip. Drag the highlighted part (or use
-the arrow keys) and set its length. Spool splits the shot around that part and
-gives the middle a workflow that joins the footage on either side; with motion it
-keeps a second of the shot on each side to anchor. The middle keeps its original
-footage as a take, so you can switch back at any time, and **Use take** puts either
-take back where it belongs in the shot.
-
-## Recast, re-angle and effects
-
-**Re-angle** and **Add effect** run the shot through MiniMax H3 Reference to Video
-with the shot itself as the reference video and its sound kept. **Recast** runs it
-through MiniMax H3 ControlNet Union: the shot's pose drives the movement and the
-cast member's pictures give the person. Say **Where** it happens; Spool fills it
-from the shot's prompt when it has one. A frame of the shot is not passed as a
-picture, because the model would bring back the old actor. The take has new sound.
-Select several shots to change them all at once; each gets its
+**Recast** runs the shot through MiniMax H3 ControlNet Union: the shot's pose drives
+the movement and the cast member's pictures give the person. Say **Where** it
+happens; Spool fills it from the shot's prompt when it has one. A frame of the shot
+is not passed as a picture, because the model would bring back the old actor. The
+take has new sound. Select several shots to recast them all at once; each gets its
 own clip workflow and keeps its footage as a take.
 
-- **Recast** replaces the main person with a cast member. It runs on local ComfyUI
-  or Deadline; Comfy Cloud has no pose-control workflow in Spool yet.
-- **Re-angle** films the same moment from another camera. Describe the camera;
-  suggestions such as low angle, close-up or over the shoulder fill in the words.
-- **Add effect** changes the weather, light or surroundings and keeps the rest of
-  the shot. Describe the change; rain, snow, fog, night and golden hour are
-  offered as suggestions.
-
-Reference to video is heavy: a seven-second shot takes many minutes on one GPU.
-Use **Draft** (below) or the workflow's **Turbo (4 steps)** control to try ideas
-first.
+Recast makes the whole shot again: the person moves as before, but the place is
+drawn from your words, so it does not match the original background. It runs on
+local ComfyUI or Deadline; Comfy Cloud has no pose-control workflow in Spool yet.
 
 ## Cast
 

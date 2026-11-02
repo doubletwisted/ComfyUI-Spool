@@ -929,13 +929,12 @@ export function closeGap(doc, index) {
 /**
  * Where a directed clip's take starts in the edit, as spool/operations.py:directed_in
  * decides. Its own takes repeat the anchored frames of the clips beside it, so they
- * start after them (`head`); a retake's original footage starts where it was cut (`sourceIn`).
+ * start after them (`head`); other takes keep the trim.
  */
 function directedIn(c, t) {
   const d = c.direction;
   if (!d) return null;
-  if (t.generated && t.summary?.workflowVersion === c.workflowVersion) return Number.isInteger(d.head) ? d.head : null;
-  return !t.generated && Number.isInteger(d.sourceIn) ? d.sourceIn : null;
+  return t.generated && t.summary?.workflowVersion === c.workflowVersion && Number.isInteger(d.head) ? d.head : null;
 }
 export function chooseTake(doc, clipId, id) {
   const c = doc.clips.find(c => c.id === clipId);

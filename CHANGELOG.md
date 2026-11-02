@@ -12,18 +12,16 @@ All notable changes to Spool are recorded here. Versions follow
   Its prompt is a timeline around what you write for the middle, with an
   instruction to keep one take; optional suggestions add wording.
 - **Extend shot** (**E**) adds the next moment of a shot.
-- **Retake part** (**R**) splits a shot around a part you choose and renders a new
-  middle that joins the footage on either side; the original stays as a take.
 - A new local workflow, **MiniMax H3 · Continue Between Clips**, anchors the last
   second of the clip before and the first second of the clip after, with their
-  sound, so movement carries through transitions, extensions and retakes instead
-  of restarting from a still frame. It is the default for all three, and its
+  sound, so movement carries through transitions and extensions instead of
+  restarting from a still frame. It is the default for both, and its
   encoder sees the first and last frame of the take. The directing tools offer only
   MiniMax H3 workflows.
 - A workflow's video input can read only the start or end of its clip (`span`),
   and **Use take** starts a directed clip's take after its anchored frames.
-- **Recast**, **Re-angle** and **Add effect** rerun one or more shots through
-  MiniMax H3 Reference to Video with the shot as its reference.
+- **Recast** gives one or more shots another actor: the shot's pose drives MiniMax
+  H3 ControlNet Union and a cast member's pictures give the person.
 - A **Cast** tab keeps characters with pictures; `@Name` in a prompt fills the
   workflow's reference inputs and becomes the tag the model reads.
 - Prompt checks under the prompt, and `@` suggestions from the cast. Editing

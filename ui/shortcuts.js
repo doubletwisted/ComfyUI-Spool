@@ -31,7 +31,6 @@ const SHORTCUTS = Object.freeze([
       [['N'], 'Toggle snapping'],
       [['T'], 'Add a transition at the cut nearest the playhead'],
       [['E'], 'Extend the selected shot'],
-      [['R'], 'Retake part of the selected shot'],
       [['I', 'O'], 'Set the export range start or end at the playhead'],
       [['Ctrl', 'S'], 'Save now', '+'],
     ],

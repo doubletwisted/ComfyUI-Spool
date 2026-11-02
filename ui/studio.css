@@ -7780,7 +7780,7 @@ input[type='range'] {
   line-height: 14px;
 }
 
-/* Directing tools (ui/directing.js): transitions, extensions, retakes, reworks and cast. */
+/* Directing tools (ui/directing.js): transitions, extensions, recasts and cast. */
 .modal.direct-modal {
   max-width: 640px;
   padding: 18px 20px 16px;
@@ -7993,44 +7993,20 @@ input[type='range'] {
   width: 12px;
   height: 12px;
 }
-.rework-tabs {
-  display: flex;
-  gap: 4px;
-}
-.rework-tabs button {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  height: 34px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--raised);
-  color: var(--dim);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-}
-.rework-tabs button.active {
-  color: var(--text);
-  border-color: var(--line2);
-  background: var(--raised);
-}
-#reworkBody {
+#recastBody {
   display: grid;
   gap: 8px;
 }
-.rework-shots {
+.recast-shots {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
   gap: 6px;
 }
-.rework-shots .direct-frame figcaption {
+.recast-shots .direct-frame figcaption {
   padding: 10px 6px 4px;
   font-size: 9px;
 }
-.rework-more {
+.recast-more {
   display: grid;
   place-items: center;
   color: var(--dim);
@@ -8075,50 +8051,6 @@ input[type='range'] {
   border-style: dashed;
   color: var(--dim);
 }
-.retake-strip {
-  position: relative;
-  height: 64px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #000;
-}
-.retake-film {
-  display: flex;
-  height: 100%;
-}
-.retake-film img {
-  flex: 1;
-  min-width: 0;
-  object-fit: cover;
-  opacity: 0.45;
-}
-.retake-range {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border: 2px solid var(--accent);
-  border-radius: 6px;
-  background: #ffb52e1f;
-  box-shadow: 0 0 0 999px #0006;
-  cursor: grab;
-  touch-action: none;
-}
-.retake-range:focus-visible {
-  outline: 2px solid #fff;
-}
-.retake-label {
-  position: absolute;
-  left: 50%;
-  bottom: 4px;
-  transform: translateX(-50%);
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font: 600 10px var(--mono);
-  white-space: nowrap;
-}
-
 /* Directed clips on the timeline and the buttons on cuts. */
 .timeline-clip.directed .direction-badge {
   display: inline-flex;
@@ -8531,7 +8463,7 @@ input[type='range'] {
   background: #62d0e01f;
 }
 
-/* The viewer shows the frames an ungenerated transition or retake joins. */
+/* The viewer shows the frames an ungenerated transition joins. */
 .placeholder-direct {
   position: relative;
   width: min(420px, 60vw);

@@ -82,32 +82,18 @@ assert.match(
   D.extendPrompt('', '', { motion: true }),
   /^Continue this shot from its opening frames in one unbroken take/,
 );
-assert.match(
-  D.retakePrompt('', 'he smiles', { motion: true }),
-  /arrives at the closing frames in one unbroken take\. He smiles\./,
-);
-assert.equal(D.toolFor('recast'), 'recast');
-assert.equal(D.toolFor('effect'), 'rework');
-assert.equal(D.toolFor('transition'), 'transition');
 assert.equal(
-  D.reworkPrompt('recast', '', '', { character: 'a knight', pictures: 2, place: 'riding through a forest.' }),
+  D.recastPrompt('', { character: 'a knight', pictures: 2, place: 'riding through a forest.' }),
   'The character shown in <Picture 1> and <Picture 2> (a knight) is riding through a forest, performing exactly the movement of the pose guide. The plain background of the character pictures is not part of the scene. Natural ambient sound.',
 );
-assert.match(
-  D.reworkPrompt('recast', '', '', { style: 'plain' }),
-  /^The character shown in Image 1 performing exactly/,
-);
+assert.match(D.recastPrompt('', { style: 'plain' }), /^The character shown in Image 1 performing exactly/);
 assert.equal(
   D.placeFrom('Use the provided start image as the first frame. A diver swims in a cave. Bubbles rise.'),
   'A diver swims in a cave',
 );
 assert.equal(D.placeFrom(''), '');
-assert.match(
-  D.reworkPrompt('reangle', D.ANGLES[0].prompt),
-  /New camera: A low angle close to the ground, looking up\./,
-);
-assert.match(D.reworkPrompt('effect', 'make it snow'), /^Change <Video 1>: Make it snow\. Keep everything else/);
-for (const list of [D.TRANSITIONS, D.ANGLES, D.EFFECTS]) assert.equal(new Set(list.map(p => p.id)).size, list.length);
+assert.equal(new Set(D.TRANSITIONS.map(p => p.id)).size, D.TRANSITIONS.length);
+assert.deepEqual(Object.keys(D.KINDS), ['transition', 'extend', 'recast']);
 assert.equal(D.directionLabel({ kind: 'transition', preset: 'smoke' }), 'Transition');
 assert.equal(D.directionLabel({ kind: 'extend' }), 'Extension');
 assert.equal(D.directionLabel({ kind: 'unknown' }), '');

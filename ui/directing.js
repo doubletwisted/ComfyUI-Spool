@@ -4,7 +4,7 @@ import { resolveMentions, tag, tagStyle } from './cast.js';
 import { inputFilled } from './input-groups.js';
 import { lintPrompt } from './prompt-lint.js';
 
-// Directing tools: transitions at cuts, extensions, retakes, reworks and the cast.
+// Directing tools: transitions at cuts, extensions, recasts and the cast.
 // Every tool makes or changes ordinary clips with ordinary workflows; the clip's
 // `direction` only remembers how it was made so the inspector can offer the same
 // choices again.
@@ -450,290 +450,106 @@ export function createDirecting({
     await finish([clip], generate, 'Extension added after ' + source.name);
   }
 
-  // ---- retake part of a shot ------------------------------------------------------------
-  function retakeDialog(clipId) {
-    const c = getState().clips.find(c => c.id === clipId);
-    if (!c) return;
-    const t = take(c);
-    if (t.placeholder) {
-      toast('Generate or choose a take for this shot first.');
-      return;
-    }
-    if (t.media.kind !== 'video') {
-      toast('Retake works on video shots.');
-      return;
-    }
-    const list = choices('retake'),
-      fps = getFps(),
-      length = c.out - c.in,
-      row = rowFor(c.id);
-    if (length < fps * 2) {
-      toast('Retake needs a shot of at least 2 seconds.');
-      return;
-    }
-    // A motion workflow keeps a second of footage on each side to anchor; others keep a few frames.
-    const plan = s => {
-      const choice = list.find(x => x.id === s.workflow),
-        b = D.toolBindings(choice?.motion ? getTemplateBindings(choice.id) : []),
-        head = b.before?.span.frames || 0,
-        tail = b.after?.span.frames || 0,
-        scale = fps / 24;
-      return choice?.motion
-        ? {
-            span: Math.round(D.motionLength(s.seconds, head, tail).visible * scale),
-            margin: Math.round(Math.max(head, tail) * scale),
-          }
-        : { span: s.seconds * fps, margin: 6 };
-    };
-    const clampStart = (s, start) => {
-      const { span, margin } = plan(s);
-      return Math.round(Math.max(margin, Math.min(length - span - margin, start)));
-    };
-    const playhead = Math.round(getState().frame) - row.start,
-      state = { detail: '', seconds: Math.max(1, Math.min(2, Math.floor(length / fps) - 2)), workflow: list[0]?.id };
-    state.start = clampStart(state, (playhead > 0 && playhead < length ? playhead : length / 2) - plan(state).span / 2);
-    const strip = Array.from({ length: 8 }, (_, i) => {
-      const frame = Math.round(c.in + ((i + 0.5) / 8) * length);
-      return '<img data-direct-thumb="' + esc(c.id) + '" data-frame="' + Math.min(c.out - 1, frame) + '" alt="">';
-    }).join('');
-    const show = () => {
-      const { span } = plan(state),
-        range = $('retakeRange');
-      if (!range) return;
-      range.style.left = (state.start / length) * 100 + '%';
-      range.style.width = (span / length) * 100 + '%';
-      $('retakeLabel').textContent =
-        (state.start / fps).toFixed(1) + '–' + ((state.start + span) / fps).toFixed(1) + ' s';
-    };
-    openDialog(
-      'Retake part of ' + c.name,
-      '<div class="retake-strip" id="retakeStrip"><div class="retake-film">' +
-        strip +
-        '</div><div class="retake-range" id="retakeRange" role="slider" tabindex="0" aria-label="Part to retake"><span class="retake-label" id="retakeLabel"></span></div></div><p class="direct-lede" id="directSees"></p><label class="direct-field"><span>What should change</span><textarea id="directDetail" rows="2" placeholder="e.g. he smiles instead of frowning"></textarea></label><div class="direct-row">' +
-        lengthField(state.seconds, list[0], 'Part length') +
-        workflowPicker('retake', state.workflow) +
-        '</div>',
-      'Retake part',
-      state,
-      (s, generate) => retakeRange(clipId, s.start, s.start + plan(s).span, s, generate),
-      {
-        kind: 'retake',
-        onChange: s => {
-          const { span, margin } = plan(s);
-          s.start = clampStart(s, s.start);
-          show();
-          const choice = list.find(x => x.id === s.workflow);
-          $('directSees').innerHTML =
-            'Drag the highlighted part. Spool splits the shot there and renders a new middle; the original stays as a take you can switch back to. ' +
-            (choice?.motion
-              ? 'The model sees a second of the shot on each side, so the movement carries through.'
-              : 'The model sees one frame on each side.');
-          s.problem = () =>
-            span > length - 2 * margin ? 'Choose a shorter part; keep some of the shot on both sides.' : null;
-        },
-      },
-    );
-    const range = $('retakeRange'),
-      track = $('retakeStrip');
-    range.onpointerdown = e => {
-      e.preventDefault();
-      range.setPointerCapture(e.pointerId);
-      const origin = e.clientX,
-        first = state.start,
-        width = track.getBoundingClientRect().width;
-      range.onpointermove = move => {
-        state.start = clampStart(state, first + ((move.clientX - origin) / width) * length);
-        show();
-      };
-      range.onpointerup = () => (range.onpointermove = null);
-    };
-    range.onkeydown = e => {
-      if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
-      e.preventDefault();
-      state.start = clampStart(state, state.start + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? fps : 4));
-      show();
-    };
-  }
-  async function retakeRange(clipId, start, end, options, generate = false) {
-    const doc = getState(),
-      c = doc.clips.find(c => c.id === clipId);
-    if (!c) throw Error('This shot was removed.');
-    const choice = choices('retake').find(x => x.id === options.workflow) || choices('retake')[0],
-      prompt = sourcePrompt(c),
-      row = rowFor(c.id);
-    let middleId = null;
-    edits.apply('Split ' + c.name + ' for a retake', () => {
-      pause();
-      editView();
-      const first = T.splitClip(getState(), row.start + end, 'clip-' + crypto.randomUUID(), c.id);
-      if (first.error) throw Error(first.error);
-      const second = T.splitClip(getState(), row.start + start, 'clip-' + crypto.randomUUID(), c.id);
-      if (second.error) throw Error(second.error);
-      const middle = getState().clips[getState().clips.indexOf(c) + 1];
-      middle.name = c.name + ' · retake';
-      middleId = middle.id;
-    });
-    if (!middleId) return;
-    const seconds = choice.motion ? options.seconds : D.fitSeconds(choice, (end - start) / getFps());
-    const clip = await place('retake', choice.id, { clipId: middleId }, m => {
-      const join = joining(D.toolBindings(m.bindings), seconds, { previous: true, next: true });
-      // The original footage stays a take; Use take returns it to where it was cut.
-      m.direction = { kind: 'retake', detail: options.detail || '', sourceIn: m.in };
-      fill(m, { ...join, prompt: D.retakePrompt(prompt, options.detail, join), shape: m });
-    });
-    await finish([clip], generate, 'Retake ready on ' + c.name);
-  }
-
-  // ---- rework: recast, re-angle, effect ----------------------------------------------------
+  // ---- recast ------------------------------------------------------------------------------
   function castList() {
     return getState().cast || [];
   }
   function castImage(file) {
     return '/spool/api/input/' + encodeURIComponent(file);
   }
-  function reworkDialog(ids, kind = 'recast') {
+  function recastDialog(ids) {
     const clips = ids.map(id => getState().clips.find(c => c.id === id)).filter(c => c && !take(c).placeholder);
     if (!clips.length) {
       toast('Choose shots with footage or a generated take.');
       return;
     }
     if (clips.some(c => take(c).media.kind !== 'video')) {
-      toast('Rework needs video shots.');
+      toast('Recast needs video shots.');
       return;
     }
-    const list = choices(D.toolFor(kind));
+    const list = choices('recast');
     if (!list.length) {
       toast('No workflow for this tool is available.');
       return;
     }
     const state = {
-      kind,
       detail: '',
       workflow: list[0].id,
       castId: castList()[0]?.id || null,
       // A generated shot's own prompt usually says where it happens.
       place: D.placeFrom(sourcePrompt(clips[0])),
-      problem: () => (state.kind === 'recast' && !state.castId ? 'Add a cast member to recast with.' : null),
+      problem: () => (!state.castId ? 'Add a cast member to recast with.' : null),
     };
-    const tabs = Object.entries(D.REWORKS)
-      .map(
-        ([id, r]) =>
-          '<button type="button" role="tab" data-rework-kind="' +
-          id +
-          '" aria-selected="' +
-          (id === kind) +
-          '" class="' +
-          (id === kind ? 'active' : '') +
-          '">' +
-          svg(D.KINDS[id].icon) +
-          esc(r.name) +
-          '</button>',
-      )
-      .join('');
     const strip = clips
       .slice(0, 6)
       .map((c, i) => frameThumb(c, 'first', 'Shot ' + (i + 1)))
       .join('');
     const body =
-      '<div class="seg rework-tabs" role="tablist">' +
-      tabs +
-      '</div><div class="rework-shots">' +
+      '<div class="recast-shots">' +
       strip +
-      (clips.length > 6 ? '<span class="rework-more">+' + (clips.length - 6) + '</span>' : '') +
-      '</div><div id="reworkBody"></div><div id="reworkModels"></div>';
-    const title = n => D.REWORKS[state.kind].verb + ' ' + (n === 1 ? clips[0].name : n + ' shots');
+      (clips.length > 6 ? '<span class="recast-more">+' + (clips.length - 6) + '</span>' : '') +
+      '</div><div id="recastBody"></div><div id="recastModels"></div>';
     openDialog(
-      title(clips.length),
+      'Recast ' + (clips.length === 1 ? clips[0].name : clips.length + ' shots'),
       body,
-      D.REWORKS[kind].name,
+      'Recast',
       state,
       (s, generate) =>
-        rework(
+        recast(
           clips.map(c => c.id),
           s,
           generate,
         ),
-      { kind: 'rework' },
+      { kind: 'recast' },
     );
     const renderBody = () => {
-      $('modalTitle').textContent = title(clips.length);
-      $('modal')
-        .querySelectorAll('[data-rework-kind]')
-        .forEach(b => {
-          const on = b.dataset.reworkKind === state.kind;
-          b.classList.toggle('active', on);
-          b.setAttribute('aria-selected', on);
-        });
-      const list = D.REWORKS[state.kind].suggestions;
-      if (state.kind === 'recast') {
-        $('reworkBody').innerHTML =
-          '<h3 class="direct-heading">Character</h3><div class="cast-pick" role="radiogroup">' +
-          castList()
-            .map(
-              m =>
-                '<button type="button" role="radio" class="cast-pick-card" data-cast-pick="' +
-                esc(m.id) +
-                '" aria-checked="' +
-                (m.id === state.castId) +
-                '"><img src="' +
-                esc(castImage(m.images[0])) +
-                '" alt=""><span>' +
-                esc(m.name) +
-                '</span></button>',
-            )
-            .join('') +
-          '<label class="cast-pick-card add" title="Add a cast member from a picture"><input type="file" accept="image/*" hidden id="reworkCastFile"><span>' +
-          svg('plus') +
-          '</span><span>New from picture</span></label></div><label class="direct-field"><span>Where</span><input id="recastPlace" type="text" value="' +
-          esc(state.place) +
-          '" placeholder="e.g. swimming underwater through a sunlit coral palace"></label><label class="direct-field"><span>Direction <em>optional</em></span><input id="directDetail" type="text" value="' +
-          esc(state.detail) +
-          '" placeholder="e.g. keep her red scarf"></label><p class="direct-lede">The main person in each shot becomes this character and moves exactly as before. Say where it happens; the new take has its own sound.</p>';
-        $('recastPlace').oninput = e => (state.place = e.target.value);
-        $('reworkBody')
-          .querySelectorAll('[data-cast-pick]')
-          .forEach(
-            b =>
-              (b.onclick = () => {
-                state.castId = b.dataset.castPick;
-                renderBody();
-              }),
-          );
-        $('reworkCastFile').onchange = async e => {
-          const file = e.target.files[0];
-          if (!file) return;
-          try {
-            const member = await addCastMember(file.name.replace(/\.[^.]+$/, ''), [file]);
-            state.castId = member.id;
-            renderBody();
-          } catch (error) {
-            toast(error.message);
-          }
-        };
-      } else {
-        const angle = state.kind === 'reangle';
-        $('reworkBody').innerHTML =
-          '<label class="direct-field"><span>' +
-          (angle ? 'New camera' : 'What changes') +
-          '</span><textarea id="directDetail" rows="2" placeholder="' +
-          (angle ? 'e.g. low and close to the ground, looking up at her' : 'e.g. it is raining and the street is wet') +
-          '">' +
-          esc(state.detail) +
-          '</textarea></label>' +
-          suggestions(list) +
-          '<p class="direct-lede">' +
-          (angle
-            ? 'The same moment, filmed again from another camera position. Performance and sound stay.'
-            : 'People, performance, camera and timing stay as they are; sound stays too.') +
-          '</p>';
-      }
+      $('recastBody').innerHTML =
+        '<h3 class="direct-heading">Character</h3><div class="cast-pick" role="radiogroup">' +
+        castList()
+          .map(
+            m =>
+              '<button type="button" role="radio" class="cast-pick-card" data-cast-pick="' +
+              esc(m.id) +
+              '" aria-checked="' +
+              (m.id === state.castId) +
+              '"><img src="' +
+              esc(castImage(m.images[0])) +
+              '" alt=""><span>' +
+              esc(m.name) +
+              '</span></button>',
+          )
+          .join('') +
+        '<label class="cast-pick-card add" title="Add a cast member from a picture"><input type="file" accept="image/*" hidden id="recastCastFile"><span>' +
+        svg('plus') +
+        '</span><span>New from picture</span></label></div><label class="direct-field"><span>Where</span><input id="recastPlace" type="text" value="' +
+        esc(state.place) +
+        '" placeholder="e.g. swimming underwater through a sunlit coral palace"></label><label class="direct-field"><span>Direction <em>optional</em></span><input id="directDetail" type="text" value="' +
+        esc(state.detail) +
+        '" placeholder="e.g. keep her red scarf"></label><p class="direct-lede">The main person in each shot becomes this character and moves exactly as before. Say where it happens; the new take has its own sound.</p>';
+      $('recastPlace').oninput = e => (state.place = e.target.value);
       $('directDetail').oninput = e => (state.detail = e.target.value);
-      bindThumbs($('reworkBody'));
-      // Each tool has its own models: recast runs on pose control, the others on reference to video.
-      const models = choices(D.toolFor(state.kind));
-      if (!models.some(m => m.id === state.workflow)) state.workflow = models[0]?.id;
-      $('reworkModels').innerHTML = workflowPicker(D.toolFor(state.kind), state.workflow);
-      $('reworkModels')
+      $('recastBody')
+        .querySelectorAll('[data-cast-pick]')
+        .forEach(
+          b =>
+            (b.onclick = () => {
+              state.castId = b.dataset.castPick;
+              renderBody();
+            }),
+        );
+      $('recastCastFile').onchange = async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          const member = await addCastMember(file.name.replace(/\.[^.]+$/, ''), [file]);
+          state.castId = member.id;
+          renderBody();
+        } catch (error) {
+          toast(error.message);
+        }
+      };
+      $('recastModels').innerHTML = workflowPicker('recast', state.workflow);
+      $('recastModels')
         .querySelectorAll('[data-direct-workflow]')
         .forEach(
           b =>
@@ -742,31 +558,14 @@ export function createDirecting({
               renderBody();
             }),
         );
-      $('directAdd').textContent = D.REWORKS[state.kind].name;
-      $('directGenerate').innerHTML = svg('play') + esc(D.REWORKS[state.kind].name) + ' and generate';
     };
-    $('modal')
-      .querySelectorAll('[data-rework-kind]')
-      .forEach(
-        b =>
-          (b.onclick = () => {
-            if (state.kind === b.dataset.reworkKind) return;
-            state.kind = b.dataset.reworkKind;
-            state.detail = '';
-            renderBody();
-          }),
-      );
     renderBody();
   }
-  async function rework(ids, options, generate = false) {
-    const kind = options.kind,
-      list = choices(D.toolFor(kind)),
+  async function recast(ids, options, generate = false) {
+    const list = choices('recast'),
       choice = list.find(c => c.id === options.workflow) || list[0],
-      member = kind === 'recast' ? castList().find(m => m.id === options.castId) : null,
-      // A recast's text is extra direction; for the others it is the change itself.
-      change = kind === 'recast' ? '' : options.detail || '',
-      detail = kind === 'recast' ? options.detail || '' : '';
-    if (kind === 'recast' && !member) throw Error('Choose a cast member to recast with.');
+      member = castList().find(m => m.id === options.castId);
+    if (!member) throw Error('Choose a cast member to recast with.');
     const done = [];
     for (const id of ids) {
       const source = getState().clips.find(c => c.id === id);
@@ -774,31 +573,28 @@ export function createDirecting({
       const original = (source.takes || []).some(t => !t.generated && !t.placeholder) ? 'original' : 'selected',
         seconds = D.fitSeconds(choice, (source.out - source.in) / getFps());
       done.push(
-        await place(kind, choice.id, { clipId: id }, c => {
+        await place('recast', choice.id, { clipId: id }, c => {
           const b = D.toolBindings(c.bindings);
-          c.direction = { kind, detail: options.detail || '', castId: member?.id };
-          if (kind === 'recast') c.direction.place = options.place || '';
+          c.direction = { kind: 'recast', detail: options.detail || '', castId: member.id, place: options.place || '' };
           const recipe = getRecipe(c),
             style = tagStyle(b.prompt && recipe?.prompt?.[b.prompt.nodeId]?.inputs?.[b.prompt.input]),
-            pictures = member ? Math.min(member.images.length, Math.max(1, b.references.length)) : 0,
-            place = kind === 'recast' ? options.place || D.placeFrom(sourcePrompt(source)) : '';
+            pictures = Math.min(member.images.length, Math.max(1, b.references.length));
           fill(c, {
-            prompt: D.reworkPrompt(kind, change, detail, {
-              character: member?.description || '',
+            prompt: D.recastPrompt(options.detail || '', {
+              character: member.description || '',
               pictures,
               style,
-              audio: !!b.video?.audio,
-              place,
+              place: options.place || D.placeFrom(sourcePrompt(source)),
             }),
             seconds,
             links: [{ key: b.video?.key, source: original, ...(b.video?.audio ? { audio: true } : {}) }],
-            images: member ? member.images.slice(0, pictures) : [],
+            images: member.images.slice(0, pictures),
             shape: source,
           });
         }),
       );
     }
-    await finish(done, generate, D.REWORKS[kind].name + ': ' + done.length + (done.length === 1 ? ' shot' : ' shots'));
+    await finish(done, generate, 'Recast: ' + done.length + (done.length === 1 ? ' shot' : ' shots'));
   }
 
   // ---- cast ------------------------------------------------------------------------------
@@ -959,17 +755,7 @@ export function createDirecting({
     const t = take(c);
     if (t.placeholder) return '';
     const video = t.media.kind === 'video',
-      tools = [
-        ['extend', 'Extend', 'E'],
-        ...(video
-          ? [
-              ['retake', 'Retake', 'R'],
-              ['recast', 'Recast', ''],
-              ['reangle', 'Re-angle', ''],
-              ['effect', 'Effect', ''],
-            ]
-          : []),
-      ];
+      tools = [['extend', 'Extend', 'E'], ...(video ? [['recast', 'Recast', '']] : [])];
     return (
       '<div class="direct-strip" role="toolbar" aria-label="Directing tools">' +
       tools
@@ -1198,8 +984,7 @@ export function createDirecting({
           (b.onclick = () => {
             const tool = b.dataset.directTool;
             if (tool === 'extend') extendDialog(c.id);
-            else if (tool === 'retake') retakeDialog(c.id);
-            else reworkDialog([c.id], tool);
+            else recastDialog([c.id]);
           }),
       );
     const card = $('inspectorContent').querySelector('.direction-card');
@@ -1228,34 +1013,14 @@ export function createDirecting({
         reason: t.placeholder ? 'Needs a take first.' : null,
         run: () => extendDialog(c.id),
       },
-      ...(video
-        ? [
-            {
-              label: 'Retake part…',
-              reason: c.out - c.in < getFps() * 2 ? 'Needs 2 seconds or more.' : null,
-              run: () => retakeDialog(c.id),
-            },
-          ]
-        : []),
-      ...(video
-        ? [
-            { label: 'Recast…', run: () => reworkDialog([c.id], 'recast') },
-            { label: 'Re-angle…', run: () => reworkDialog([c.id], 'reangle') },
-            { label: 'Add effect…', run: () => reworkDialog([c.id], 'effect') },
-          ]
-        : []),
+      ...(video ? [{ label: 'Recast…', run: () => recastDialog([c.id]) }] : []),
     ];
   }
   function selectionActions(clips) {
     const videos = clips.filter(c => !take(c).placeholder && take(c).media.kind === 'video');
     if (!videos.length) return [];
-    const ids = videos.map(c => c.id),
-      n = ids.length + ' shots';
-    return [
-      { label: 'Recast ' + n + '…', run: () => reworkDialog(ids, 'recast') },
-      { label: 'Re-angle ' + n + '…', run: () => reworkDialog(ids, 'reangle') },
-      { label: 'Add effect to ' + n + '…', run: () => reworkDialog(ids, 'effect') },
-    ];
+    const ids = videos.map(c => c.id);
+    return [{ label: 'Recast ' + ids.length + ' shots…', run: () => recastDialog(ids) }];
   }
   /** T: the cut nearest the playhead on the active track. */
   function transitionAtPlayhead(track) {
@@ -1276,10 +1041,8 @@ export function createDirecting({
     addTransition,
     extendDialog,
     extendClip,
-    retakeDialog,
-    retakeRange,
-    reworkDialog,
-    rework,
+    recastDialog,
+    recast,
     addCastMember,
     renderCast,
     directionCard,
