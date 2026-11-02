@@ -300,7 +300,13 @@ def record(args):
     # A clip split or copied in a saved edit is new to the host; its takes' setups
     # are read through the host clip that holds them.
     host_clips = {c["id"] for c in document["clips"]}
-    holder = {t["id"]: c["id"] for c in document["clips"] for t in c.get("takes", [])}
+    holder = {}
+    for visible in (True, False):
+        for clip in document["clips"]:
+            hidden = set(clip.get("hiddenTakeIds") or []) - {clip.get("takeId")}
+            for take in clip.get("takes", []):
+                if not take.get("placeholder") and (take["id"] not in hidden) == visible:
+                    holder.setdefault(take["id"], clip["id"])
     overlay = [overlay_spec(value) for value in args.overlay]
     if args.leave_out or args.move_to_end or args.close_gaps or overlay:
         demo_edit(document, args.leave_out, args.move_to_end, args.close_gaps, overlay)
