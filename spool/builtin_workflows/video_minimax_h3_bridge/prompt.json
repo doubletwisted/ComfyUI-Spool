@@ -186,6 +186,14 @@
       "vae": [
         "9",
         0
+      ],
+      "first_frame": [
+        "17",
+        0
+      ],
+      "last_frame": [
+        "34",
+        0
       ]
     },
     "class_type": "MiniMaxH3ImageToVideo",
@@ -475,6 +483,36 @@
     "class_type": "SaveVideo",
     "_meta": {
       "title": "SaveVideo"
+    }
+  },
+  "33": {
+    "inputs": {
+      "expression": "a - (a - 5) % 17 - 1 if a >= 5 else 0",
+      "values.a": [
+        "21",
+        2
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "Last anchored frame"
+    }
+  },
+  "34": {
+    "inputs": {
+      "batch_index": [
+        "33",
+        1
+      ],
+      "length": 1,
+      "image": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Last frame of the clip after"
     }
   }
 }

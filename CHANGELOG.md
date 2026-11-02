@@ -8,23 +8,27 @@ All notable changes to Spool are recorded here. Versions follow
 ### Directing tools
 
 - **Add transition** at a cut (the button on the cut, the clip menu or **T**)
-  renders the move between two shots as a clip of its own. Optional suggestions add
-  wording to its prompt.
+  renders the move between two shots as one continuous take, 4 seconds by default.
+  Its prompt is a timeline around what you write for the middle, with an
+  instruction to keep one take; optional suggestions add wording.
 - **Extend shot** (**E**) adds the next moment of a shot.
 - **Retake part** (**R**) splits a shot around a part you choose and renders a new
   middle that joins the footage on either side; the original stays as a take.
 - A new local workflow, **MiniMax H3 · Continue Between Clips**, anchors the last
   second of the clip before and the first second of the clip after, with their
   sound, so movement carries through transitions, extensions and retakes instead
-  of restarting from a still frame. It is the default for all three.
+  of restarting from a still frame. It is the default for all three, and its
+  encoder sees the first and last frame of the take. The directing tools offer only
+  MiniMax H3 workflows.
 - A workflow's video input can read only the start or end of its clip (`span`),
   and **Use take** starts a directed clip's take after its anchored frames.
 - **Recast**, **Re-angle** and **Add effect** rerun one or more shots through
   MiniMax H3 Reference to Video with the shot as its reference.
 - A **Cast** tab keeps characters with pictures; `@Name` in a prompt fills the
   workflow's reference inputs and becomes the tag the model reads.
-- Prompt checks under the prompt, and `@` suggestions from the cast.
-- **Draft** renders quick low-resolution takes; **Make final** on a draft renders it
+- Prompt checks under the prompt, and `@` suggestions from the cast. Editing
+  instructions such as "no cuts" are not flagged as negative phrasing.
+- **Draft** renders quick takes at 0.4 megapixels; **Make final** on a draft renders it
   again at full quality with the same seed.
 - Image and video inputs can read the clip before or after a shot when it is
   queued (`previous` and `next` shot inputs), also through `set_shot_inputs`.

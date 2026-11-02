@@ -1,8 +1,8 @@
 {
   "id": "5d1c0b7e-6a8f-4b7e-9d64-3c2f1e9b8a70",
   "revision": 0,
-  "last_node_id": 32,
-  "last_link_id": 47,
+  "last_node_id": 34,
+  "last_link_id": 52,
   "nodes": [
     {
       "id": 1,
@@ -613,8 +613,8 @@
       "id": 15,
       "type": "MiniMaxH3ImageToVideo",
       "pos": [
-        1480,
-        290
+        2570,
+        90
       ],
       "size": [
         430,
@@ -671,6 +671,18 @@
           "widget": {
             "name": "length"
           }
+        },
+        {
+          "name": "first_frame",
+          "type": "IMAGE",
+          "link": 48,
+          "shape": 7
+        },
+        {
+          "name": "last_frame",
+          "type": "IMAGE",
+          "link": 52,
+          "shape": 7
         }
       ],
       "outputs": [
@@ -776,7 +788,8 @@
           "name": "images",
           "type": "IMAGE",
           "links": [
-            25
+            25,
+            48
           ]
         },
         {
@@ -813,8 +826,8 @@
       "id": 18,
       "type": "MiniMaxH3AddGuide",
       "pos": [
-        1970,
-        310
+        3060,
+        90
       ],
       "size": [
         310,
@@ -955,7 +968,8 @@
           "type": "IMAGE",
           "links": [
             27,
-            29
+            29,
+            50
           ]
         },
         {
@@ -993,7 +1007,7 @@
       "type": "GetImageSize",
       "pos": [
         1480,
-        930
+        290
       ],
       "size": [
         230,
@@ -1024,7 +1038,8 @@
           "name": "batch_size",
           "type": "INT",
           "links": [
-            28
+            28,
+            49
           ]
         }
       ],
@@ -1039,8 +1054,8 @@
       "id": 22,
       "type": "ComfyMathExpression",
       "pos": [
-        1970,
-        580
+        1810,
+        310
       ],
       "size": [
         225,
@@ -1093,7 +1108,7 @@
       "id": 23,
       "type": "MiniMaxH3AddGuide",
       "pos": [
-        2400,
+        3430,
         90
       ],
       "size": [
@@ -1211,7 +1226,7 @@
       "id": 25,
       "type": "BasicGuider",
       "pos": [
-        2770,
+        3800,
         90
       ],
       "size": [
@@ -1288,7 +1303,7 @@
       "id": 27,
       "type": "BasicScheduler",
       "pos": [
-        1970,
+        1810,
         90
       ],
       "size": [
@@ -1342,7 +1357,7 @@
       "id": 28,
       "type": "SamplerCustomAdvanced",
       "pos": [
-        3190,
+        4220,
         90
       ],
       "size": [
@@ -1404,7 +1419,7 @@
       "id": 29,
       "type": "VAEDecode",
       "pos": [
-        3480,
+        4510,
         90
       ],
       "size": [
@@ -1445,7 +1460,7 @@
       "id": 30,
       "type": "VAEDecodeAudio",
       "pos": [
-        3480,
+        4510,
         240
       ],
       "size": [
@@ -1486,7 +1501,7 @@
       "id": 31,
       "type": "CreateVideo",
       "pos": [
-        3770,
+        4800,
         90
       ],
       "size": [
@@ -1540,7 +1555,7 @@
       "id": 32,
       "type": "SaveVideo",
       "pos": [
-        4100,
+        5130,
         90
       ],
       "size": [
@@ -1580,6 +1595,113 @@
         "format": "auto",
         "format.codec": "auto",
         "codec": "auto"
+      }
+    },
+    {
+      "id": 33,
+      "type": "ComfyMathExpression",
+      "pos": [
+        1810,
+        528
+      ],
+      "size": [
+        225,
+        128
+      ],
+      "flags": {},
+      "order": 33,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "a",
+          "name": "values.a",
+          "type": "FLOAT,INT,BOOLEAN",
+          "link": 49
+        }
+      ],
+      "outputs": [
+        {
+          "name": "FLOAT",
+          "type": "FLOAT",
+          "links": []
+        },
+        {
+          "name": "INT",
+          "type": "INT",
+          "links": [
+            51
+          ]
+        },
+        {
+          "name": "BOOL",
+          "type": "BOOLEAN",
+          "links": []
+        }
+      ],
+      "title": "Last anchored frame",
+      "properties": {
+        "Node name for S&R": "ComfyMathExpression",
+        "cnr_id": "comfy-core",
+        "ver": "0.33.0"
+      },
+      "widgets_values": [
+        "a - (a - 5) % 17 - 1 if a >= 5 else 0"
+      ],
+      "widgets_values_named": {
+        "expression": "a - (a - 5) % 17 - 1 if a >= 5 else 0"
+      }
+    },
+    {
+      "id": 34,
+      "type": "ImageFromBatch",
+      "pos": [
+        2240,
+        90
+      ],
+      "size": [
+        270,
+        82
+      ],
+      "flags": {},
+      "order": 34,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 50
+        },
+        {
+          "name": "batch_index",
+          "type": "INT",
+          "link": 51,
+          "widget": {
+            "name": "batch_index"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            52
+          ]
+        }
+      ],
+      "title": "Last frame of the clip after",
+      "properties": {
+        "Node name for S&R": "ImageFromBatch",
+        "cnr_id": "comfy-core",
+        "ver": "0.33.0"
+      },
+      "widgets_values": [
+        0,
+        1
+      ],
+      "widgets_values_named": {
+        "batch_index": 0,
+        "length": 1
       }
     }
   ],
@@ -1959,6 +2081,46 @@
       32,
       0,
       "VIDEO"
+    ],
+    [
+      48,
+      17,
+      0,
+      15,
+      6,
+      "IMAGE"
+    ],
+    [
+      49,
+      21,
+      2,
+      33,
+      0,
+      "INT"
+    ],
+    [
+      50,
+      20,
+      0,
+      34,
+      0,
+      "IMAGE"
+    ],
+    [
+      51,
+      33,
+      1,
+      34,
+      1,
+      "INT"
+    ],
+    [
+      52,
+      34,
+      0,
+      15,
+      7,
+      "IMAGE"
     ]
   ],
   "groups": [],

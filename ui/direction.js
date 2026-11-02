@@ -68,25 +68,22 @@ export const KINDS = {
 };
 
 /**
- * Workflows each tool can use, best first. `min`/`max` are whole seconds; `options`
- * lists the only lengths a workflow accepts. `motion` workflows anchor the frames on
- * each side of the gap as clips, so movement carries through instead of starting
- * again from one still frame.
+ * Workflows each tool can use, best first. Only MiniMax H3: it reads a direction
+ * through a language model and holds one take where the others cut or dissolve.
+ * `min`/`max` are whole seconds; `options` lists the only lengths a workflow accepts.
+ * `motion` workflows anchor the frames on each side of the gap as clips, so movement
+ * carries through instead of starting again from one still frame.
  * @type {Record<string, { id: string, label: string, target: string, min?: number, max?: number, options?: number[], motion?: boolean }[]>}
  */
 export const WORKFLOWS = {
   transition: [
     { id: 'video_minimax_h3_bridge', label: 'MiniMax H3 · Local', target: 'local', min: 1, max: 10, motion: true },
-    { id: 'video_ltx2_5_flf2v', label: 'LTX 2.5 · Local', target: 'local', min: 1, max: 10 },
     { id: 'api_minimax_h3_flf2v', label: 'MiniMax H3 · Cloud', target: 'cloud', min: 4, max: 15 },
-    { id: 'api_ltx2_5_flf2v', label: 'LTX 2.5 · Cloud', target: 'cloud', options: [2, 3, 4, 5, 6, 8, 10] },
   ],
   extend: [
     { id: 'video_minimax_h3_bridge', label: 'MiniMax H3 · Local', target: 'local', min: 1, max: 12, motion: true },
     { id: 'video_minimax_h3_i2v', label: 'MiniMax H3 · From last frame', target: 'local', min: 2, max: 15 },
-    { id: 'video_ltx2_5_i2v', label: 'LTX 2.5 · Local', target: 'local', min: 1, max: 10 },
     { id: 'api_minimax_h3_max_i2v', label: 'MiniMax H3 Max · Cloud', target: 'cloud', min: 4, max: 15 },
-    { id: 'api_ltx2_5_i2v', label: 'LTX 2.5 · Cloud', target: 'cloud', options: [2, 3, 4, 5, 6, 8, 10] },
   ],
   rework: [
     { id: 'video_minimax_h3_r2v', label: 'MiniMax H3 · Local', target: 'local', min: 2, max: 15 },
@@ -191,19 +188,38 @@ const sentence = text => {
 
 const sound = 'The sound carries on throughout.';
 
-/** With `motion`, the clips on both sides are anchored as moving footage; otherwise as single frames. */
-export function transitionPrompt(detail = '', { motion = false } = {}) {
+const oneTake =
+  'Single continuous take: no cuts, no scene changes, no dissolves. The same people, place and light throughout.';
+const at = value => Math.round(value * 10) / 10 + 's';
+
+/**
+ * A transition is one take from the shot before to the shot after. With `motion`,
+ * the take opens and closes on footage of both shots and `middle` says, in seconds,
+ * where the new part lies; the timeline tells the model what happens when.
+ * MiniMax H3 reads plain instructions such as "no cuts" through its language model.
+ */
+export function transitionPrompt(detail = '', { motion = false, seconds = 0, middle = null } = {}) {
+  const action =
+    sentence(detail) || 'The movement carries on and the camera travels naturally to where the next shot begins.';
+  if (motion && middle && seconds)
+    return [
+      'One continuous shot, filmed in a single take with one camera.',
+      'Timeline:\n' +
+        [
+          '[0s-' + at(middle[0]) + '] Opens on the footage of the shot before; its movement carries straight on.',
+          '[' + at(middle[0]) + '-' + at(middle[1]) + '] ' + action,
+          '[' + at(middle[1]) + '-' + at(seconds) + '] Arrives exactly in the opening footage of the next shot.',
+        ].join('\n'),
+      oneTake,
+      'Audio: ' + sound.toLowerCase(),
+    ].join('\n\n');
   return [
-    motion
-      ? 'One continuous shot. It opens with the movement of the first scene, carries that movement on in one unbroken take and arrives naturally in the closing frames of the second scene.'
-      : 'Use the provided start image as the first frame and the provided end image as the last frame.',
-    sentence(detail),
-    motion
-      ? sound
-      : 'One smooth continuous motion over the whole clip, landing on the last frame only at the very end. ' + sound,
-  ]
-    .filter(Boolean)
-    .join(' ');
+    'Use the provided start image as the first frame and the provided end image as the last frame.',
+    action,
+    'One smooth continuous motion over the whole clip, landing on the last frame only at the very end.',
+    oneTake,
+    sound,
+  ].join(' ');
 }
 
 export function extendPrompt(sourcePrompt = '', detail = '', { motion = false } = {}) {

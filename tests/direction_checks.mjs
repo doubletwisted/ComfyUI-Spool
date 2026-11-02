@@ -60,11 +60,21 @@ assert.deepEqual(
 // Prompts say how the clip is anchored and carry the user's direction.
 assert.equal(
   D.transitionPrompt('red smoke'),
-  'Use the provided start image as the first frame and the provided end image as the last frame. Red smoke. One smooth continuous motion over the whole clip, landing on the last frame only at the very end. The sound carries on throughout.',
+  'Use the provided start image as the first frame and the provided end image as the last frame. Red smoke. One smooth continuous motion over the whole clip, landing on the last frame only at the very end. Single continuous take: no cuts, no scene changes, no dissolves. The same people, place and light throughout. The sound carries on throughout.',
 );
+// A motion transition is a timeline around the footage it opens and closes on.
 assert.equal(
-  D.transitionPrompt('she keeps running', { motion: true }),
-  'One continuous shot. It opens with the movement of the first scene, carries that movement on in one unbroken take and arrives naturally in the closing frames of the second scene. She keeps running. The sound carries on throughout.',
+  D.transitionPrompt('she keeps running', { motion: true, seconds: 141 / 24, middle: [22 / 24, 119 / 24] }),
+  [
+    'One continuous shot, filmed in a single take with one camera.',
+    'Timeline:\n[0s-0.9s] Opens on the footage of the shot before; its movement carries straight on.\n[0.9s-5s] She keeps running.\n[5s-5.9s] Arrives exactly in the opening footage of the next shot.',
+    'Single continuous take: no cuts, no scene changes, no dissolves. The same people, place and light throughout.',
+    'Audio: the sound carries on throughout.',
+  ].join('\n\n'),
+);
+assert.match(
+  D.transitionPrompt('', { motion: true, seconds: 5, middle: [1, 4] }),
+  /\[1s-4s\] The movement carries on and the camera travels naturally/,
 );
 const extended = D.extendPrompt('Use the provided start image as the first frame. A diver swims.', 'she waves');
 assert.ok(extended.includes(' She waves.') && extended.endsWith('Earlier in this shot: A diver swims.'), extended);

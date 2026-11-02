@@ -71,7 +71,7 @@
   );
   d.querySelector('.cut-transition').click();
   await wait('second transition dialog', () => $('directSees')?.textContent);
-  d.querySelector('.direct-modal [data-direct-workflow="video_ltx2_5_flf2v"]').click();
+  d.querySelector('.direct-modal [data-direct-workflow="api_minimax_h3_flf2v"]').click();
   check('A frame model says it sees single frames', /last frame of/.test($('directSees').textContent));
   $('directCancel').click();
 

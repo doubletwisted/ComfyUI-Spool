@@ -4,7 +4,9 @@ import { unknownMentions } from './cast.js';
 
 const QUALITY =
   /\b(4k|8k|16k|masterpiece|best quality|high quality|ultra[- ]?detailed|highly detailed|ultra[- ]?realistic|award[- ]winning|trending on artstation)\b/gi;
-const NEGATIVE = /\b(no|without|don't|do not|never|avoid)\s+([a-z]+)/i;
+const NEGATIVE = /\b(no|without|don't|do not|never|avoid)\s+([a-z]+)/gi;
+// Editing instructions ("no cuts") are followed, not drawn: they name nothing to bring in.
+const EDITING = /^(cuts?|scene|dissolves?|fades?)$/i;
 const CAMERA =
   /\b(push(?:es|ing)? in|pull(?:s|ing)? (?:back|out)|pans?|panning|tilts?|tilting|orbits?|orbiting|dolly|dollies|zoom(?:s|ing)? (?:in|out)|crane|tracking shot|whip pan|handheld|crash zoom)\b/gi;
 const CUTS = /\b(cut \d+|cut to|hard cut|smash cut)\b/gi;
@@ -51,7 +53,7 @@ export function lintPrompt(text, context = {}) {
   const quality = [...new Set([...value.matchAll(QUALITY)].map(m => m[0].toLowerCase()))];
   if (quality.length)
     info('“' + quality.join('”, “') + '” does little for video models. Describe the light, lens or texture instead.');
-  const negative = !context.negative && value.match(NEGATIVE);
+  const negative = !context.negative && [...value.matchAll(NEGATIVE)].find(m => !EDITING.test(m[2]));
   if (negative) info('“' + negative[0] + '” can bring in the thing it names. Describe what is there instead.');
   const cuts = [...value.matchAll(CUTS)].length,
     seconds = context.seconds || 0;

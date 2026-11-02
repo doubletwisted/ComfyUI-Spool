@@ -14,6 +14,9 @@ assert.deepEqual(messages('Image 1 walks.', { references: false }), []);
 assert.match(messages('masterpiece, 8k, a cat', {})[0], /“masterpiece”, “8k”/);
 assert.match(messages('A street with no cars', {})[0], /“no cars”/);
 assert.deepEqual(messages('A street with no cars', { negative: true }), []);
+// Editing instructions are followed, so they pass; a thing named after them still warns.
+assert.deepEqual(messages('One take: no cuts, no dissolves. She waves to the sound of waves.', {}), []);
+assert.match(messages('No cuts, no cars.', {})[0], /“no cars”/);
 assert.match(messages('CUT 1: a door. CUT 2: a hall. CUT 3: a room.', { seconds: 5 })[0], /4 shots in 5 s/);
 assert.match(messages('The camera pans, then tilts, then orbits and dollies.', {})[0], /Several camera moves/);
 assert.match(messages('A quiet empty hall.', { audio: true }).join(''), /^$/);

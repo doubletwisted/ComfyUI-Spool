@@ -437,6 +437,39 @@
    ],
    "output_node": false
   },
+  "ImageFromBatch": {
+   "input": {
+    "required": {
+     "image": [
+      "IMAGE",
+      {}
+     ],
+     "batch_index": [
+      "INT",
+      {
+       "default": 0,
+       "min": -16384,
+       "max": 16384
+      }
+     ],
+     "length": [
+      "INT",
+      {
+       "default": 1,
+       "min": 1,
+       "max": 4096
+      }
+     ]
+    }
+   },
+   "output": [
+    "IMAGE"
+   ],
+   "output_name": [
+    "IMAGE"
+   ],
+   "output_node": false
+  },
   "KSamplerSelect": {
    "input": {
     "required": {

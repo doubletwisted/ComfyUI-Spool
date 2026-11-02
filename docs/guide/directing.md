@@ -9,8 +9,8 @@ card at the top of the inspector that shows what it joins.
 
 | Tool | Where | Shortcut | Workflows |
 | --- | --- | --- | --- |
-| Add transition | The button on a cut, or the clip menu | **T** at the nearest cut | MiniMax H3 Continue Between Clips or LTX 2.5 First-Last Frame (local), MiniMax H3 and LTX 2.5 First-Last Frame (Cloud) |
-| Extend shot | The clip menu or the inspector | **E** | MiniMax H3 Continue Between Clips, MiniMax H3 or LTX 2.5 Image to Video (local), MiniMax H3 Max or LTX 2.5 Image to Video (Cloud) |
+| Add transition | The button on a cut, or the clip menu | **T** at the nearest cut | MiniMax H3 Continue Between Clips (local), MiniMax H3 First-Last Frame (Cloud) |
+| Extend shot | The clip menu or the inspector | **E** | MiniMax H3 Continue Between Clips or MiniMax H3 Image to Video (local), MiniMax H3 Max Image to Video (Cloud) |
 | Retake part | The clip menu | **R** | The transition workflows |
 | Recast | The clip menu or the inspector, also for several selected clips | – | MiniMax H3 ControlNet Union (local) |
 | Re-angle, Add effect | The clip menu or the inspector, also for several selected clips | – | MiniMax H3 Reference to Video (local or Cloud) |
@@ -38,26 +38,42 @@ the cut lands on the next frame of the movement.
 
 The other models read single frames: **Last frame of the clip before** and
 **First frame of the clip after**. Each dialog says which the chosen model sees.
+The directing tools offer only MiniMax H3: it reads the direction through a
+language model and holds one take where other models cut or dissolve.
 
 The new clip uses the picture shape of the shot it joins, so a workflow whose
 default is square still matches widescreen footage.
 
 MiniMax H3 renders 24 frames a second in fixed steps, so a transition or retake
-with motion is a little shorter or longer than the length you asked for (2 s gives
-1.9 s). Continue Between Clips expects a 24 fps edit.
+with motion is a little shorter or longer than the length you asked for (4 s gives
+4.04 s). Continue Between Clips expects a 24 fps edit.
 
 ## Transitions
 
 Hover a cut between two touching shots on the same track and press its button, or
 press **T** to use the cut nearest the playhead. Say what happens in between, set
-a length and a model. The transition is inserted at the cut and the shots after it
-move later.
+a length (4 seconds by default) and a model. The transition is inserted at the cut
+and the shots after it move later.
 
-Under the field are a few suggestions (camera move, match the motion, push
-through, whip pan, morph); each adds its wording to the field, where you can edit
-it. When the two shots are very different, MiniMax H3 may cut to the second shot
-near one end instead of moving between them; describe a path from one place to the
-other, or give it more length.
+A transition is one continuous take from the last frame of the first shot to the
+first frame of the second. Spool writes the prompt as a timeline: the footage it
+opens on, what you wrote for the middle, the footage it arrives in, and an
+instruction to keep one take with no cuts or dissolves. What you write decides
+whether the take holds:
+
+- Describe how the camera and the people get from one frame to the other, in
+  order: who moves where, how the camera follows, what comes into view.
+- Name what the second shot opens on, as it really looks: "a coral-covered
+  balustrade with columns behind it", not just "the palace".
+- Join shots that can meet in one move. A first-person shot does not turn into a
+  shot of the same person facing the camera; an empty reef does not become a
+  close-up in a second. Reorder the edit so neighbours share a place or a subject.
+- Give the move time: about 4 seconds for a turn and a reveal, 3 for a small
+  change of framing.
+
+If a take still cuts, make another take or say more about the path. Under the
+field are a few suggestions (camera move, match the motion, push through, whip
+pan, morph); each adds its wording to the field, where you can edit it.
 
 ## Extend a shot
 
@@ -116,14 +132,15 @@ mention becomes.
 
 Under the prompt, Spool lists problems it can see before you spend GPU time: an
 `@name` that is not in the cast, a `<Picture 3>` or `<Video 1>` with no input
-behind it, prompts over 220 words, quality tags such as "8k", "no …" phrasing,
+behind it, prompts over 220 words, quality tags such as "8k", "no …" phrasing
+(except editing instructions such as "no cuts", which video models follow),
 more cuts than the length allows, several camera moves in one shot, and, for
 models that make sound, a prompt that never says what we hear. The checks are
 advice; they never block **Generate**.
 
 ## Drafts
 
-**Draft** beside **Generate** renders quick takes: at most 0.25 megapixels, the
+**Draft** beside **Generate** renders quick takes: at most 0.4 megapixels, the
 smallest size of the same shape for Cloud models, and a workflow's turbo switch
 on. Draft takes carry a **Draft** badge. **Make final** on a draft renders again
 with that take's seed and the clip's current settings at full quality. The

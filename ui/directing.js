@@ -248,6 +248,8 @@ export function createDirecting({
       return {
         motion,
         seconds: length.seconds,
+        // Where the new part starts and ends in the take, in seconds; the prompt's timeline uses them.
+        middle: [head / 24, (length.total - tail) / 24],
         frames: Math.round(length.visible * scale),
         trimHead: Math.round(head * scale),
         trimTail: Math.round(tail * scale),
@@ -326,7 +328,7 @@ export function createDirecting({
       toast('No first and last frame workflow is available.');
       return;
     }
-    const state = { detail: '', seconds: 2, workflow: list[0].id };
+    const state = { detail: '', seconds: 4, workflow: list[0].id };
     openDialog(
       'Add transition',
       '<div class="direct-hero">' +
@@ -335,7 +337,7 @@ export function createDirecting({
         svg('transition') +
         '</span>' +
         frameThumb(right, 'first', 'Into') +
-        '</div><p class="direct-lede" id="directSees"></p><label class="direct-field"><span>What happens in between <em>optional</em></span><textarea id="directDetail" rows="3" placeholder="e.g. she keeps running and the camera follows her through the doorway"></textarea></label>' +
+        '</div><p class="direct-lede" id="directSees"></p><label class="direct-field"><span>What happens in between</span><textarea id="directDetail" rows="4" placeholder="How the camera and the people get from the last frame to the first frame of the next shot, and what comes into view. e.g. she slows, sinks and turns upright; the camera eases back and the statue comes in on the right"></textarea></label>' +
         suggestions(D.TRANSITIONS) +
         '<div class="direct-row">' +
         lengthField(state.seconds, list[0]) +

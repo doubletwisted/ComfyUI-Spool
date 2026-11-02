@@ -205,7 +205,7 @@ class QueueOperationTests(unittest.TestCase):
         values = {"mp": 0.9, "size": "1080x1920", "tier": "1080P", "ratio": "1:1 (Square)", "seed": 4, "turbo": False}
         self.assertEqual(
             requests.draft_values(bindings, values),
-            {"mp": 0.25, "size": "720x1280", "tier": "768P", "ratio": "1:1 (Square)", "seed": 4, "turbo": True},
+            {"mp": 0.4, "size": "720x1280", "tier": "768P", "ratio": "1:1 (Square)", "seed": 4, "turbo": True},
         )
         self.assertEqual(requests.draft_values(bindings, {**values, "mp": 0.1})["mp"], 0.1)
         _, request = requests.prepare(

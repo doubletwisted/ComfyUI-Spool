@@ -105,7 +105,8 @@ def validate_shot_input(binding, setting):
         raise ValueError("Choose an audio track to align with this shot")
 
 
-DRAFT_MEGAPIXELS = 0.25
+# MiniMax H3 loses the shot below 0.4 megapixels.
+DRAFT_MEGAPIXELS = 0.4
 
 
 def draft_values(bindings, values):
