@@ -73,6 +73,135 @@
    ],
    "output_node": false
   },
+  "CFGGuider": {
+   "input": {
+    "required": {
+     "model": [
+      "MODEL",
+      {}
+     ],
+     "positive": [
+      "CONDITIONING",
+      {}
+     ],
+     "negative": [
+      "CONDITIONING",
+      {}
+     ],
+     "cfg": [
+      "FLOAT",
+      {
+       "default": 8.0,
+       "min": 0.0,
+       "max": 100.0,
+       "step": 0.1,
+       "round": 0.01
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "model",
+     "positive",
+     "negative",
+     "cfg"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "GUIDER"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "GUIDER"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "CFGGuider",
+   "display_name": "CFG Guider",
+   "description": "",
+   "python_module": "comfy_extras.nodes_custom_sampler",
+   "category": "model/sampling/guiders",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": null,
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
+  "CFGNorm": {
+   "input": {
+    "required": {
+     "model": [
+      "MODEL",
+      {}
+     ],
+     "strength": [
+      "FLOAT",
+      {
+       "default": 1.0,
+       "min": 0.0,
+       "max": 100.0,
+       "step": 0.01
+      }
+     ]
+    },
+    "optional": {
+     "pre_cfg": [
+      "BOOLEAN",
+      {
+       "tooltip": "If true, rescale the combined noise BEFORE the sampler's CFG combine, without clamping (can amplify). Matches the norm-scaled CFG used by models like Lens. Default false keeps the original post-CFG x0-space attenuate-only behavior.",
+       "default": false
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "model",
+     "strength"
+    ],
+    "optional": [
+     "pre_cfg"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "MODEL"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "patched_model"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "CFGNorm",
+   "display_name": null,
+   "description": "",
+   "python_module": "comfy_extras.nodes_cfg",
+   "category": "advanced/guidance",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": true,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": null,
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
   "CLIPLoader": {
    "input": {
     "required": {
@@ -384,6 +513,177 @@
    ],
    "output_node": false
   },
+  "EmptyMiniMaxH3LatentAV": {
+   "input": {
+    "required": {
+     "width": [
+      "INT",
+      {
+       "default": 1344,
+       "min": 32,
+       "max": 16384,
+       "step": 32
+      }
+     ],
+     "height": [
+      "INT",
+      {
+       "default": 768,
+       "min": 32,
+       "max": 16384,
+       "step": 32
+      }
+     ],
+     "length": [
+      "INT",
+      {
+       "tooltip": "Frame count at 24 fps, snapped up to the model's 17k+5 grid (124 = ~5s; trained range is ~124-362, longer is untested)",
+       "default": 124,
+       "min": 5,
+       "max": 3600,
+       "step": 17
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "width",
+     "height",
+     "length"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "LATENT"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "LATENT"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "EmptyMiniMaxH3LatentAV",
+   "display_name": "Empty MiniMax H3 AV Latent",
+   "description": "Joint video+audio latent for MiniMax H3. Duration snaps to the model's 17k+5 frame grid at 24 fps.",
+   "python_module": "comfy_extras.nodes_minimax_h3",
+   "category": "model/latent/minimax",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": null,
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
+  "FluxKontextImageScale": {
+   "input": {
+    "required": {
+     "image": [
+      "IMAGE",
+      {}
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "image"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "IMAGE"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "IMAGE"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "FluxKontextImageScale",
+   "display_name": null,
+   "description": "This node resizes the image to one that is more optimal for flux kontext.",
+   "python_module": "comfy_extras.nodes_flux",
+   "category": "model/conditioning/flux",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": null,
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
+  "FluxKontextMultiReferenceLatentMethod": {
+   "input": {
+    "required": {
+     "conditioning": [
+      "CONDITIONING",
+      {}
+     ],
+     "reference_latents_method": [
+      "COMBO",
+      {
+       "advanced": true,
+       "multiselect": false,
+       "options": [
+        "offset",
+        "index",
+        "uxo/uno",
+        "index_timestep_zero",
+        "index_timestep_zero_isolated",
+        "index_timestep_zero_text_start"
+       ]
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "conditioning",
+     "reference_latents_method"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "CONDITIONING"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "CONDITIONING"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "FluxKontextMultiReferenceLatentMethod",
+   "display_name": "Edit Model Reference Method",
+   "description": "",
+   "python_module": "comfy_extras.nodes_flux",
+   "category": "model/conditioning/flux",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": true,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": null,
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
   "GetImageSize": {
    "input": {
     "required": {
@@ -519,6 +819,264 @@
    ],
    "output_node": false
   },
+  "ImageScaleToTotalPixels": {
+   "input": {
+    "required": {
+     "image": [
+      "IMAGE",
+      {}
+     ],
+     "upscale_method": [
+      "COMBO",
+      {
+       "multiselect": false,
+       "options": [
+        "nearest-exact",
+        "bilinear",
+        "area",
+        "bicubic",
+        "lanczos"
+       ]
+      }
+     ],
+     "megapixels": [
+      "FLOAT",
+      {
+       "default": 1.0,
+       "min": 0.01,
+       "max": 16.0,
+       "step": 0.01
+      }
+     ],
+     "resolution_steps": [
+      "INT",
+      {
+       "advanced": true,
+       "default": 1,
+       "min": 1,
+       "max": 256
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "image",
+     "upscale_method",
+     "megapixels",
+     "resolution_steps"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "IMAGE"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "IMAGE"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "ImageScaleToTotalPixels",
+   "display_name": "Scale Image to Total Pixels",
+   "description": "",
+   "python_module": "comfy_extras.nodes_post_processing",
+   "category": "image/upscaling",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": null,
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
+  "KSampler": {
+   "input": {
+    "required": {
+     "model": [
+      "MODEL",
+      {
+       "tooltip": "The model used for denoising the input latent."
+      }
+     ],
+     "seed": [
+      "INT",
+      {
+       "default": 0,
+       "min": 0,
+       "max": 18446744073709551615,
+       "control_after_generate": true,
+       "tooltip": "The random seed used for creating the noise."
+      }
+     ],
+     "steps": [
+      "INT",
+      {
+       "default": 20,
+       "min": 1,
+       "max": 10000,
+       "tooltip": "The number of steps used in the denoising process."
+      }
+     ],
+     "cfg": [
+      "FLOAT",
+      {
+       "default": 8.0,
+       "min": 0.0,
+       "max": 100.0,
+       "step": 0.1,
+       "round": 0.01,
+       "tooltip": "The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality."
+      }
+     ],
+     "sampler_name": [
+      [
+       "euler",
+       "euler_cfg_pp",
+       "euler_ancestral",
+       "euler_ancestral_cfg_pp",
+       "heun",
+       "heunpp2",
+       "exp_heun_2_x0",
+       "exp_heun_2_x0_sde",
+       "dpm_2",
+       "dpm_2_ancestral",
+       "lms",
+       "dpm_fast",
+       "dpm_adaptive",
+       "dpmpp_2s_ancestral",
+       "dpmpp_2s_ancestral_cfg_pp",
+       "dpmpp_sde",
+       "dpmpp_sde_gpu",
+       "dpmpp_2m",
+       "dpmpp_2m_cfg_pp",
+       "dpmpp_2m_sde",
+       "dpmpp_2m_sde_gpu",
+       "dpmpp_2m_sde_heun",
+       "dpmpp_2m_sde_heun_gpu",
+       "dpmpp_3m_sde",
+       "dpmpp_3m_sde_gpu",
+       "ddpm",
+       "lcm",
+       "ipndm",
+       "ipndm_v",
+       "deis",
+       "cfgpp_ud10_ab",
+       "res_multistep",
+       "res_multistep_cfg_pp",
+       "res_multistep_ancestral",
+       "res_multistep_ancestral_cfg_pp",
+       "gradient_estimation",
+       "gradient_estimation_cfg_pp",
+       "er_sde",
+       "seeds_2",
+       "seeds_3",
+       "sa_solver",
+       "sa_solver_pece",
+       "ddim",
+       "uni_pc",
+       "uni_pc_bh2"
+      ],
+      {
+       "tooltip": "The algorithm used when sampling, this can affect the quality, speed, and style of the generated output."
+      }
+     ],
+     "scheduler": [
+      [
+       "simple",
+       "sgm_uniform",
+       "karras",
+       "exponential",
+       "ddim_uniform",
+       "beta",
+       "normal",
+       "linear_quadratic",
+       "kl_optimal"
+      ],
+      {
+       "tooltip": "The scheduler controls how noise is gradually removed to form the image."
+      }
+     ],
+     "positive": [
+      "CONDITIONING",
+      {
+       "tooltip": "The conditioning describing the attributes you want to include in the image."
+      }
+     ],
+     "negative": [
+      "CONDITIONING",
+      {
+       "tooltip": "The conditioning describing the attributes you want to exclude from the image."
+      }
+     ],
+     "latent_image": [
+      "LATENT",
+      {
+       "tooltip": "The latent image to denoise."
+      }
+     ],
+     "denoise": [
+      "FLOAT",
+      {
+       "default": 1.0,
+       "min": 0.0,
+       "max": 1.0,
+       "step": 0.01,
+       "tooltip": "The amount of denoising applied, lower values will maintain the structure of the initial image allowing for image to image sampling."
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "model",
+     "seed",
+     "steps",
+     "cfg",
+     "sampler_name",
+     "scheduler",
+     "positive",
+     "negative",
+     "latent_image",
+     "denoise"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "LATENT"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "LATENT"
+   ],
+   "name": "KSampler",
+   "display_name": "KSampler",
+   "description": "Uses the provided model, positive and negative conditioning to denoise the latent image.",
+   "python_module": "nodes",
+   "category": "model/sampling",
+   "output_node": false,
+   "has_intermediate_output": false,
+   "output_tooltips": [
+    "The denoised latent."
+   ],
+   "search_aliases": [
+    "sampler",
+    "sample",
+    "generate",
+    "denoise",
+    "diffuse",
+    "txt2img",
+    "img2img"
+   ]
+  },
   "KSamplerSelect": {
    "input": {
     "required": {
@@ -605,6 +1163,53 @@
     "latent"
    ],
    "output_node": false
+  },
+  "LTXVSeparateAVLatent": {
+   "input": {
+    "required": {
+     "av_latent": [
+      "LATENT",
+      {}
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "av_latent"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "LATENT",
+    "LATENT"
+   ],
+   "output_is_list": [
+    false,
+    false
+   ],
+   "output_name": [
+    "video_latent",
+    "audio_latent"
+   ],
+   "output_tooltips": [
+    null,
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "LTXVSeparateAVLatent",
+   "display_name": "Separate AV Latent",
+   "description": "Split a joint AV latent into its video and audio latents (any AV model, e.g. LTXV or MiniMax H3).",
+   "python_module": "comfy_extras.nodes_lt",
+   "category": "model/latent/ltxv",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": null,
+   "essentials_category": null,
+   "has_intermediate_output": false
   },
   "LoadAudio": {
    "input": {
@@ -1083,6 +1688,136 @@
    ],
    "output_node": false
   },
+  "MiniMaxH3SigmaShift": {
+   "input": {
+    "required": {
+     "model": [
+      "MODEL",
+      {}
+     ],
+     "shift_video": [
+      "FLOAT",
+      {
+       "default": 12.0,
+       "min": 0.01,
+       "max": 100.0,
+       "step": 0.01
+      }
+     ],
+     "shift_audio": [
+      "FLOAT",
+      {
+       "default": 3.0,
+       "min": 0.01,
+       "max": 100.0,
+       "step": 0.01
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "model",
+     "shift_video",
+     "shift_audio"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "MODEL"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "MODEL"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "MiniMaxH3SigmaShift",
+   "display_name": "ModelSamplingMiniMaxH3",
+   "description": "Set the video/audio flow shifts.",
+   "python_module": "comfy_extras.nodes_minimax_h3",
+   "category": "model/patch/minimax",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": [
+    "sigma shift",
+    "minimax shift"
+   ],
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
+  "ModelAttentionBackend": {
+   "input": {
+    "required": {
+     "model": [
+      "MODEL",
+      {
+       "tooltip": "The model to patch."
+      }
+     ],
+     "attention": [
+      "COMBO",
+      {
+       "display_name": "backend",
+       "tooltip": "The dense attention backend. Comfy Kitchen attention uses quantized INT8 attention and is available only on Nvidia and AMD GPUs.",
+       "default": "pytorch attention",
+       "multiselect": false,
+       "options": [
+        "pytorch attention",
+        "comfy kitchen attention"
+       ]
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "model",
+     "attention"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "MODEL"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "model"
+   ],
+   "output_tooltips": [
+    "The model with the selected attention backend."
+   ],
+   "output_matchtypes": null,
+   "name": "ModelAttentionBackend",
+   "display_name": "Model Attention Backend",
+   "description": "Selects the dense attention implementation for the model. When used with Block Sparse Attention, this backend is used whenever sparse attention is inactive or unsupported.",
+   "python_module": "comfy_extras.nodes_model_advanced",
+   "category": "model/patch",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": true,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": [
+    "comfy kitchen",
+    "attention",
+    "pytorch",
+    "kitchen attention"
+   ],
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
   "ModelPatchLoader": {
    "input": {
     "required": {
@@ -1100,6 +1835,63 @@
     "MODEL_PATCH"
    ],
    "output_node": false
+  },
+  "ModelSamplingAuraFlow": {
+   "input": {
+    "required": {
+     "model": [
+      "MODEL"
+     ],
+     "shift": [
+      "FLOAT",
+      {
+       "default": 1.73,
+       "min": 0.0,
+       "max": 100.0,
+       "step": 0.01
+      }
+     ]
+    },
+    "optional": {
+     "sampling": [
+      [
+       "flow",
+       "img_to_img_velocity"
+      ],
+      {
+       "default": "flow",
+       "advanced": true
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "model",
+     "shift"
+    ],
+    "optional": [
+     "sampling"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "MODEL"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "MODEL"
+   ],
+   "name": "ModelSamplingAuraFlow",
+   "display_name": "ModelSamplingAuraFlow",
+   "description": "",
+   "python_module": "comfy_extras.nodes_model_advanced",
+   "category": "model/patch",
+   "output_node": false,
+   "has_intermediate_output": false,
+   "search_aliases": []
   },
   "PreviewImage": {
    "input": {
@@ -1179,6 +1971,56 @@
     "INT"
    ],
    "output_node": false
+  },
+  "PrimitiveString": {
+   "input": {
+    "required": {
+     "value": [
+      "STRING",
+      {
+       "multiline": false
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "value"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "STRING"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "STRING"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "PrimitiveString",
+   "display_name": "Text",
+   "description": "",
+   "python_module": "comfy_extras.nodes_primitive",
+   "category": "utilities/primitive",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": [
+    "text",
+    "string",
+    "text box",
+    "prompt"
+   ],
+   "essentials_category": null,
+   "has_intermediate_output": false
   },
   "PrimitiveStringMultiline": {
    "input": {
@@ -1351,6 +2193,111 @@
     "NOISE"
    ],
    "output_node": false
+  },
+  "RegexExtract": {
+   "input": {
+    "required": {
+     "string": [
+      "STRING",
+      {
+       "multiline": true
+      }
+     ],
+     "regex_pattern": [
+      "STRING",
+      {
+       "multiline": true
+      }
+     ],
+     "mode": [
+      "COMBO",
+      {
+       "multiselect": false,
+       "options": [
+        "First Match",
+        "All Matches",
+        "First Group",
+        "All Groups"
+       ]
+      }
+     ],
+     "case_insensitive": [
+      "BOOLEAN",
+      {
+       "advanced": true,
+       "default": true
+      }
+     ],
+     "multiline": [
+      "BOOLEAN",
+      {
+       "advanced": true,
+       "default": false
+      }
+     ],
+     "dotall": [
+      "BOOLEAN",
+      {
+       "advanced": true,
+       "default": false
+      }
+     ],
+     "group_index": [
+      "INT",
+      {
+       "advanced": true,
+       "default": 1,
+       "min": 0,
+       "max": 100
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "string",
+     "regex_pattern",
+     "mode",
+     "case_insensitive",
+     "multiline",
+     "dotall",
+     "group_index"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "STRING"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "STRING"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "RegexExtract",
+   "display_name": "Extract Text",
+   "description": "",
+   "python_module": "comfy_extras.nodes_string",
+   "category": "text",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": [
+    "regex extract",
+    "regex",
+    "pattern extract",
+    "text parser",
+    "parse text"
+   ],
+   "essentials_category": null,
+   "has_intermediate_output": false
   },
   "ResizeImageMaskNode": {
    "input": {
@@ -2367,6 +3314,331 @@
     "MASK"
    ],
    "output_node": false
+  },
+  "StringConcatenate": {
+   "input": {
+    "required": {
+     "string_a": [
+      "STRING",
+      {
+       "multiline": true
+      }
+     ],
+     "string_b": [
+      "STRING",
+      {
+       "multiline": true
+      }
+     ],
+     "delimiter": [
+      "STRING",
+      {
+       "default": "",
+       "multiline": false
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "string_a",
+     "string_b",
+     "delimiter"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "STRING"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "STRING"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "StringConcatenate",
+   "display_name": "Concatenate Text",
+   "description": "",
+   "python_module": "comfy_extras.nodes_string",
+   "category": "text",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": [
+    "concatenate",
+    "text concat",
+    "join text",
+    "merge text",
+    "combine strings",
+    "string concat",
+    "append text",
+    "combine text"
+   ],
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
+  "StringLength": {
+   "input": {
+    "required": {
+     "string": [
+      "STRING",
+      {
+       "multiline": true
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "string"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "INT"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "length"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "StringLength",
+   "display_name": "Text Length",
+   "description": "",
+   "python_module": "comfy_extras.nodes_string",
+   "category": "text",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": [
+    "character count",
+    "text size",
+    "string length"
+   ],
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
+  "StringReplace": {
+   "input": {
+    "required": {
+     "string": [
+      "STRING",
+      {
+       "multiline": true
+      }
+     ],
+     "find": [
+      "STRING",
+      {
+       "multiline": true
+      }
+     ],
+     "replace": [
+      "STRING",
+      {
+       "multiline": true
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "string",
+     "find",
+     "replace"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "STRING"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "STRING"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "StringReplace",
+   "display_name": "Replace Text",
+   "description": "",
+   "python_module": "comfy_extras.nodes_string",
+   "category": "text",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": [
+    "replace",
+    "find and replace",
+    "substitute",
+    "swap text"
+   ],
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
+  "TextEncodeQwenImageEditPlus": {
+   "input": {
+    "required": {
+     "clip": [
+      "CLIP",
+      {}
+     ],
+     "prompt": [
+      "STRING",
+      {
+       "multiline": true,
+       "dynamicPrompts": true
+      }
+     ]
+    },
+    "optional": {
+     "vae": [
+      "VAE",
+      {}
+     ],
+     "image1": [
+      "IMAGE",
+      {}
+     ],
+     "image2": [
+      "IMAGE",
+      {}
+     ],
+     "image3": [
+      "IMAGE",
+      {}
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "clip",
+     "prompt"
+    ],
+    "optional": [
+     "vae",
+     "image1",
+     "image2",
+     "image3"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "CONDITIONING"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "CONDITIONING"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "TextEncodeQwenImageEditPlus",
+   "display_name": "Text Encode Qwen Image Edit Plus",
+   "description": "",
+   "python_module": "comfy_extras.nodes_qwen",
+   "category": "model/conditioning/qwen image",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": null,
+   "essentials_category": null,
+   "has_intermediate_output": false
+  },
+  "TrimAudioDuration": {
+   "input": {
+    "required": {
+     "audio": [
+      "AUDIO",
+      {}
+     ],
+     "start_index": [
+      "FLOAT",
+      {
+       "tooltip": "Start time in seconds, can be negative to count from the end (supports sub-seconds).",
+       "default": 0.0,
+       "min": -18446744073709551615,
+       "max": 18446744073709551615,
+       "step": 0.01
+      }
+     ],
+     "duration": [
+      "FLOAT",
+      {
+       "tooltip": "Duration in seconds",
+       "default": 60.0,
+       "min": 0.0,
+       "step": 0.01
+      }
+     ]
+    }
+   },
+   "input_order": {
+    "required": [
+     "audio",
+     "start_index",
+     "duration"
+    ]
+   },
+   "is_input_list": false,
+   "output": [
+    "AUDIO"
+   ],
+   "output_is_list": [
+    false
+   ],
+   "output_name": [
+    "AUDIO"
+   ],
+   "output_tooltips": [
+    null
+   ],
+   "output_matchtypes": null,
+   "name": "TrimAudioDuration",
+   "display_name": "Trim Audio Duration",
+   "description": "Trim audio tensor into chosen time range.",
+   "python_module": "comfy_extras.nodes_audio",
+   "category": "audio",
+   "output_node": false,
+   "deprecated": false,
+   "experimental": false,
+   "dev_only": false,
+   "api_node": false,
+   "price_badge": null,
+   "search_aliases": [
+    "cut audio",
+    "audio clip",
+    "shorten audio"
+   ],
+   "essentials_category": null,
+   "has_intermediate_output": false
   },
   "UNETLoader": {
    "input": {

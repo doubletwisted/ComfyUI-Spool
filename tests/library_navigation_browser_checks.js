@@ -11,7 +11,7 @@
   click('[data-workflow-location="local"]');
   check(
     'Local filter shows only local built-ins and project workflows',
-    ids().length === 11 &&
+    ids().length === 13 &&
       ids().every(id => catalog.find(w => w.id === id).section === 'local') &&
       !!$('[data-template="custom-local"]') &&
       !$('[data-template="custom-cloud"]'),
@@ -49,7 +49,7 @@
   search.value = '';
   search.dispatchEvent(new Event('input'));
   click('[data-workflow-location="all"]');
-  check('All restores the complete catalog', ids().length === 25);
+  check('All restores the complete catalog', ids().length === 27);
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 32;
   const image = await new Promise(resolve => canvas.toBlob(resolve, 'image/png')),

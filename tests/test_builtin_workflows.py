@@ -63,6 +63,8 @@ class OwnWorkflowTests(unittest.TestCase):
                 "video_minimax_h3_fun_controlnet_union",
                 "video_minimax_h3_multiframe_reference",
                 "video_minimax_h3_r2v",
+                "video_minimax_h3_recast",
+                "video_minimax_h3_regenerate",
             ],
         )
 
