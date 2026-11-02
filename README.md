@@ -8,6 +8,7 @@
 <p align="center"><b>A video timeline studio inside ComfyUI</b></p>
 
 <p align="center">
+  <a href="https://doubletwisted.github.io/ComfyUI-Spool/demo/"><img alt="Try the demo" src="https://img.shields.io/badge/Try_the_demo-101113?style=flat&logo=googlechrome&logoColor=white"></a>
   <a href="docs/guide/README.md"><img alt="User guide" src="https://img.shields.io/badge/User_guide-101113?style=flat&logo=gitbook&logoColor=white"></a>
   <a href="CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-101113?style=flat&logo=keepachangelog&logoColor=white"></a>
   <a href="https://github.com/sponsors/doubletwisted"><img alt="Sponsor" src="https://img.shields.io/badge/Sponsor-101113?style=flat&logo=githubsponsors&logoColor=white"></a>
@@ -24,6 +25,10 @@ them, and choose the take that goes in the edit. Takes render on this computer,
 on Comfy Cloud or on a Deadline farm.
 
 Your workflows stay as they are: Spool needs no custom nodes in the graph.
+
+To look around first, [try the online demo](https://doubletwisted.github.io/ComfyUI-Spool/demo/):
+the studio in your browser with a finished project. You can play the edit,
+review takes and change the edit there; generating takes needs Spool with ComfyUI.
 
 ![The Spool studio: an eight-shot sequence on the timeline, the first shot selected with its four takes beside the viewer and its workflow inputs on the right](docs/images/studio.webp)
 
