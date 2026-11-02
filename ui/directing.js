@@ -4,7 +4,7 @@ import { resolveMentions, tag, tagStyle } from './cast.js';
 import { inputFilled } from './input-groups.js';
 import { lintPrompt } from './prompt-lint.js';
 
-// Directing tools: transitions at cuts, extensions, recasts and the cast.
+// Directing tools: transitions at cuts, extensions and the cast.
 // Every tool makes or changes ordinary clips with ordinary workflows; the clip's
 // `direction` only remembers how it was made so the inspector can offer the same
 // choices again.
@@ -450,154 +450,13 @@ export function createDirecting({
     await finish([clip], generate, 'Extension added after ' + source.name);
   }
 
-  // ---- recast ------------------------------------------------------------------------------
+  // ---- cast ------------------------------------------------------------------------------
   function castList() {
     return getState().cast || [];
   }
   function castImage(file) {
     return '/spool/api/input/' + encodeURIComponent(file);
   }
-  function recastDialog(ids) {
-    const clips = ids.map(id => getState().clips.find(c => c.id === id)).filter(c => c && !take(c).placeholder);
-    if (!clips.length) {
-      toast('Choose shots with footage or a generated take.');
-      return;
-    }
-    if (clips.some(c => take(c).media.kind !== 'video')) {
-      toast('Recast needs video shots.');
-      return;
-    }
-    const list = choices('recast');
-    if (!list.length) {
-      toast('No workflow for this tool is available.');
-      return;
-    }
-    const state = {
-      detail: '',
-      workflow: list[0].id,
-      castId: castList()[0]?.id || null,
-      // A generated shot's own prompt usually says where it happens.
-      place: D.placeFrom(sourcePrompt(clips[0])),
-      problem: () => (!state.castId ? 'Add a cast member to recast with.' : null),
-    };
-    const strip = clips
-      .slice(0, 6)
-      .map((c, i) => frameThumb(c, 'first', 'Shot ' + (i + 1)))
-      .join('');
-    const body =
-      '<div class="recast-shots">' +
-      strip +
-      (clips.length > 6 ? '<span class="recast-more">+' + (clips.length - 6) + '</span>' : '') +
-      '</div><div id="recastBody"></div><div id="recastModels"></div>';
-    openDialog(
-      'Recast ' + (clips.length === 1 ? clips[0].name : clips.length + ' shots'),
-      body,
-      'Recast',
-      state,
-      (s, generate) =>
-        recast(
-          clips.map(c => c.id),
-          s,
-          generate,
-        ),
-      { kind: 'recast' },
-    );
-    const renderBody = () => {
-      $('recastBody').innerHTML =
-        '<h3 class="direct-heading">Character</h3><div class="cast-pick" role="radiogroup">' +
-        castList()
-          .map(
-            m =>
-              '<button type="button" role="radio" class="cast-pick-card" data-cast-pick="' +
-              esc(m.id) +
-              '" aria-checked="' +
-              (m.id === state.castId) +
-              '"><img src="' +
-              esc(castImage(m.images[0])) +
-              '" alt=""><span>' +
-              esc(m.name) +
-              '</span></button>',
-          )
-          .join('') +
-        '<label class="cast-pick-card add" title="Add a cast member from a picture"><input type="file" accept="image/*" hidden id="recastCastFile"><span>' +
-        svg('plus') +
-        '</span><span>New from picture</span></label></div><label class="direct-field"><span>Where</span><input id="recastPlace" type="text" value="' +
-        esc(state.place) +
-        '" placeholder="e.g. swimming underwater through a sunlit coral palace"></label><label class="direct-field"><span>Direction <em>optional</em></span><input id="directDetail" type="text" value="' +
-        esc(state.detail) +
-        '" placeholder="e.g. keep her red scarf"></label><p class="direct-lede">The main person in each shot becomes this character and moves exactly as before. Say where it happens; the new take has its own sound.</p>';
-      $('recastPlace').oninput = e => (state.place = e.target.value);
-      $('directDetail').oninput = e => (state.detail = e.target.value);
-      $('recastBody')
-        .querySelectorAll('[data-cast-pick]')
-        .forEach(
-          b =>
-            (b.onclick = () => {
-              state.castId = b.dataset.castPick;
-              renderBody();
-            }),
-        );
-      $('recastCastFile').onchange = async e => {
-        const file = e.target.files[0];
-        if (!file) return;
-        try {
-          const member = await addCastMember(file.name.replace(/\.[^.]+$/, ''), [file]);
-          state.castId = member.id;
-          renderBody();
-        } catch (error) {
-          toast(error.message);
-        }
-      };
-      $('recastModels').innerHTML = workflowPicker('recast', state.workflow);
-      $('recastModels')
-        .querySelectorAll('[data-direct-workflow]')
-        .forEach(
-          b =>
-            (b.onclick = () => {
-              state.workflow = b.dataset.directWorkflow;
-              renderBody();
-            }),
-        );
-    };
-    renderBody();
-  }
-  async function recast(ids, options, generate = false) {
-    const list = choices('recast'),
-      choice = list.find(c => c.id === options.workflow) || list[0],
-      member = castList().find(m => m.id === options.castId);
-    if (!member) throw Error('Choose a cast member to recast with.');
-    const done = [];
-    for (const id of ids) {
-      const source = getState().clips.find(c => c.id === id);
-      if (!source) continue;
-      const original = (source.takes || []).some(t => !t.generated && !t.placeholder) ? 'original' : 'selected',
-        seconds = D.fitSeconds(choice, (source.out - source.in) / getFps());
-      done.push(
-        await place('recast', choice.id, { clipId: id }, c => {
-          const b = D.toolBindings(c.bindings);
-          c.direction = { kind: 'recast', detail: options.detail || '', castId: member.id, place: options.place || '' };
-          const recipe = getRecipe(c),
-            style = tagStyle(b.prompt && recipe?.prompt?.[b.prompt.nodeId]?.inputs?.[b.prompt.input]),
-            pictures = Math.min(member.images.length, Math.max(1, b.references.length));
-          fill(c, {
-            prompt: D.recastPrompt(options.detail || '', {
-              character: member.description || '',
-              pictures,
-              style,
-              place: options.place || D.placeFrom(sourcePrompt(source)),
-            }),
-            seconds,
-            links: [{ key: b.video?.key, source: original, ...(b.video?.audio ? { audio: true } : {}) }],
-            images: member.images.slice(0, pictures),
-            shape: source,
-          });
-        }),
-      );
-    }
-    await finish(done, generate, 'Recast: ' + done.length + (done.length === 1 ? ' shot' : ' shots'));
-  }
-
-  // ---- cast ------------------------------------------------------------------------------
   async function uploadImage(file) {
     if (!file.type.startsWith('image/')) throw Error('Choose an image file.');
     const uploaded = await api.upload('projects/' + projectKey + '/input', file, file.name || 'cast.png', {
@@ -754,8 +613,7 @@ export function createDirecting({
   function directStrip(c) {
     const t = take(c);
     if (t.placeholder) return '';
-    const video = t.media.kind === 'video',
-      tools = [['extend', 'Extend', 'E'], ...(video ? [['recast', 'Recast', '']] : [])];
+    const tools = [['extend', 'Extend', 'E']];
     return (
       '<div class="direct-strip" role="toolbar" aria-label="Directing tools">' +
       tools
@@ -788,8 +646,7 @@ export function createDirecting({
           ? '<span class="direct-bridge" aria-hidden="true">' + svg(D.KINDS[d.kind].icon) + '</span>'
           : '') +
         (links.includes('next') ? frameThumb(next, 'first', 'To') : '');
-    const member = d.castId && castList().find(m => m.id === d.castId),
-      bindings = D.toolBindings(c.bindings),
+    const bindings = D.toolBindings(c.bindings),
       motion = (bindings.before || bindings.after) && links.some(l => l === 'previous' || l === 'next');
     return (
       '<section class="direction-card"><div class="direction-head">' +
@@ -800,13 +657,6 @@ export function createDirecting({
       (motion ? '<span>Anchored on a second of footage each side</span>' : '') +
       '</div>' +
       (frames ? '<div class="direction-frames">' + frames + '</div>' : '') +
-      (member
-        ? '<div class="direction-cast"><img src="' +
-          esc(castImage(member.images[0])) +
-          '" alt=""><span>@' +
-          esc(member.name) +
-          '</span></div>'
-        : '') +
       '</section>'
     );
   }
@@ -982,9 +832,7 @@ export function createDirecting({
       .forEach(
         b =>
           (b.onclick = () => {
-            const tool = b.dataset.directTool;
-            if (tool === 'extend') extendDialog(c.id);
-            else recastDialog([c.id]);
+            if (b.dataset.directTool === 'extend') extendDialog(c.id);
           }),
       );
     const card = $('inspectorContent').querySelector('.direction-card');
@@ -1002,7 +850,6 @@ export function createDirecting({
   }
   function clipActions(c) {
     const t = take(c),
-      video = !t.placeholder && t.media.kind === 'video',
       before = touching(c, 'previous'),
       after = touching(c, 'next');
     return [
@@ -1013,14 +860,7 @@ export function createDirecting({
         reason: t.placeholder ? 'Needs a take first.' : null,
         run: () => extendDialog(c.id),
       },
-      ...(video ? [{ label: 'Recast…', run: () => recastDialog([c.id]) }] : []),
     ];
-  }
-  function selectionActions(clips) {
-    const videos = clips.filter(c => !take(c).placeholder && take(c).media.kind === 'video');
-    if (!videos.length) return [];
-    const ids = videos.map(c => c.id);
-    return [{ label: 'Recast ' + ids.length + ' shots…', run: () => recastDialog(ids) }];
   }
   /** T: the cut nearest the playhead on the active track. */
   function transitionAtPlayhead(track) {
@@ -1041,8 +881,6 @@ export function createDirecting({
     addTransition,
     extendDialog,
     extendClip,
-    recastDialog,
-    recast,
     addCastMember,
     renderCast,
     directionCard,
@@ -1050,7 +888,6 @@ export function createDirecting({
     bindPromptTools,
     promptReport,
     clipActions,
-    selectionActions,
     transitionAtPlayhead,
   };
 }

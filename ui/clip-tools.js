@@ -237,9 +237,7 @@ export function createClipTools({
     if (selectionIds().length > 1) {
       getShowActionMenu()(
         'Selection actions',
-        inspector
-          ? [{ label: 'Delete selection', run: () => getRemove()(false) }]
-          : [...(getDirecting()?.selectionActions(selectedVideos()) || []), ...selectionActions()],
+        inspector ? [{ label: 'Delete selection', run: () => getRemove()(false) }] : selectionActions(),
         x,
         y,
         origin,

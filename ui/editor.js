@@ -92,7 +92,6 @@ async function startEditor(isFailed) {
     warning: '<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.3"/>',
     transition: '<path d="M3 5v14l9-7zM21 5v14l-9-7z"/>',
     extend: '<path d="M3 5h8v14H3zM14 12h7M18 8l4 4-4 4"/>',
-    recast: '<circle cx="8" cy="8" r="3"/><path d="M3 20a5 5 0 0 1 10 0M16 4l3 3-3 3M19 7h-4M16 14l3 3-3 3M19 17h-4"/>',
     cast: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14a5 5 0 0 1 6.5 5"/>',
   };
   let diagnosticsTimer = 0;

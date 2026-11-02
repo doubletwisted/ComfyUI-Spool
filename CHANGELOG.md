@@ -20,8 +20,12 @@ All notable changes to Spool are recorded here. Versions follow
   MiniMax H3 workflows.
 - A workflow's video input can read only the start or end of its clip (`span`),
   and **Use take** starts a directed clip's take after its anchored frames.
-- **Recast** gives one or more shots another actor: the shot's pose drives MiniMax
-  H3 ControlNet Union and a cast member's pictures give the person.
+- **MiniMax H3 · Recast**, a built-in workflow, puts other people into a shot and
+  keeps its set, camera, movement and sound (after H3 Recast and the BFS character
+  swap LoRA). Drop it on a clip, add a picture of the new person and say who
+  becomes who.
+- **MiniMax H3 · Regenerate**, a built-in workflow, refines any clip at a higher
+  resolution with the Open-H3-Regenerate refiner.
 - A **Cast** tab keeps characters with pictures; `@Name` in a prompt fills the
   workflow's reference inputs and becomes the tag the model reads.
 - Prompt checks under the prompt, and `@` suggestions from the cast. Editing

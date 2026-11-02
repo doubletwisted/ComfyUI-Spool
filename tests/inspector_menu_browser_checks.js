@@ -89,7 +89,7 @@
   check(
     'Video footage offers audio and cut actions without unavailable workflows',
     JSON.stringify(labels().filter(label => !label.startsWith('Add transition'))) ===
-      JSON.stringify(['Disable clip', 'Unlink audio and video', 'Detect cuts…', 'Extend shot…', 'Recast…', 'Delete']),
+      JSON.stringify(['Disable clip', 'Unlink audio and video', 'Detect cuts…', 'Extend shot…', 'Delete']),
   );
   action('Unlink audio and video').click();
   await n.flush();

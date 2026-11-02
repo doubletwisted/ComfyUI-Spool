@@ -1,6 +1,5 @@
-// Directing tools: transitions, extensions and recasts.
+// Directing tools: transitions and extensions.
 // Pure data and rules; ui/directing.js owns the dialogs and edits.
-import { tag } from './cast.js';
 
 /**
  * Optional wording a dialog offers next to its prompt field. Choosing one adds its
@@ -36,7 +35,6 @@ export const TRANSITIONS = [
 export const KINDS = {
   transition: { name: 'Transition', icon: 'transition' },
   extend: { name: 'Extension', icon: 'extend' },
-  recast: { name: 'Recast', icon: 'recast' },
 };
 
 /**
@@ -56,16 +54,6 @@ export const WORKFLOWS = {
     { id: 'video_minimax_h3_bridge', label: 'MiniMax H3 · Local', target: 'local', min: 1, max: 12, motion: true },
     { id: 'video_minimax_h3_i2v', label: 'MiniMax H3 · From last frame', target: 'local', min: 2, max: 15 },
     { id: 'api_minimax_h3_max_i2v', label: 'MiniMax H3 Max · Cloud', target: 'cloud', min: 4, max: 15 },
-  ],
-  // Recast transfers the shot's motion through pose control, which only runs locally.
-  recast: [
-    {
-      id: 'video_minimax_h3_fun_controlnet_union',
-      label: 'MiniMax H3 ControlNet · Local',
-      target: 'local',
-      min: 2,
-      max: 15,
-    },
   ],
 };
 
@@ -198,38 +186,6 @@ export function extendPrompt(sourcePrompt = '', detail = '', { motion = false } 
   ]
     .filter(Boolean)
     .join(' ');
-}
-
-/** A recast's prompt. MiniMax H3 numbers the character pictures <Picture 1>, <Picture 2>. */
-export function recastPrompt(detail = '', { character = '', pictures = 1, style = 'angle', place = '' } = {}) {
-  const shown = Array.from({ length: Math.max(1, pictures) }, (_, i) => tag(style, 'Image', i + 1)).join(' and ');
-  // A frame of the shot as a reference brings back its old actor, so the place is described in words.
-  const where = String(place || '')
-    .trim()
-    .replace(/[.!?]+$/, '');
-  return [
-    'The character shown in ' +
-      shown +
-      (character ? ' (' + character + ')' : '') +
-      (where ? ' is ' + where + ',' : '') +
-      ' performing exactly the movement of the pose guide.',
-    'The plain background of the character pictures is not part of the scene.',
-    sentence(detail),
-    'Natural ambient sound.',
-  ]
-    .filter(Boolean)
-    .join(' ');
-}
-
-/** A place to recast into, taken from a shot's prompt: its first sentence without frame instructions. */
-export function placeFrom(prompt = '') {
-  const text = stripFramePhrases(prompt);
-  return text
-    ? text
-        .split(/(?<=[.!?])\s/)[0]
-        .replace(/[.!?]$/, '')
-        .slice(0, 200)
-    : '';
 }
 
 function stripFramePhrases(text) {

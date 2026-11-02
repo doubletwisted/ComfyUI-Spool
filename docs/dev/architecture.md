@@ -241,7 +241,7 @@ Comfy templates without touching the user's graph.
 
 ## Directing tools
 
-Transitions, extensions and recasts are ordinary clips with built-in
+Transitions and extensions are ordinary clips with built-in
 workflows, so execution, takes and Edit in Comfy need no new paths. What they add
 is resolved when a request is frozen, never stored as baked files: neighbour inputs
 read the clips beside the shot, cast mentions fill reference inputs, and draft
@@ -255,7 +255,8 @@ restarts any movement under way at the cut. A request records what each resolved
 (`shotInputs[].clipId`, `castMentions`, `quality`, `finishes`), so a take stays explainable
 after the edit changes. The command API exposes the same pieces on existing clips
 (`set_shot_inputs`, `set_cast`, draft variants); creating the clips stays a studio
-action, as other clip creation is.
+action, as other clip creation is. A technique that needs no place on the
+timeline, such as Recast, is a built-in workflow only, with no dialog of its own.
 
 ## Constraints
 

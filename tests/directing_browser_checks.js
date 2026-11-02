@@ -138,13 +138,13 @@
   );
   check('Only one set of prompt tools is shown', $('inspectorContent').querySelectorAll('.prompt-tools').length === 1);
 
-  // A shot offers only the tools that keep its footage: Extend and Recast.
+  // A shot offers one directing tool: Extend. Recast is a workflow in the library.
   n.selectClip('shot-a');
   await wait('directing tools', () => $('inspectorContent').querySelector('[data-direct-tool]'));
   check(
-    'A video shot offers Extend and Recast only',
+    'A video shot offers Extend only',
     JSON.stringify([...$('inspectorContent').querySelectorAll('[data-direct-tool]')].map(b => b.dataset.directTool)) ===
-      '["extend","recast"]',
+      '["extend"]',
   );
   const closedBefore = $('modalOverlay').hidden;
   press('r');

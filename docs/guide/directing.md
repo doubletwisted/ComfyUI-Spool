@@ -1,7 +1,7 @@
 # Directing tools
 
 Directing tools make new shots from the edit itself: a transition between two
-shots, the next moment of a shot, or the same shot with another actor. Each tool
+shots or the next moment of a shot. Each tool
 makes an ordinary clip with
 an ordinary workflow, so its takes, seeds and **Edit in Comfy** work as for any
 other clip. A clip made this way carries a small label on the timeline and a
@@ -11,7 +11,6 @@ card at the top of the inspector that shows what it joins.
 | --- | --- | --- | --- |
 | Add transition | The button on a cut, or the clip menu | **T** at the nearest cut | MiniMax H3 Continue Between Clips (local), MiniMax H3 First-Last Frame (Cloud) |
 | Extend shot | The clip menu or the inspector | **E** | MiniMax H3 Continue Between Clips or MiniMax H3 Image to Video (local), MiniMax H3 Max Image to Video (Cloud) |
-| Recast | The clip menu or the inspector, also for several selected clips | – | MiniMax H3 ControlNet Union (local) |
 
 Every dialog has **Add**, which only changes the edit, and **Add and generate**,
 which also queues one take. Generating never chooses a take for you.
@@ -86,18 +85,37 @@ as trimmed in the edit: from its last second with MiniMax H3 Continue Between
 Clips, or from its last frame with the other models. Describe what happens next.
 The shot's own prompt, if it has one, is added as context.
 
-## Recast
+## Recast and Regenerate
 
-**Recast** runs the shot through MiniMax H3 ControlNet Union: the shot's pose drives
-the movement and the cast member's pictures give the person. Say **Where** it
-happens; Spool fills it from the shot's prompt when it has one. A frame of the shot
-is not passed as a picture, because the model would bring back the old actor. The
-take has new sound. Select several shots to recast them all at once; each gets its
-own clip workflow and keeps its footage as a take.
+These two are workflows in the library, not tools with dialogs. Drop one on a
+clip: the clip keeps its takes and **Use timeline video** feeds it the clip's own
+footage. Fill the inputs in the inspector and press **Generate**.
 
-Recast makes the whole shot again: the person moves as before, but the place is
-drawn from your words, so it does not match the original background. It runs on
-local ComfyUI or Deadline; Comfy Cloud has no pose-control workflow in Spool yet.
+**MiniMax H3 · Recast** puts other people into a shot and keeps the rest: the set,
+the camera, the movement and the shot's sound. It follows
+[H3 Recast](https://github.com/Bambushu/h3-recast) and needs the BFS character swap
+LoRA (`minimax_h3_character_swap_v1.0_ref2va_r64_gl.safetensors`, from
+[Civitai](https://civitai.com/models/2027766?modelVersionId=3401556), login needed)
+in `models/loras`.
+
+- **Character** is a picture of the new person. Spool edits them into the shot's
+  first frame with Qwen-Image-Edit, and that frame shows the model who goes where.
+- **Scene reference** replaces that edit with your own frame, made in any image
+  editor. It has to be a frame of this shot with everyone edited into their new look.
+- **Person 1** to **Person 3**, left to right as they stand, one sentence each with
+  *becomes*: `the woman in the red dress becomes a woman with short blonde hair in a
+  green dress`. Write a line for everyone in the shot, also those who stay as they
+  are, or they get new clothes.
+
+Big changes land (hair colour, age, clothes); small ones fall back to the shot.
+Hands, accessories and lips come from the shot. A 7-second shot at 0.9 megapixels
+took about 14 minutes on one RTX 4090.
+
+**MiniMax H3 · Regenerate** sharpens a finished clip at a higher resolution in three
+steps with the Open-H3-Regenerate refiner, the same finish as **Make final**, for a
+clip that was not made as a draft. **Strength** says how much it may change (0.25
+keeps motion and framing). Describe the shot in **Prompt**. It is made for MiniMax H3
+clips; other footage may change more.
 
 ## Cast
 
