@@ -297,6 +297,10 @@ def record(args):
 
     current = get(host, f"projects/{project}", view=True)
     document = current["document"]
+    # A clip split or copied in a saved edit is new to the host; its takes' setups
+    # are read through the host clip that holds them.
+    host_clips = {c["id"] for c in document["clips"]}
+    holder = {t["id"]: c["id"] for c in document["clips"] for t in c.get("takes", [])}
     overlay = [overlay_spec(value) for value in args.overlay]
     if args.leave_out or args.move_to_end or args.close_gaps or overlay:
         demo_edit(document, args.leave_out, args.move_to_end, args.close_gaps, overlay)
@@ -304,6 +308,7 @@ def record(args):
         use_edit(current, args.edit)
     if args.max_takes:
         limit_takes(document, args.max_takes)
+        prune_media(document)
     keep("GET", f"projects/{project}", current)
     for path in ("capabilities", "builtin-workflows", "templates", "comfy"):
         keep("GET", path, get(host, path))
@@ -316,8 +321,10 @@ def record(args):
             path = f"projects/{project}/takes/{urllib.parse.quote(take['id'])}"
             keep("GET", path, get_or_error(host, path))
             # Use take reads the take's workflow before it puts the take in the edit.
+            source = clip["id"] if clip["id"] in host_clips else holder.get(take["id"], clip["id"])
+            read = f"projects/{project}/take-workflow/{urllib.parse.quote(source)}/{urllib.parse.quote(take['id'])}"
             path = f"projects/{project}/take-workflow/{urllib.parse.quote(clip['id'])}/{urllib.parse.quote(take['id'])}"
-            keep("GET", path, get_or_error(host, path))
+            keep("GET", path, get_or_error(host, read))
             versions.add((take.get("batch") or {}).get("workflowVersion"))
     for version in sorted(v for v in versions if v):
         path = "workflows/" + urllib.parse.quote(version)
