@@ -70,10 +70,16 @@
     await n.flush();
     const recipe = await (await fetch('/spool/api/workflows/' + c.workflowVersion)).json(),
       bindings = c.bindings;
+    // Workflows that remake a clip take its length from the clip; Recast writes its prompt from the Person lines.
+    const remake = { video_minimax_h3_recast: 0, video_minimax_h3_regenerate: 1 }[t.id];
     check(
       t.id + ' appends an automatically bound shot',
-      bindings.filter(b => b.role === 'positive').length === 1 &&
-        bindings.filter(b => b.role === 'duration').length === 1 &&
+      (remake === undefined
+        ? bindings.filter(b => b.role === 'positive').length === 1 &&
+          bindings.filter(b => b.role === 'duration').length === 1
+        : bindings.filter(b => b.role === 'positive').length === remake &&
+          !bindings.some(b => b.role === 'duration') &&
+          bindings.some(b => b.slot === 'video')) &&
         bindings.filter(b => b.role === 'seed').length === 1 &&
         bindings.some(b => b.role === 'resolution') &&
         $('#modalOverlay').hidden,
