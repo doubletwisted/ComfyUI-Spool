@@ -474,6 +474,38 @@ class CommandTests(unittest.TestCase):
         self.assertFalse(operations.keeps_recipe({"workflowVersion": "v2"}, own, {"bindings": []}))
         self.assertTrue(operations.keeps_recipe({"workflowVersion": "v2"}, own, {"bindings": [{"draft": True}]}))
 
+    def test_use_take_of_a_directed_clips_own_take_keeps_its_recipe_links_and_start(self):
+        document = self.project["document"]
+        version = document["clips"][0]["workflowVersion"]
+        document["clips"][0].update(
+            direction={"kind": "extend", "head": 22},
+            generationBase={"takeId": "original"},
+            shotInputs=[{"key": "source", "source": "previous"}],
+        )
+        self.project = self.store.save(self.project["id"], self.project["revision"], document)
+        # Generated takes come from attempts; give the projection one made with the clip's recipe.
+        made = {
+            "id": "made",
+            "generated": True,
+            "summary": {"workflowVersion": version},
+            "media": {**document["clips"][0]["takes"][0]["media"], "id": "made-media", "frames": 100},
+        }
+        attach = commands.ledger.attach
+
+        def with_made(document, attempts):
+            projected = attach(document, attempts)
+            next(c for c in projected["clips"] if c["id"] == "shot")["takes"].append(copy.deepcopy(made))
+            return projected
+
+        clip = copy.deepcopy(self.store.clip(self.project["id"], "shot"))
+        clip["takes"].append(made)
+        with patch.object(self.store, "clip", return_value=clip), patch.object(commands.ledger, "attach", with_made):
+            self.execute(self.envelope("use_take", {"clipId": "shot", "takeId": "made", "capture": None}))
+        clip = self.store.get(self.project["id"])["document"]["clips"][0]
+        self.assertEqual((clip["takeId"], clip["workflowVersion"], clip["in"]), ("made", version, 22))
+        self.assertEqual(clip["shotInputs"], [{"key": "source", "source": "previous"}])
+        self.assertNotIn("generationBase", clip, "Its settings are the clip's own recipe")
+
     def test_apply_workflow_resets_target_seed_and_take_setup_like_the_library(self):
         document = self.project["document"]
         version = document["clips"][0]["workflowVersion"]

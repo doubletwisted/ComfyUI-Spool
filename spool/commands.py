@@ -370,6 +370,7 @@ def execute(store, media, project_id, data):
     if action not in ("brief", "set_cast", "cancel", "recover_submission") and not clip_id:
         raise ValueError("Supply an explicit shot ID for this command")
     scope_check(project_id, scope, ACTION_CAPABILITIES[action], [clip_id] if clip_id else [])
+    keeps = False
     if action == "use_take":
         # Resolve replay before preparing inputs or consulting a possibly changed take.
         if store.operation(identity, project_id, data) is not None:
@@ -377,7 +378,7 @@ def execute(store, media, project_id, data):
         clip = store.clip(project_id, clip_id)
         take = next((t for t in clip["takes"] if t["id"] == arguments["takeId"]), None)
         if take and operations.keeps_recipe(clip, take, store.recipe(project_id, clip.get("workflowVersion"))):
-            action = "choose_take"
+            action, keeps = "choose_take", True
     if action == "use_take":
         capture = arguments["capture"]
         if capture is None:
@@ -473,6 +474,9 @@ def execute(store, media, project_id, data):
             if not take:
                 raise ValueError("Take is unavailable for this shot")
             operations.choose_take(document, clip, take["id"], take["media"]["frames"], take)
+            if keeps:
+                # Use take of the clip's own take: its settings are the clip's recipe, not an adopted setup.
+                clip.pop("generationBase", None)
         elif action == "feedback":
             take_id = arguments["takeId"]
             projected = ledger.attach(copy.deepcopy(document), store.project_attempts(project_id, db))

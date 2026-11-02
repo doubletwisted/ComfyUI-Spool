@@ -56,4 +56,25 @@ assert.deepEqual(
 assert.deepEqual(setups, [], 'No capture runs for the clip’s own take');
 await tools.chooseTake('transition', 'older');
 assert.deepEqual(setups, ['older'], 'A take from another recipe still goes through workflow setup');
+// A draft-capable clip whose setup was adopted from a take: using its own draft keeps the
+// recipe and drops the stale base, so Generate and Make final stay available.
+state.clips.push({
+  id: 'drafting',
+  workflowVersion: 'v5',
+  bindings: [{ key: 'draft', draft: true }],
+  generationBase: { takeId: 'adopted' },
+  in: 0,
+  out: 49,
+  takeId: 'adopted',
+  takes: [
+    { id: 'adopted', generated: true, number: 1, media: media(49), summary: { workflowVersion: 'v4' } },
+    { id: 'draft', generated: true, number: 2, media: media(49), summary: { workflowVersion: 'v5', quality: 'draft' } },
+  ],
+});
+await tools.chooseTake('drafting', 'draft');
+const d = state.clips[1];
+assert.equal(d.takeId, 'draft');
+assert.equal(d.workflowVersion, 'v5');
+assert.equal(d.generationBase, undefined, 'The stale take setup is cleared');
+assert.deepEqual(setups, ['older'], 'Its own draft needs no capture');
 console.log('clip tools checks passed');

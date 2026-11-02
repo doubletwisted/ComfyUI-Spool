@@ -66,6 +66,8 @@ export function createClipTools({
     if ((c.direction || canDraft(c)) && t.generated && t.summary?.workflowVersion === c.workflowVersion) {
       edits.apply('Use take', () => {
         T.chooseTake(getState(), clipId, id);
+        // Its settings are now the clip's own recipe, not a setup adopted from an older take.
+        delete getState().clips.find(x => x.id === clipId).generationBase;
       });
       return;
     }
