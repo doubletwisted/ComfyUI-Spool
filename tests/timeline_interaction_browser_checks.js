@@ -56,6 +56,22 @@
     'Duplicate toolbar timecode and zoom percentage are hidden',
     w.getComputedStyle($('timelineTime')).display === 'none' && w.getComputedStyle($('zoomValue')).display === 'none',
   );
+  const shotWidth = () => d.querySelector('[data-clip="shot"]').getBoundingClientRect().width,
+    editLength = () => Math.max(...T.layout(n.state).map(r => r.end)),
+    beforeAdd = { width: shotWidth(), length: editLength(), zoom: n.state.zoom };
+  n.selectClip('shot');
+  n.duplicate();
+  await n.flush();
+  const afterAdd = { width: shotWidth(), length: editLength(), zoom: n.state.zoom };
+  n.undo();
+  await n.flush();
+  check(
+    'Adding a clip keeps clips the same size on screen, and undo too',
+    afterAdd.length > beforeAdd.length &&
+      afterAdd.zoom > beforeAdd.zoom &&
+      Math.abs(afterAdd.width - beforeAdd.width) < 1.5 &&
+      Math.abs(shotWidth() - beforeAdd.width) < 1.5,
+  );
   const row = id => T.rowFor(n.state, id),
     source = () => n.state.clips.find(c => c.id === 'shot');
   const afterMove = JSON.parse(g.moveEnd.clips),

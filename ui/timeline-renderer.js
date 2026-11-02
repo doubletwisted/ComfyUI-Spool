@@ -52,6 +52,9 @@ export function createTimelineRenderer({
   let laneNodes = new Map(),
     laneOrder = [],
     laneDrawn = false;
+  // The time span and zoom of the last render, so an edit that changes the length keeps the scale.
+  let scaleSpan = null,
+    scaleZoom = null;
   function applyClipGeometry(rows) {
     const sharedIn = new Set(),
       sharedOut = new Set(),
@@ -175,10 +178,20 @@ export function createTimelineRenderer({
     renderAudioTrackHeaders(count);
     const empty = !getState().clips.length && !(getState().audioClips || []).length,
       extra = empty ? 160 : 0,
-      usable = Math.max(1, viewport - extra);
-    setPixelScale(
-      getDrag()?.scale || (Math.max(0.0001, usable / Math.max(length, getFps() * 5)) * getState().zoom) / 100,
-    );
+      usable = Math.max(1, viewport - extra),
+      span = Math.max(length, getFps() * 5);
+    // The zoom is relative to the edit's length (100% fits it). When an edit makes the timeline
+    // longer or shorter, change the zoom so clips keep their size on screen.
+    if (!getDrag()) {
+      if (!empty && scaleSpan && span !== scaleSpan && getState().zoom === scaleZoom) {
+        getState().zoom = Math.round(Math.min(1600, Math.max(5, (scaleZoom * span) / scaleSpan)) * 100) / 100;
+        $('zoom').value = getState().zoom;
+        saveView();
+      }
+      scaleSpan = empty ? null : span;
+      scaleZoom = getState().zoom;
+    }
+    setPixelScale(getDrag()?.scale || (Math.max(0.0001, usable / span) * getState().zoom) / 100);
     const width = Math.max(viewport, Math.ceil(Math.max(length, 120) * getPixelScale()) + extra);
     $('timelineContent').style.width = width + 'px';
     $('zoomValue').textContent = Math.round(getState().zoom) + '%';
