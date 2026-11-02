@@ -88,7 +88,8 @@ def assign_workflow(clip, version, capture):
         clip["workflow"] = library
     else:
         clip.pop("workflow", None)
-    for key in ("shotInputs", "seedKey", "generationBase"):
+    # A directing tool made the clip with its own workflow; another workflow's takes start at the trim.
+    for key in ("shotInputs", "seedKey", "generationBase", "direction"):
         clip.pop(key, None)
     clip["seedMode"] = "same"
 

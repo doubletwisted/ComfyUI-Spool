@@ -89,7 +89,8 @@ module contracts are in [architecture.md](architecture.md).
 
 - **Direction**: `clip.direction`, how a directing tool made a clip (`kind`:
   transition or extend, and the user's words). It drives the timeline label
-  and the inspector card; the clip's workflow and inputs are ordinary. `head` is
+  and the inspector card; the clip's workflow and inputs are ordinary. Applying
+  another workflow to the clip clears it. `head` is
   where the clip's own takes start (after the anchored frames); **Use take** reads it
   (`ui/timeline.js:directedIn`, mirrored by
   `spool/operations.py:directed_in`). Owned by `ui/directing.js`; suggestions and

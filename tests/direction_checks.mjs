@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as D from '../ui/direction.js';
 import * as T from '../ui/timeline.js';
+import { createWorkflowAssignment } from '../ui/edit-actions.js';
 
 // The neighbour rule is shared with spool/requests.py (tests/test_queue_operations.py).
 const fixture = JSON.parse(fs.readFileSync(new URL('./fixtures/neighbours.json', import.meta.url), 'utf8'));
@@ -119,4 +120,17 @@ for (const c of directed.cases) {
 assert.deepEqual(D.motionLength(2, 22, 22), { total: 90, visible: 46, seconds: 90 / 24 });
 assert.deepEqual(D.motionLength(5, 22, 0), { total: 141, visible: 119, seconds: 141 / 24 });
 assert.equal(D.motionLength(0.1, 22, 22).visible >= 12, true);
+// Another workflow applied to a directed clip makes it an ordinary clip: its takes start at the trim.
+{
+  const clip = { id: 'x', revision: 0, direction: { kind: 'extend', head: 22 }, bindings: [], inputValues: {} };
+  createWorkflowAssignment({
+    inputReplacements: { invalidate() {} },
+    copy: structuredClone,
+    getRecipes: () => ({ v: { bindings: [], prompt: {} } }),
+    definitionsFor: () => ({}),
+    getFps: () => 24,
+    matchClipInputs() {},
+  }).applyPreparedWorkflow(clip, 'w', 'v');
+  assert.equal(clip.direction, undefined);
+}
 console.log('direction checks passed');
