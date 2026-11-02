@@ -84,6 +84,24 @@ The recording is data, not code. It stays out of Git and is published as
    These change only the recording, never the project. `--keep-media` records
    the replies again and reuses media already in DIR.
 
+   The edit can also be arranged in the demo itself. Edit it in the browser,
+   then save what the demo answers for the project from the browser console:
+
+   ```js
+   fetch(location.pathname + 'spool/api/projects/ID').then(r => r.blob()).then(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'demo-edit.json'; a.click(); })
+   ```
+
+   `--edit demo-edit.json` records that edit instead of the host's, in place of
+   the options above. `--max-takes 4` keeps the take in the edit and the latest
+   other takes the rail shows, up to four per clip; hidden takes and the media
+   of every take left out stay out of the data. The coral demo is recorded
+   with both:
+
+   ```powershell
+   python pages/build.py record --host http://127.0.0.1:PORT --project ID --data DIR --name "Coral Palace" `
+     --keep-media --edit coral-demo-edit.json --max-takes 4
+   ```
+
    It asks the host for every playback copy at the project size and waits for
    them. It re-encodes video to 960 pixels wide (H.264, a keyframe every 12
    frames, same frames and timing) and shrinks the posters.
@@ -138,7 +156,7 @@ root redirects to `demo/`.
 
 ## Size
 
-The coral demo records to about 240 MB: playback copies, review copies, input
-pictures and posters, for 11 shots and their takes. Pages allows 1 GB per site
-and about 100 GB of traffic a month. The browser loads media only when the
-studio shows it, so a visit usually costs far less than the whole project.
+The coral demo records to about 130 MB: playback copies, review copies, input
+pictures and posters, for 10 shots and up to four takes each. Pages allows 1 GB
+per site and about 100 GB of traffic a month. The browser loads media only when
+the studio shows it, so a visit usually costs far less than the whole project.

@@ -176,15 +176,8 @@ def demo_edit(document, leave_out, move_to_end, close_gaps, overlay=()):
             clip["videoTrack"], clip["gapBefore"] = 2, start - end
             document["clips"].append(clip)
             end = start + clip["out"] - clip["in"]
-    used = {
-        value
-        for item in document["clips"] + document.get("audioClips", [])
-        for media in [item.get("media", {})] + [t.get("media", {}) for t in item.get("takes", [])]
-        for value in (media.get("id"), media.get("originalFile"))
-        if value
-    }
     if leave_out:
-        document["media"] = [m for m in document.get("media", []) if {m.get("id"), m.get("originalFile")} & used]
+        prune_media(document)
     tracks = [c.get("videoTrack", 1) for c in document["clips"]]
     document["videoTracks"] = max(tracks, default=1)
     document["videoTailGaps"] = {k: v for k, v in document.get("videoTailGaps", {}).items() if int(k) in tracks}
@@ -193,6 +186,50 @@ def demo_edit(document, leave_out, move_to_end, close_gaps, overlay=()):
         for track in set(tracks) or {1}
     )
     document["exportRange"] = {"start": 0, "end": length}
+
+
+def prune_media(document):
+    """Leave out pool media that no clip or take in the edit uses."""
+    used = {
+        value
+        for item in document["clips"] + document.get("audioClips", [])
+        for media in [item.get("media", {})] + [t.get("media", {}) for t in item.get("takes", [])]
+        for value in (media.get("id"), media.get("originalFile"))
+        if value
+    }
+    document["media"] = [m for m in document.get("media", []) if {m.get("id"), m.get("originalFile")} & used]
+
+
+def use_edit(current, path):
+    """Record the edit saved from a demo page instead of the host's.
+
+    The file is what the demo answers for the project (saved in the browser; see
+    docs/dev/demo.md). Its edit fields replace the host's; records such as jobs
+    stay the host's, and its recipes join the host's.
+    """
+    saved = json.loads(Path(path).read_text(encoding="utf-8"))
+    fields = json.loads((ROOT / "tests" / "fixtures" / "document_fields.json").read_text(encoding="utf-8"))["edit"]
+    edit, document = saved.get("document", saved), current["document"]
+    for field in fields:
+        if field in edit:
+            document[field] = edit[field]
+        else:
+            document.pop(field, None)
+    current["recipes"] = {**(current.get("recipes") or {}), **(saved.get("recipes") or {})}
+    prune_media(document)
+
+
+def limit_takes(document, most):
+    """Keep at most `most` takes per clip: the take in the edit and the latest
+    others the take rail shows. Hidden takes go, so their media do too."""
+    for clip in document["clips"]:
+        hidden = set(clip.get("hiddenTakeIds") or [])
+        shown = [t for t in clip["takes"] if t["id"] != clip.get("takeId") and t["id"] not in hidden]
+        kept = {clip.get("takeId")} | {t["id"] for t in shown[max(0, len(shown) - (most - 1)) :] if most > 1}
+        if len(kept & {t["id"] for t in clip["takes"]}) < len(clip["takes"]):
+            clip["takes"] = [t for t in clip["takes"] if t["id"] in kept]
+            clip.pop("hiddenTakeIds", None)
+            print(f"Kept {len(clip['takes'])} takes of {clip['name']}", flush=True)
 
 
 def overlay_spec(value):
@@ -260,9 +297,24 @@ def record(args):
 
     current = get(host, f"projects/{project}", view=True)
     document = current["document"]
+    # A clip split or copied in a saved edit is new to the host; its takes' setups
+    # are read through the host clip that holds them.
+    host_clips = {c["id"] for c in document["clips"]}
+    holder = {}
+    for visible in (True, False):
+        for clip in document["clips"]:
+            hidden = set(clip.get("hiddenTakeIds") or []) - {clip.get("takeId")}
+            for take in clip.get("takes", []):
+                if not take.get("placeholder") and (take["id"] not in hidden) == visible:
+                    holder.setdefault(take["id"], clip["id"])
     overlay = [overlay_spec(value) for value in args.overlay]
     if args.leave_out or args.move_to_end or args.close_gaps or overlay:
         demo_edit(document, args.leave_out, args.move_to_end, args.close_gaps, overlay)
+    if args.edit:
+        use_edit(current, args.edit)
+    if args.max_takes:
+        limit_takes(document, args.max_takes)
+        prune_media(document)
     keep("GET", f"projects/{project}", current)
     for path in ("capabilities", "builtin-workflows", "templates", "comfy"):
         keep("GET", path, get(host, path))
@@ -275,8 +327,10 @@ def record(args):
             path = f"projects/{project}/takes/{urllib.parse.quote(take['id'])}"
             keep("GET", path, get_or_error(host, path))
             # Use take reads the take's workflow before it puts the take in the edit.
+            source = clip["id"] if clip["id"] in host_clips else holder.get(take["id"], clip["id"])
+            read = f"projects/{project}/take-workflow/{urllib.parse.quote(source)}/{urllib.parse.quote(take['id'])}"
             path = f"projects/{project}/take-workflow/{urllib.parse.quote(clip['id'])}/{urllib.parse.quote(take['id'])}"
-            keep("GET", path, get_or_error(host, path))
+            keep("GET", path, get_or_error(host, read))
             versions.add((take.get("batch") or {}).get("workflowVersion"))
     for version in sorted(v for v in versions if v):
         path = "workflows/" + urllib.parse.quote(version)
@@ -525,6 +579,8 @@ def main():
     rec.add_argument(
         "--overlay", action="append", default=[], metavar="CLIP@SECONDS", help="move a clip to V2, starting there"
     )
+    rec.add_argument("--edit", metavar="FILE", help="record the edit saved from a demo page")
+    rec.add_argument("--max-takes", type=int, metavar="N", help="keep at most N takes per clip")
     rec.add_argument("--inputs-like", metavar="CLIP", help="give shots without inputs the inputs of this clip")
     rec.add_argument("--close-gaps", action="store_true", help="remove every gap and hear the shots' own audio")
     rec.add_argument("--video-width", type=int, default=960)
