@@ -123,6 +123,57 @@ def remaining_paths(value, found, where=""):
         found.append((where, value))
 
 
+def demo_edit(document, leave_out, move_to_end, close_gaps):
+    """Shape the recorded edit for the demo without touching the real project.
+
+    `leave_out` names video and audio clips to remove; pool media no remaining
+    clip uses go with them. `move_to_end` appends video clips to the end of V1.
+    `close_gaps` removes every gap, for an edit that no longer follows a
+    soundtrack; the shots' own audio is then heard.
+    """
+    names = {c["name"] for c in document["clips"]} | {c["name"] for c in document.get("audioClips", [])}
+    unknown = set(leave_out) | set(move_to_end)
+    if unknown - names:
+        raise SystemExit("No clip named " + ", ".join(sorted(unknown - names)))
+    removed = [c for c in document["clips"] if c["name"] in leave_out]
+    for clip in removed:
+        # The next clip on the track keeps its place behind the removed one.
+        track = document["clips"][document["clips"].index(clip) + 1 :]
+        following = next((c for c in track if c.get("videoTrack", 1) == clip.get("videoTrack", 1)), None)
+        if following:
+            following["gapBefore"] = following.get("gapBefore", 0) + clip.get("gapBefore", 0) + clip["out"] - clip["in"]
+        document["clips"].remove(clip)
+    document["audioClips"] = [c for c in document.get("audioClips", []) if c["name"] not in leave_out]
+    for name in move_to_end:
+        clip = next(c for c in document["clips"] if c["name"] == name)
+        document["clips"].remove(clip)
+        clip["videoTrack"], clip["gapBefore"] = 1, 0
+        last = max((i for i, c in enumerate(document["clips"]) if c.get("videoTrack", 1) == 1), default=-1)
+        document["clips"].insert(last + 1, clip)
+    if close_gaps:
+        for clip in document["clips"]:
+            clip["gapBefore"] = 0
+        document["tailGap"], document["videoTailGaps"] = 0, {}
+        document["audioTracks"]["sourceMuted"] = False
+    used = {
+        value
+        for item in document["clips"] + document.get("audioClips", [])
+        for media in [item.get("media", {})] + [t.get("media", {}) for t in item.get("takes", [])]
+        for value in (media.get("id"), media.get("originalFile"))
+        if value
+    }
+    if leave_out:
+        document["media"] = [m for m in document.get("media", []) if {m.get("id"), m.get("originalFile")} & used]
+    tracks = [c.get("videoTrack", 1) for c in document["clips"]]
+    document["videoTracks"] = max(tracks, default=1)
+    document["videoTailGaps"] = {k: v for k, v in document.get("videoTailGaps", {}).items() if int(k) in tracks}
+    length = max(
+        (sum(c.get("gapBefore", 0) + c["out"] - c["in"] for c in document["clips"] if c.get("videoTrack", 1) == track))
+        for track in set(tracks) or {1}
+    )
+    document["exportRange"] = {"start": 0, "end": length}
+
+
 def record(args):
     host, project, data = args.host.rstrip("/"), args.project, Path(args.data)
     if data.exists() and not args.keep_media:
@@ -135,6 +186,8 @@ def record(args):
 
     current = get(host, f"projects/{project}", view=True)
     document = current["document"]
+    if args.leave_out or args.move_to_end or args.close_gaps:
+        demo_edit(document, args.leave_out, args.move_to_end, args.close_gaps)
     keep("GET", f"projects/{project}", current)
     for path in ("capabilities", "builtin-workflows", "templates", "comfy"):
         keep("GET", path, get(host, path))
@@ -190,6 +243,10 @@ def record(args):
         raise SystemExit("Recorded replies still name local paths; add --scrub FROM=>TO pairs")
 
     media_root = data / "media"
+    if args.keep_media and media_root.is_dir():
+        for stale in [f for f in media_root.rglob("*") if f.is_file()]:
+            if stale.relative_to(media_root).as_posix() not in found:
+                stale.unlink()
     for index, relative in enumerate(sorted(found), 1):
         target = media_root / relative
         if args.keep_media and target.is_file():
@@ -378,6 +435,9 @@ def main():
     rec.add_argument("--scrub", action="append", default=[], metavar="FROM=>TO", help="replace a local path prefix")
     rec.add_argument("--allow-paths", action="store_true", help="record even if local paths remain")
     rec.add_argument("--name", help="project name shown in the demo")
+    rec.add_argument("--leave-out", action="append", default=[], metavar="CLIP", help="remove a clip by name")
+    rec.add_argument("--move-to-end", action="append", default=[], metavar="CLIP", help="append a clip to V1")
+    rec.add_argument("--close-gaps", action="store_true", help="remove every gap and hear the shots' own audio")
     rec.add_argument("--video-width", type=int, default=960)
     rec.add_argument("--keep-video", action="store_true", help="copy video without re-encoding")
     rec.add_argument("--keep-media", action="store_true", help="record replies again, keeping media already in DIR")

@@ -55,6 +55,20 @@ The recording is data, not code. It stays out of Git and is published as
    python pages/build.py record --host http://127.0.0.1:PORT --project ID --data DIR --name "Coral Palace"
    ```
 
+   The demo leaves the launch film out of the coral project, which starts at
+   the soundtrack's drop. `--leave-out` removes clips by name (pool media no
+   remaining clip uses go too), `--move-to-end` appends a clip to V1, and
+   `--close-gaps` removes every gap and unmutes the shots' own audio:
+
+   ```powershell
+   python pages/build.py record --host http://127.0.0.1:PORT --project ID --data DIR --name "Coral Palace" `
+     --leave-out "Film v14 · to the drop" --leave-out "Film v14 · export and end card" `
+     --leave-out "Launch film v14 soundtrack" --move-to-end c11 --close-gaps
+   ```
+
+   These change only the recording, never the project. `--keep-media` records
+   the replies again and reuses media already in DIR.
+
    It asks the host for every playback copy at the project size and waits for
    them. It re-encodes video to 960 pixels wide (H.264, a keyframe every 12
    frames, same frames and timing) and shrinks the posters.
@@ -94,7 +108,7 @@ root redirects to `demo/`.
 
 ## Size
 
-The coral project records to about 340 MB: playback copies, review copies,
-three soundtrack versions as WAV, input pictures and posters. Pages allows 1 GB
-per site and about 100 GB of traffic a month. The browser loads media only when
-the studio shows it, so a visit usually costs far less than the whole project.
+The coral demo records to about 235 MB: playback copies, review copies, input
+pictures and posters, for 11 shots and their takes. Pages allows 1 GB per site
+and about 100 GB of traffic a month. The browser loads media only when the
+studio shows it, so a visit usually costs far less than the whole project.
