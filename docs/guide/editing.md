@@ -77,8 +77,8 @@ including a group move, is one undo step.
 ## Audio
 
 - **Add audio** (the waveform button) places the full sound of an audio or video
-  file on A2. You can also drop a Media item onto A1 or A2, or right-click it for
-  **Use audio only**.
+  file on A2. You can also drop a Media item or a file from your computer onto A1
+  or A2, or right-click a Media item for **Use audio only**.
 - Right-click a clip or its A1 audio for **Unlink audio and video**. The audio
   becomes an independent A1 clip with the same trims, level and fades, and stays
   put when the video is moved, trimmed or replaced. Undo restores the link.

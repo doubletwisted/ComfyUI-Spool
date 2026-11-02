@@ -13,6 +13,9 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Timeline
 
+- An empty A2 lane is plain, without the dashed "Add audio" box that looked like
+  a clip on the track. The waveform button adds audio, and files still drop onto
+  A2.
 - The mouse wheel zooms the timeline around the pointer, without Ctrl, and zooms
   out past the end of the edit. Shift+wheel pans; Alt+wheel scrolls the tracks.
 - Adding, removing or trimming clips no longer changes the timeline's zoom; clips
