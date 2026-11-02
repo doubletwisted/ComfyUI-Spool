@@ -158,6 +158,11 @@ reply is caught before visitors see it.
 Pages must use **GitHub Actions** as its source (Settings → Pages). The site
 root redirects to `demo/`.
 
+## Credits
+
+The workflow library's posters in the demo come from Comfy-Org's
+`comfyui-workflow-templates` packages, which are MIT licensed.
+
 ## Size
 
 The coral demo records to about 130 MB: playback copies, review copies, input

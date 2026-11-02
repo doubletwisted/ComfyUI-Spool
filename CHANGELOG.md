@@ -5,6 +5,12 @@ All notable changes to Spool are recorded here. Versions follow
 
 ## Unreleased
 
+### Online demo
+
+- An [online demo](https://doubletwisted.github.io/ComfyUI-Spool/demo/) of the
+  studio opens a finished project in the browser. Edits reset on reload, and
+  generating takes needs Spool with ComfyUI.
+
 ### Timeline
 
 - The mouse wheel zooms the timeline around the pointer, without Ctrl, and zooms
