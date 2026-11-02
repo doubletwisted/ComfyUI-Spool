@@ -2,9 +2,10 @@
 
 The online demo is the real studio on GitHub Pages, opened on one recorded
 project. Visitors can play the edit, look through takes, trim, move and split
-clips, choose takes, delete takes and write notes. Everything that needs Spool
-on a computer says so and does nothing: generating takes, Use take, ComfyUI,
-import, export and file actions. Reloading the page resets the project.
+clips, choose takes, Use take, delete takes and write notes. Everything that
+needs Spool on a computer says so when clicked and does nothing: generating
+takes, ComfyUI, import, export and file actions. Reloading the page resets the
+project.
 
 ## How it works
 
@@ -24,19 +25,21 @@ only:
 - Delete takes follows `take_files.plan`: it refuses the take in the edit and
   takes that are not available, then records `deletedTakeIds` and
   `deletedMediaIds`, as the host does, without touching files.
+- Use take follows `Store.capture`: it puts the take in the edit with the
+  studio's own `chooseTake` and adopts the recorded setup of the take. The host
+  also freezes input files and writes sidecars; the demo has none.
 - Every other request gets a 403 with code `demo_unavailable` and a message that
   names ComfyUI and the install page. The studio shows it like any other failed
-  request. Use take is declined rather than imitated: it prepares inputs and
-  writes sidecars on the host.
+  request.
 
 Library posters and the inspector's input pictures are images the studio loads
 by address, not through `fetch`. The recording saves them as static files at
 their API paths. An input name contains an escaped slash (`%2F`), so each is
 saved under both the escaped and the unescaped path.
 
-The fake mirrors four host replies: the project, the unchanged-project poll, the
-save and take deletion. If one of those routes changes shape, change
-`pages/demo-api.js` in the same commit.
+The fake mirrors five host replies: the project, the unchanged-project poll, the
+save, take deletion and Use take. If one of those routes changes shape, change
+`pages/demo-api.js` and `tests/demo_api_checks.mjs` in the same commit.
 
 ## Recording the project
 
@@ -66,8 +69,12 @@ The recording is data, not code. It stays out of Git and is published as
    ```powershell
    python pages/build.py record --host http://127.0.0.1:PORT --project ID --data DIR --name "Coral Palace" `
      --leave-out "Film v14 · to the drop" --leave-out "Film v14 · export and end card" `
-     --leave-out "Launch film v14 soundtrack" --move-to-end c11 --close-gaps --inputs-like c26
+     --leave-out "Launch film v14 soundtrack" --move-to-end c11 --close-gaps --inputs-like c26 `
+     --overlay c26@10.5 --overlay c43@17.5 --overlay c57@24
    ```
+
+   `--overlay CLIP@SECONDS` moves a clip to V2 at that time, so the demo shows
+   a second track. With `--close-gaps`, V1 closes up behind it.
 
    Only five coral shots were set up for generation. `--inputs-like c26` gives
    the others the workflow of the take in their edit, as Use take would, with
@@ -98,8 +105,23 @@ The recording is data, not code. It stays out of Git and is published as
 5. Zip the contents of DIR as `spool-demo-data.zip`, replace the asset on the
    `demo-data` release, and run the **Online demo** workflow by hand.
 
-Record again when the project format or one of the recorded routes changes. The
-data has its own format number (`DATA_FORMAT` in `pages/build.py`), and
+## Keeping it current
+
+Each deploy builds the studio from the commit being released, so studio changes
+reach the demo with the next release without recording again. Three things
+catch the changes that need more:
+
+- The data notes the project schema it was recorded at (`SCHEMA_VERSION` in
+  `spool/store.py`). Assembling refuses data from another schema, so a release
+  that changes the project format cannot deploy until the demo is recorded
+  again.
+- The smoke check fails when the studio asks during startup for a route the
+  demo does not answer. Record again so the reply is in the data, or answer it
+  in `pages/demo-api.js` if it changes the project.
+- `tests/demo_api_checks.mjs` runs in the architecture checks and holds the
+  mirrored host replies to their shapes.
+
+The data has its own format number too (`DATA_FORMAT` in `pages/build.py`);
 assembling refuses a mismatch.
 
 ## Deploying

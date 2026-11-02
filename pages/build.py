@@ -33,6 +33,12 @@ ABSOLUTE_PATH = re.compile(r"(?<![A-Za-z])[A-Za-z]:\\\\?[A-Za-z0-9_]|\\\\[A-Za-z
 DEMO_UNAVAILABLE = "Not in the online demo"
 
 
+def project_schema():
+    """The project schema this checkout of Spool writes (`SCHEMA_VERSION`)."""
+    found = re.search(r"^SCHEMA_VERSION = (\d+)$", (ROOT / "spool" / "store.py").read_text(encoding="utf-8"), re.M)
+    return int(found.group(1))
+
+
 def get(host, path, body=None, view=False):
     headers = {"Content-Type": "application/json"}
     if view:
@@ -125,16 +131,18 @@ def remaining_paths(value, found, where=""):
         found.append((where, value))
 
 
-def demo_edit(document, leave_out, move_to_end, close_gaps):
+def demo_edit(document, leave_out, move_to_end, close_gaps, overlay=()):
     """Shape the recorded edit for the demo without touching the real project.
 
     `leave_out` names video and audio clips to remove; pool media no remaining
     clip uses go with them. `move_to_end` appends video clips to the end of V1.
     `close_gaps` removes every gap, for an edit that no longer follows a
-    soundtrack; the shots' own audio is then heard.
+    soundtrack; the shots' own audio is then heard. `overlay` is a list of
+    (name, seconds): each clip moves to V2 and starts there, over V1. V1 closes
+    up behind it only with `close_gaps`.
     """
     names = {c["name"] for c in document["clips"]} | {c["name"] for c in document.get("audioClips", [])}
-    unknown = set(leave_out) | set(move_to_end)
+    unknown = set(leave_out) | set(move_to_end) | {name for name, _ in overlay}
     if unknown - names:
         raise SystemExit("No clip named " + ", ".join(sorted(unknown - names)))
     removed = [c for c in document["clips"] if c["name"] in leave_out]
@@ -157,6 +165,17 @@ def demo_edit(document, leave_out, move_to_end, close_gaps):
             clip["gapBefore"] = 0
         document["tailGap"], document["videoTailGaps"] = 0, {}
         document["audioTracks"]["sourceMuted"] = False
+    if overlay:
+        fps, end = document.get("fps", 24), 0
+        for name, seconds in sorted(overlay, key=lambda item: item[1]):
+            clip = next(c for c in document["clips"] if c["name"] == name)
+            start = round(seconds * fps)
+            if start < end:
+                raise SystemExit(f"{name} would start at {seconds}s, before the V2 clip ahead of it ends")
+            document["clips"].remove(clip)
+            clip["videoTrack"], clip["gapBefore"] = 2, start - end
+            document["clips"].append(clip)
+            end = start + clip["out"] - clip["in"]
     used = {
         value
         for item in document["clips"] + document.get("audioClips", [])
@@ -174,6 +193,14 @@ def demo_edit(document, leave_out, move_to_end, close_gaps):
         for track in set(tracks) or {1}
     )
     document["exportRange"] = {"start": 0, "end": length}
+
+
+def overlay_spec(value):
+    name, _, seconds = value.rpartition("@")
+    try:
+        return name, float(seconds)
+    except ValueError:
+        raise SystemExit(f"--overlay takes CLIP@SECONDS, not {value!r}") from None
 
 
 def give_inputs(current, replies, project, model_name):
@@ -233,8 +260,9 @@ def record(args):
 
     current = get(host, f"projects/{project}", view=True)
     document = current["document"]
-    if args.leave_out or args.move_to_end or args.close_gaps:
-        demo_edit(document, args.leave_out, args.move_to_end, args.close_gaps)
+    overlay = [overlay_spec(value) for value in args.overlay]
+    if args.leave_out or args.move_to_end or args.close_gaps or overlay:
+        demo_edit(document, args.leave_out, args.move_to_end, args.close_gaps, overlay)
     keep("GET", f"projects/{project}", current)
     for path in ("capabilities", "builtin-workflows", "templates", "comfy"):
         keep("GET", path, get(host, path))
@@ -317,6 +345,7 @@ def record(args):
     (data / "api" / "replies.json").write_text(json.dumps(replies, separators=(",", ":")), encoding="utf-8")
     manifest = {
         "format": DATA_FORMAT,
+        "schema": project_schema(),
         "project": project,
         "recorded": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
@@ -434,6 +463,13 @@ def assemble(args):
     manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
     if manifest["format"] != DATA_FORMAT:
         raise SystemExit(f"Demo data format {manifest['format']} needs a matching build script")
+    if manifest.get("schema") != project_schema():
+        # The studio would open a project older than the one it expects. Record
+        # again with a host on this commit (docs/dev/demo.md).
+        raise SystemExit(
+            f"The demo was recorded at project schema {manifest.get('schema')} and Spool is at {project_schema()}."
+            " Record the demo again."
+        )
     if out.exists():
         shutil.rmtree(out)
     studio = out / "spool" / "ui"
@@ -486,6 +522,9 @@ def main():
     rec.add_argument("--name", help="project name shown in the demo")
     rec.add_argument("--leave-out", action="append", default=[], metavar="CLIP", help="remove a clip by name")
     rec.add_argument("--move-to-end", action="append", default=[], metavar="CLIP", help="append a clip to V1")
+    rec.add_argument(
+        "--overlay", action="append", default=[], metavar="CLIP@SECONDS", help="move a clip to V2, starting there"
+    )
     rec.add_argument("--inputs-like", metavar="CLIP", help="give shots without inputs the inputs of this clip")
     rec.add_argument("--close-gaps", action="store_true", help="remove every gap and hear the shots' own audio")
     rec.add_argument("--video-width", type=int, default=960)
