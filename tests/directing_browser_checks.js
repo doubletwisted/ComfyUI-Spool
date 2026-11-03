@@ -98,6 +98,7 @@
     'An ungenerated extension shows the end of its shot in the viewer',
     $('placeholderDirect').querySelectorAll('img').length === 1 &&
       /Continues Shot C/.test($('placeholderDirect').textContent) &&
+      $('placeholderDirect').querySelector('img').getBoundingClientRect().height > 40 &&
       $('placeholderTitle').textContent === 'Not generated yet',
   );
   await wait('attached extension', () => d.querySelector('[data-clip="' + extension.id + '"].attached'));

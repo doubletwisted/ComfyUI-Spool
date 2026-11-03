@@ -8491,7 +8491,11 @@ input[type='range'] {
   margin: 0 auto;
 }
 .direct-pair img {
+  /* Not the viewer's full-size picture: these frames sit in the flow of the empty state. */
+  position: static;
+  inset: auto;
   width: 100%;
+  height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   display: block;
