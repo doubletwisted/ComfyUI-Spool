@@ -125,7 +125,10 @@ The recording is data, not code. It stays out of Git and is published as
    `serve.py` serves the site under its base path with byte ranges, as Pages
    does, so video seeks.
 5. Zip the contents of DIR as `spool-demo-data.zip`, replace the asset on the
-   `demo-data` release, and run the **Online demo** workflow by hand.
+   `demo-data` release, and run the **Online demo** workflow by hand. Wait a
+   minute after the upload: a run that starts at once can still download the
+   previous asset. Browsers keep the site's files for up to ten minutes, so check
+   the result with a hard reload.
 
 ## Keeping it current
 
