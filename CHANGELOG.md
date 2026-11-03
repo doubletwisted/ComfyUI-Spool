@@ -59,6 +59,9 @@ All notable changes to Spool are recorded here. Versions follow
 - The take rail stays beside the viewer when the selected clip has no takes, so the
   viewer no longer changes size as you select clips. Imported footage is labelled
   **Footage** in the inspector, with a line on how to generate from it.
+- A clip with a take on the way says **Generating** in the viewer instead of
+  "Not generated yet", and an extension without a take shows the end of the shot it
+  continues.
 
 ## 0.1.0 (2026-10-30)
 

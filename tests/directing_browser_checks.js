@@ -92,6 +92,14 @@
       /She waves/.test(JSON.stringify(extension.inputValues)),
   );
   check('The extension records the shot it continues', extension.direction.parent === 'shot-c');
+  n.setFrame(rows().find(r => r.id === extension.id).start + 2, true);
+  await wait('extension preview', () => !$('placeholderDirect').hidden);
+  check(
+    'An ungenerated extension shows the end of its shot in the viewer',
+    $('placeholderDirect').querySelectorAll('img').length === 1 &&
+      /Continues Shot C/.test($('placeholderDirect').textContent) &&
+      $('placeholderTitle').textContent === 'Not generated yet',
+  );
   await wait('attached extension', () => d.querySelector('[data-clip="' + extension.id + '"].attached'));
   check(
     'The shot and its extension draw joined, with a seam and no transition button between them',

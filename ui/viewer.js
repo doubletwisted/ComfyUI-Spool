@@ -2,7 +2,7 @@ import * as T from './timeline.js';
 import { pictureAt } from './picture.js';
 import { createPreviews } from './preview.js';
 import { videoFrameCount } from './video-seek-guard.js';
-import { KINDS, directionLabel, neighbor } from './direction.js';
+import { KINDS, attachedParent, directionLabel, neighbor } from './direction.js';
 
 // Owns viewer presentation, media elements, seeking and the playback clock.
 export function createViewer({
@@ -45,6 +45,7 @@ export function createViewer({
   trackAudible,
   audioEnvelope,
   fileUrl,
+  pendingJobs,
 }) {
   const setStatus = textStatus;
   const url = fileUrl;
@@ -80,14 +81,17 @@ export function createViewer({
     '</span><div class="placeholder-direct" id="placeholderDirect" hidden></div><strong id="placeholderTitle"></strong><p id="placeholderHint"></p>';
   $('emptyStage').after(placeholderState);
   let directPreview = '';
-  // An ungenerated transition shows the frames it joins.
+  // An ungenerated transition shows the frames it joins; an extension, the end of its shot.
   function renderDirectPreview(c) {
     const kind = c?.direction?.kind,
-      before = kind && neighbor(getState(), c, 'previous'),
-      after = kind && neighbor(getState(), c, 'next'),
+      extension = kind === 'extend',
+      before = kind && (extension ? attachedParent(getState(), c) : neighbor(getState(), c, 'previous')),
+      after = kind && !extension && neighbor(getState(), c, 'next'),
       usable = x => x && !T.takeOf(x).placeholder,
-      show = kind === 'transition' && usable(before) && usable(after),
-      signature = show ? [c.id, before.id, before.takeId, before.out, after.id, after.takeId, after.in].join('|') : '';
+      show = extension ? usable(before) : kind === 'transition' && usable(before) && usable(after),
+      signature = show
+        ? [c.id, before.id, before.takeId, before.out, after?.id, after?.takeId, after?.in].join('|')
+        : '';
     $('placeholderDirect').hidden = !show;
     placeholderState.classList.toggle('directed', show);
     if (signature === directPreview) return;
@@ -97,25 +101,32 @@ export function createViewer({
       return;
     }
     $('placeholderDirect').innerHTML =
-      '<span class="direct-pair"><img alt=""><img alt=""></span><em>' +
+      '<span class="direct-pair' +
+      (after ? '' : ' single') +
+      '"><img alt="">' +
+      (after ? '<img alt="">' : '') +
+      '</span><em>' +
       svg(KINDS[kind].icon) +
-      directionLabel(c.direction) +
+      (after ? directionLabel(c.direction) : 'Continues ' + esc(before.name)) +
       '</em>';
     const [a, b] = $('placeholderDirect').querySelectorAll('img');
     thumbnails.bind(a, T.takeOf(before).media, Math.max(before.in, before.out - 1), getFps());
-    thumbnails.bind(b, T.takeOf(after).media, after.in, getFps());
+    if (after) thumbnails.bind(b, T.takeOf(after).media, after.in, getFps());
   }
   function renderPlaceholderState(d = viewerData()) {
     placeholderState.hidden = !d?.take?.placeholder;
     renderDirectPreview(placeholderState.hidden ? null : d.clip);
     if (!placeholderState.hidden) {
-      const available = T.realTakes(d.clip).length > 0;
-      text('placeholderTitle', available ? 'Choose a take' : 'Not generated yet');
+      const available = T.realTakes(d.clip).length > 0,
+        working = pendingJobs(d.clip).length;
+      text('placeholderTitle', available ? 'Choose a take' : working ? 'Generating' : 'Not generated yet');
       text(
         'placeholderHint',
         available
           ? 'Generated takes are ready in Takes. Use a take to add it to the edit.'
-          : 'Generate a take to preview this clip.',
+          : working
+            ? 'The take appears in Takes when it is ready.'
+            : 'Generate a take to preview this clip.',
       );
     }
   }

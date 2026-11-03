@@ -1796,6 +1796,7 @@ async function startEditor(isFailed) {
 
   const viewer = createViewer({
     getState: () => state,
+    pendingJobs,
     getPixelScale: () => ppf,
     isTimelinePanning: () => !!timelinePan,
     resetProjectPoll: () => {

@@ -8485,6 +8485,11 @@ input[type='range'] {
   border-radius: 8px;
   overflow: hidden;
 }
+.direct-pair.single {
+  grid-template-columns: 1fr;
+  width: 60%;
+  margin: 0 auto;
+}
 .direct-pair img {
   width: 100%;
   aspect-ratio: 16 / 9;
