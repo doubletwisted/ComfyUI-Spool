@@ -2230,7 +2230,7 @@ async function startEditor(isFailed) {
   ])
     $(id).onclick = () => {
       edits.apply(
-        'Change ' + (key.startsWith('source') ? 'clip audio' : 'soundtrack') + ' mix',
+        'Change ' + (key.startsWith('source') ? 'A1' : 'A2') + ' mix',
         () => {
           state.audioTracks = { ...defaultAudioTracks, ...state.audioTracks, [key]: !state.audioTracks?.[key] };
         },
