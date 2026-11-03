@@ -203,7 +203,9 @@ export function createAudioEditor({
     const c = selectedAudio() || selected(),
       bed = !!selectedAudio();
     $('clipName').value = c?.name || 'Audio';
-    $('generateLabel').textContent = selected() ? 'Generate ' + selected().count + ' takes' : 'Generate takes';
+    $('generateLabel').textContent = selected()
+      ? 'Generate ' + selected().count + (selected().count === 1 ? ' take' : ' takes')
+      : 'Generate takes';
     if (!c) {
       draw(
         'inspectorContent',
@@ -223,7 +225,11 @@ export function createAudioEditor({
       max = (c.out - c.in) / getFps() / 2;
     const html =
       '<div class="group-label">' +
-      (bed ? (T.audioTrack(c) === 'source' ? 'Independent clip audio' : 'Soundtrack') : 'Linked clip audio') +
+      (bed
+        ? T.audioTrack(c) === 'source'
+          ? T.sourceLaneLabel(T.sourceLane(c)) + ' · unlinked'
+          : 'A2'
+        : T.sourceLaneLabel(T.videoTrack(c)) + ' · linked to video') +
       '<span>' +
       svg(bed ? 'audio' : 'link') +
       '</span></div><p class="audio-summary">' +
@@ -256,7 +262,7 @@ export function createAudioEditor({
             ? 'Audio stays at its timeline position when the video edit ripples. Trim or move this clip directly on its audio track.'
             : "This is the chosen take's audio. Video trims, rolls, and slips keep it in sync. Unlink audio and video to edit them independently.") +
           '</p><p class="audio-note">Track M/S buttons change the saved mix. Monitor mute only changes what you hear.</p></div></div>'
-        : '<p class="audio-note">This take has no audio. Import music or voiceover to the soundtrack lane.</p><button class="outline" id="audioAdd">' +
+        : '<p class="audio-note">This take has no audio. Import music or voiceover to A2.</p><button class="outline" id="audioAdd">' +
           svg('import') +
           ' Import audio</button>');
     if (!draw('inspectorContent', html)) return;

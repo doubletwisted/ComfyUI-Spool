@@ -144,7 +144,7 @@ export function createTrackLayout({
     const music = $('musicTrackHeader');
     music.style.height = 'var(--music-height)';
     if (!music.querySelector('[data-track-resize]'))
-      music.insertAdjacentHTML('beforeend', trackResizeHandle('music', 'A2 soundtrack'));
+      music.insertAdjacentHTML('beforeend', trackResizeHandle('music', 'A2'));
   }
   return { trackAt, trackResizeHandle, setStyle, applyTrackHeights, storeTrackHeights, renderAudioTrackHeaders };
 }

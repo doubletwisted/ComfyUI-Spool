@@ -617,7 +617,9 @@ export function resolveGesture(doc, target, modifiers = {}) {
     const clips = trackClips(doc, videoTrack(c)),
       index = clips.indexOf(c),
       blocked = target.audio
-        ? 'Soundtrack stays independent. Move or slip it directly.'
+        ? 'Audio on ' +
+          (audioTrack(c) === 'source' ? sourceLaneLabel(sourceLane(c)) : 'A2') +
+          ' stays independent. Move or slip it directly.'
         : index < 1 || index === clips.length - 1 || c.gapBefore || gapAfter(doc, doc.clips.indexOf(c))
           ? 'Slide needs touching clips on both sides.'
           : null;

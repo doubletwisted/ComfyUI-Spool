@@ -11,6 +11,16 @@ All notable changes to Spool are recorded here. Versions follow
   studio opens a finished project in the browser. Edits reset on reload, and
   generating takes needs Spool with ComfyUI.
 
+### Studio
+
+- The same kind of control looks the same in every panel: tab bars, track names
+  and toggles, single-choice filters (media type now matches workflow location),
+  Grid and List icons, search fields, section titles and panel buttons. Audio
+  clip names use the video clips' type and read over the volume line.
+- The audio inspector's level slider shows its track again, its fields follow the
+  Inputs tab's label-left rows, and it names the audio by its track (A1 or A2).
+- Generate reads "1 take" and "1 clip", not "1 takes" and "1 clips".
+
 ### Timeline
 
 - Track headers show just V1, A1, A2 and so on, without "Clip audio" and
