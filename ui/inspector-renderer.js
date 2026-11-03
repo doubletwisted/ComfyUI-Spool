@@ -165,7 +165,9 @@ export function createInspectorRenderer({
       getState().cast,
     );
     const workflowLabel = c.generationBase
-      ? 'Workflow from take'
+      ? c.workflowVersion
+        ? 'Workflow from take'
+        : 'Footage'
       : c.workflowVersion
         ? 'Clip workflow'
         : embedded

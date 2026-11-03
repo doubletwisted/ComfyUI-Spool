@@ -124,12 +124,14 @@ export function workflowStatus(clip, workflow, recipe, definitions = {}, embedde
     recipe &&
     resolveMentions(cast, clip.bindings || [], { ...clip.inputValues, ...values }, clip.shotInputs || []).values;
   const missing = recipe && inputProblem(clip.bindings || [], resolved, clip.shotInputs || [], recipe.inputRules);
+  // Footage chosen as the take carries no workflow: nothing is wrong, there is just nothing to run yet.
+  const footage = !!clip?.generationBase && !clip.workflowVersion && clip.generationBase.takeId === clip.takeId;
   const reason =
     clip?.generationBase && clip.generationBase.takeId !== clip.takeId
       ? 'Use the take again to update generation settings.'
       : !clip?.workflowVersion
         ? clip?.generationBase
-          ? 'This take has no executable metadata. Choose a workflow from the library.'
+          ? 'Drop a workflow from the library on this clip to generate from it'
           : 'Capture an executable workflow first.'
         : !recipe
           ? 'Reopen the saved recipe before queueing.'
@@ -141,7 +143,7 @@ export function workflowStatus(clip, workflow, recipe, definitions = {}, embedde
     name,
     reason,
     ready: !reason,
-    problem: !!reason && !!(clip?.generationBase || clip?.workflowVersion),
+    problem: !!reason && !footage && !!(clip?.generationBase || clip?.workflowVersion),
     note: !reason
       ? 'Ready to generate'
       : clip?.generationBase || clip?.workflowVersion

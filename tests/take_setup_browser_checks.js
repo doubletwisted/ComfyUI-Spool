@@ -98,11 +98,12 @@
   await n.chooseTake('shot', 'plain');
   await n.flush();
   check(
-    'Metadata-free footage clears the previous recipe and blocks generation',
+    'Metadata-free footage clears the previous recipe and blocks generation without calling it a problem',
     shot().takeId === 'plain' &&
       !shot().workflowVersion &&
       $('generate').disabled &&
-      $('inspectorContent').textContent.includes('no executable metadata'),
+      $('inspectorContent').querySelector('.workflow-hint')?.textContent.includes('Drop a workflow from the library') &&
+      !$('inspectorContent').querySelector('.workflow-problem'),
   );
   await n.chooseTake('shot', 's04');
   await n.flush();
