@@ -339,7 +339,12 @@ def record(args):
         give_inputs(current, replies, project, args.inputs_like)
 
     size = {**document["resolution"], "fps": document["fps"]}
-    records = {m["id"]: m for m in media_records(document) if m.get("id")}
+    # Unlinked audio shares its take's media id as kind "audio"; the picture still
+    # needs its playback copy, so a video or image record wins the id.
+    records = {}
+    for m in media_records(document):
+        if m.get("id") and records.get(m["id"], {}).get("kind") not in ("video", "image"):
+            records[m["id"]] = m
     for index, (identity, media) in enumerate(sorted(records.items()), 1):
         if media.get("kind") in ("video", "image"):
             print(f"Preparing playback {index}/{len(records)}: {media.get('name')}", flush=True)
@@ -395,6 +400,16 @@ def record(args):
             shrink(target, args.video_width)
         print(f"Media {index}/{len(found)}: {relative} {target.stat().st_size // 1024} KiB", flush=True)
 
+    missing = [
+        clip["name"]
+        for clip in document["clips"]
+        for take in clip.get("takes", [])
+        if take["id"] == clip.get("takeId")
+        and (take.get("media") or {}).get("kind") in ("video", "image")
+        and key("POST", f"projects/{project}/media/{urllib.parse.quote(take['media']['id'])}/preview") not in replies
+    ]
+    if missing:
+        raise SystemExit("No playback copy recorded for the take in the edit of " + ", ".join(missing))
     short = short_videos(current["document"], replies, project, media_root)
     for line in short:
         print("Video shorter than its take:", line, file=sys.stderr)

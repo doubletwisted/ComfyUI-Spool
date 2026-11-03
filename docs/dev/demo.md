@@ -105,10 +105,10 @@ The recording is data, not code. It stays out of Git and is published as
    It asks the host for every playback copy at the project size and waits for
    them. It re-encodes video to 960 pixels wide (H.264, a keyframe every 12
    frames, same frames and timing) and shrinks the posters.
-   Recording stops if a take's review or playback copy has fewer frames than
-   the take: a damaged copy on the host re-encodes into a clean but shorter
-   video that cannot be scrubbed to its end. Rebuild that copy from the take's
-   original and record again.
+   Recording stops if a take in the edit has no playback copy, or if a take's
+   review or playback copy has fewer frames than the take: a damaged copy on the
+   host re-encodes into a clean but shorter video that cannot be scrubbed to its
+   end. Rebuild that copy from the take's original and record again.
 
    It also removes this computer from the replies: no Cloud key, no folders, no
    file manager. Values that are whole absolute paths keep only their last two
