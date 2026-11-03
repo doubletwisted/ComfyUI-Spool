@@ -13,6 +13,9 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Timeline
 
+- Track headers show just V1, A1, A2 and so on, without "Clip audio" and
+  "Soundtrack" under them, and keep the eye, mute and solo right of the name. A1
+  keeps mute and solo when a higher video track's audio lane is hidden.
 - An empty A2 lane is plain, without the dashed "Add audio" box that looked like
   a clip on the track. The waveform button adds audio, and files still drop onto
   A2.

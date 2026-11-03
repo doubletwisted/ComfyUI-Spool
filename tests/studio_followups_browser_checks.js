@@ -47,13 +47,40 @@
     'One Undo restores the deleted lane and all clip data',
     T.videoTracks(n.state) === 3 && JSON.stringify(n.state.clips) === initial,
   );
+  const headerKey = () => $('sourceTrackHeader').querySelector('[data-track-resize]').dataset.trackResize,
+    headerName = () => $('sourceTrackHeader').querySelector('.track-title').textContent;
+  check(
+    'Track headers are plain names, A1 for V1 audio, with the eye right of the video name',
+    !$('trackHeaders').querySelector('small') &&
+      [...$('sourceTrackLabels').querySelectorAll('.track-title')].at(-1).textContent === 'A1' &&
+      $('musicTrackHeader').querySelector('.track-title').textContent === 'A2' &&
+      d.querySelector('[data-select-track="1"]').nextElementSibling.matches('[data-toggle-video-track="1"]'),
+  );
   context($('sourceTrackHeader'));
   remove();
   await n.flush();
   check(
-    'Deleting A1 removes its lane without deleting video',
-    n.state.clips.some(c => c.id === 'next' && c.audioDetached) && $('sourceTrackHeader').hidden,
+    'Deleting A1 / V3 removes its lane without deleting video',
+    n.state.clips.some(c => c.id === 'next' && c.audioDetached) &&
+      T.sourceTrackHidden(n.state, 3) &&
+      !$('trackHeaders').querySelector('[data-track-resize="source:3"]'),
   );
+  check(
+    'Mute and solo move to the topmost audio lane still shown',
+    !$('sourceTrackHeader').hidden && headerKey() === 'source:2' && headerName() === 'A1 / V2',
+  );
+  context($('sourceTrackHeader'));
+  remove();
+  await n.flush();
+  check(
+    'With only V1 audio shown, A1 keeps mute and solo',
+    !$('sourceTrackHeader').hidden &&
+      headerKey() === 'source:1' &&
+      headerName() === 'A1' &&
+      !!$('trackMute').getClientRects().length &&
+      !!$('trackSolo').getClientRects().length,
+  );
+  await undo();
   await undo();
   context($('musicTrackHeader'));
   remove();
