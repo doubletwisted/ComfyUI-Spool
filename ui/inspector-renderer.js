@@ -170,7 +170,7 @@ export function createInspectorRenderer({
         ? 'Clip workflow'
         : embedded
           ? 'Workflow from take'
-          : 'Choose a take with a workflow';
+          : 'Footage';
     draw(
       'inspectorContent',
       '<div class="clip-workflow-heading' +

@@ -150,7 +150,7 @@ export function workflowStatus(clip, workflow, recipe, definitions = {}, embedde
           ? 'Use this take to set up generation'
           : workflow
             ? 'Prepare this workflow to generate'
-            : 'Use a take or choose a workflow from the library',
+            : 'Drop a workflow from the library on this clip to generate from it',
   };
 }
 

@@ -15,7 +15,7 @@
     'Footage explains why generation is unavailable',
     $('generate').disabled &&
       $('inspectorContent').querySelector('.workflow-hint').textContent ===
-        'Use a take or choose a workflow from the library' &&
+        'Drop a workflow from the library on this clip to generate from it' &&
       !$('generateReason').hidden,
   );
   n.viewTake('two');
