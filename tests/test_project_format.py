@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from PIL import Image, PngImagePlugin
 
-from spool import durable, ledger, maintenance, receipts, sidecars, take_workflow
+from spool import __version__, durable, ledger, maintenance, receipts, sidecars, take_workflow
 from spool.projects import ProjectStore, Workspace
 from spool.store import Conflict, SCHEMA_VERSION, Store, encode, read_only_uri
 from pathlib import PurePosixPath, PureWindowsPath
@@ -312,7 +312,7 @@ class ProjectFormatTests(unittest.TestCase):
                 "format": "spool-project",
                 "formatVersion": SCHEMA_VERSION,
                 "projectId": self.project_id,
-                "writtenBy": "0.1.0",
+                "writtenBy": __version__,
             },
         )
 

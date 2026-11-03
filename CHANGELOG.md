@@ -3,7 +3,7 @@
 All notable changes to Spool are recorded here. Versions follow
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 0.1.1 (2026-11-03)
 
 ### Directing tools
 
@@ -66,6 +66,14 @@ All notable changes to Spool are recorded here. Versions follow
 - The audio inspector's level slider shows its track again, its fields follow the
   Inputs tab's label-left rows, and it names the audio by its track (A1 or A2).
 - Generate reads "1 take" and "1 clip", not "1 takes" and "1 clips".
+- The take rail stays beside the viewer when the selected clip has no takes, so the
+  viewer no longer changes size as you select clips. Imported footage is labelled
+  **Footage** in the inspector, with a line on how to generate from it.
+- Using a take that is plain footage no longer shows a warning about missing
+  executable metadata; the inspector calls it **Footage** and says how to generate.
+- A clip with a take on the way says **Generating** in the viewer, from the moment
+  Generate is pressed, instead of "Not generated yet", and an extension without a take shows the end of the shot it
+  continues.
 
 ### Timeline
 
@@ -79,17 +87,6 @@ All notable changes to Spool are recorded here. Versions follow
   out past the end of the edit. Shift+wheel pans; Alt+wheel scrolls the tracks.
 - Adding, removing or trimming clips no longer changes the timeline's zoom; clips
   stay the same size on screen. During a clip drag the wheel scrolls the tracks.
-
-### Studio
-
-- The take rail stays beside the viewer when the selected clip has no takes, so the
-  viewer no longer changes size as you select clips. Imported footage is labelled
-  **Footage** in the inspector, with a line on how to generate from it.
-- Using a take that is plain footage no longer shows a warning about missing
-  executable metadata; the inspector calls it **Footage** and says how to generate.
-- A clip with a take on the way says **Generating** in the viewer, from the moment
-  Generate is pressed, instead of "Not generated yet", and an extension without a take shows the end of the shot it
-  continues.
 
 ## 0.1.0 (2026-10-30)
 

@@ -1,6 +1,6 @@
 [project]
 name = "spool-timeline"
-version = "0.1.0"
+version = "0.1.1"
 description = "A video timeline studio inside ComfyUI: cut clips, generate takes with your own workflows locally or on Comfy Cloud, and choose the take that fits each shot."
 readme = "README.md"
 license = { file = "LICENSE" }
