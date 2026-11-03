@@ -38,5 +38,42 @@
   );
   check('View-only focus and selection leave project untouched', n.revision === revision);
   n.selectClip('shot');
+  await n.flush();
+  // The same kind of control looks the same in every panel.
+  const font = node => {
+      const s = getComputedStyle(node);
+      return [s.fontFamily, s.fontSize].join(' ');
+    },
+    same = nodes => nodes.length > 1 && new Set(nodes.map(font)).size === 1,
+    shown = selector => [...d.querySelectorAll(selector)].filter(node => node.getClientRects().length);
+  check(
+    'Track names share one type, video and audio alike',
+    same([...shown('.track-select'), ...shown('#trackHeaders .track-title b')]),
+  );
+  check(
+    'Tab bars share one size',
+    same([
+      ...shown('.media-panel > .panel-head .seg button'),
+      ...shown('.viewer-tabs button'),
+      ...shown('.inspector-tabs button'),
+    ]),
+  );
+  check(
+    'Track toggles share one size',
+    new Set(shown('#trackHeaders .track-toggle').map(node => node.getBoundingClientRect().height)).size === 1,
+  );
+  const mediaFilter = d.querySelector('.media-filters button'),
+    locationFilter = d.querySelector('.workflow-location button');
+  check(
+    'Single-choice filters share one control',
+    !!mediaFilter &&
+      !!locationFilter &&
+      getComputedStyle(mediaFilter).borderRadius === getComputedStyle(locationFilter).borderRadius &&
+      getComputedStyle(mediaFilter).fontSize === getComputedStyle(locationFilter).fontSize,
+  );
+  check(
+    'Media and workflow display toggles are both icons',
+    !!$('mediaViewgrid').querySelector('svg') && !!d.querySelector('[data-workflow-view] svg'),
+  );
   return { checks };
 })();

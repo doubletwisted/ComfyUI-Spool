@@ -57,7 +57,7 @@ export function createClipBadges({
     getJobStatus().textContent = '';
     $('generate').hidden = !videos.length;
     $('draftToggle').hidden = !videos.some(canDraft);
-    $('generateLabel').textContent = 'Generate ' + videos.length + ' clips';
+    $('generateLabel').textContent = 'Generate ' + videos.length + (videos.length === 1 ? ' clip' : ' clips');
     $('generate').title = selectionQueueReason() || 'Generate takes for the selected clips';
     draw(
       'inspectorContent',

@@ -643,8 +643,10 @@ button:disabled {
   padding: 0 12px;
 }
 .viewer-tabs button {
-  font-weight: 600;
   padding: 3px 12px;
+}
+.viewer-tabs button.active {
+  font-weight: 600;
 }
 .viewer.source-mode #sourceTab {
   color: var(--preview);
@@ -1174,7 +1176,6 @@ button:disabled {
   height: 46px;
   justify-content: space-between;
   gap: 3px;
-  padding: 0 5px;
 }
 .track-label.audio .iconbutton {
   width: 24px;
@@ -2099,11 +2100,6 @@ input[type='range'] {
   gap: 2px;
   min-width: 0;
 }
-.track-title small {
-  font-size: 8px;
-  color: var(--faint);
-  white-space: nowrap;
-}
 .track-toggle {
   border: 1px solid var(--line2);
   border-radius: 3px;
@@ -2129,12 +2125,18 @@ input[type='range'] {
 .audio-clip.muted {
   opacity: 0.3;
 }
+/* The name reads over the volume line, which passes behind it. */
 .audio-clip .audio-name {
   position: absolute;
-  left: 6px;
+  z-index: 1;
+  left: 4px;
   top: 3px;
-  right: 7px;
-  font: 9px var(--mono);
+  max-width: calc(100% - 11px);
+  padding: 0 3px;
+  border-radius: 2px;
+  background: #173d32d9;
+  font-size: 11px;
+  font-weight: 500;
   color: #c6d9d1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2175,21 +2177,6 @@ input[type='range'] {
 .music-clip .trim-handle {
   width: 8px;
 }
-.music-empty {
-  position: absolute;
-  inset: 5px 12px;
-  border: 1px dashed #315044;
-  border-radius: 4px;
-  background: transparent;
-  color: #75978a;
-  text-align: left;
-  font-size: 10px;
-  padding: 0 12px;
-}
-.music-empty:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
 .inspector-tabs {
   display: flex;
   border: 1px solid var(--line);
@@ -2210,12 +2197,12 @@ input[type='range'] {
   color: var(--text);
   background: var(--raised);
 }
-.audio-controls .field input[type='range'] {
+.audio-controls .field input[type='range'],
+.full-editor .audio-controls .field input[type='range'] {
   padding: 0;
-  background: transparent;
   border: 0;
+  background: var(--line2);
   accent-color: #79cba0;
-  height: 4px;
   margin: 12px 0;
 }
 .audio-level-head {
@@ -2235,6 +2222,9 @@ input[type='range'] {
 }
 .audio-controls .outline {
   width: 100%;
+}
+.audio-controls .two-fields {
+  margin-top: 12px;
 }
 .audio-controls .outline.active {
   color: var(--accent);
@@ -3338,8 +3328,9 @@ input[type='range'] {
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--line2);
-  border-radius: 5px;
-  padding: 5px 8px;
+  border-radius: 4px;
+  height: 26px;
+  padding: 5px 7px;
   font-size: 11px;
   flex: 1;
   min-width: 90px;
@@ -3441,11 +3432,7 @@ input[type='range'] {
   border-radius: 8px 8px 0 0;
   overflow: hidden;
 }
-.full-editor .viewer-tabs button {
-  padding: 4px 8px;
-  min-height: 28px;
-  font-size: 11px;
-}
+
 .full-editor .viewer-context {
   font-size: 12px;
 }
@@ -3530,7 +3517,7 @@ input[type='range'] {
 }
 .full-editor .takes-title {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .full-editor #takeCount,
 .full-editor .takes-keys {
@@ -3650,8 +3637,6 @@ input[type='range'] {
 }
 .full-editor .inspector-tabs button {
   border-radius: 4px 4px 0 0;
-  padding: 6px;
-  font-size: 11px;
   border-bottom: 2px solid transparent;
 }
 .full-editor .inspector-tabs button.active {
@@ -3838,10 +3823,6 @@ input[type='range'] {
   height: 38px;
   background: #173d32;
   box-shadow: inset 0 0 0 1px #487064;
-}
-.full-editor .track-title small {
-  font-size: 9px;
-  color: var(--dim);
 }
 .full-editor .tick {
   font-size: 10px;
@@ -4066,9 +4047,6 @@ input[type='range'] {
   .full-editor .track-labels {
     width: 72px;
   }
-  .full-editor .track-title small {
-    display: none;
-  }
   .full-editor .shot-picker {
     grid-template-columns: 1fr;
   }
@@ -4083,7 +4061,7 @@ input[type='range'] {
 }
 .video-track-toggle {
   flex-shrink: 0;
-  margin-right: 7px;
+  margin-left: 7px;
 }
 .video-track-toggle .icon {
   width: 15px;
@@ -4105,17 +4083,19 @@ input[type='range'] {
   display: none;
 }
 .media-view-controls button {
-  padding: 4px 5px;
-  font-size: 10px;
-  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  width: 26px;
+  min-height: 26px;
+  padding: 0;
+  border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--dim);
+  color: var(--faint);
 }
 .media-view-controls button.active {
-  color: var(--accent);
+  color: var(--text);
   background: var(--raised);
-  border-color: var(--line2);
 }
 .media-detail {
   display: none;
@@ -4180,9 +4160,6 @@ input[type='range'] {
   height: 14px;
 }
 
-.source-track-label b {
-  font-size: 9px;
-}
 .track-resize {
   position: absolute;
   bottom: 0;
@@ -5516,6 +5493,12 @@ input[type='range'] {
   padding: 8px;
   border-top: 1px solid var(--line);
 }
+.studio-sidebar .media-panel .panel-foot .outline {
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+}
 .workflow-search {
   display: flex;
   gap: 6px;
@@ -5548,16 +5531,14 @@ input[type='range'] {
   font-size: 10px;
   padding: 4px;
 }
-.workflow-filters,
-.media-filters {
+.workflow-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   padding: 4px 9px 9px;
   flex-shrink: 0;
 }
-.workflow-filters button,
-.media-filters button {
+.workflow-filters button {
   border: 1px solid var(--line2);
   border-radius: 12px;
   padding: 4px 7px;
@@ -5565,8 +5546,7 @@ input[type='range'] {
   font-size: 10px;
   color: var(--dim);
 }
-.workflow-filters button.active,
-.media-filters button.active {
+.workflow-filters button.active {
   background: var(--raised);
   border-color: var(--accent);
   color: var(--text);
@@ -5601,7 +5581,7 @@ input[type='range'] {
 }
 .workflow-section h4 {
   font-size: 11px;
-  font-weight: 550;
+  font-weight: 600;
   margin: 8px 0 5px;
 }
 .workflow-section h4 span {
@@ -6397,8 +6377,11 @@ input[type='range'] {
   justify-content: space-between;
   gap: 12px;
 }
+/* A panel, not a dialog: titled like Takes and Notes. */
 .renders-panel h2 {
   margin: 0;
+  font-size: 12px;
+  font-weight: 600;
 }
 /* Keyboard shortcut sheet */
 #modal.shortcut-dialog {
@@ -7010,8 +6993,10 @@ input[type='range'] {
   min-width: 0;
   font-family: var(--mono);
 }
-/* Tabs are one size everywhere: 12px labels with an amber underline. */
-.full-editor .media-panel > .panel-head .seg button {
+/* Tabs are one size everywhere: 12px labels, the active one bold and underlined. */
+.full-editor .media-panel > .panel-head .seg button,
+.full-editor .viewer-tabs button,
+.full-editor .inspector-tabs button {
   min-height: 28px;
   padding: 4px 10px;
   font-size: 12px;
@@ -7045,7 +7030,8 @@ input[type='range'] {
   color: var(--text);
   background: var(--raised);
 }
-.workflow-search .seg svg {
+.workflow-search .seg svg,
+.media-view-controls svg {
   width: 14px;
   height: 14px;
   fill: none;
@@ -7054,7 +7040,8 @@ input[type='range'] {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.workflow-location {
+.workflow-location,
+.media-filters {
   display: flex;
   gap: 2px;
   margin: 0 10px 6px;
@@ -7064,7 +7051,8 @@ input[type='range'] {
   background: var(--bg);
   flex-shrink: 0;
 }
-.workflow-location button {
+.workflow-location button,
+.media-filters button {
   flex: 1;
   min-width: 0;
   min-height: 22px;
@@ -7076,10 +7064,12 @@ input[type='range'] {
   font-size: 11px;
   white-space: nowrap;
 }
-.workflow-location button:hover {
+.workflow-location button:hover,
+.media-filters button:hover {
   color: var(--text);
 }
-.workflow-location button.active {
+.workflow-location button.active,
+.media-filters button.active {
   background: var(--raised);
   color: var(--text);
   font-weight: 600;
@@ -7091,7 +7081,7 @@ input[type='range'] {
 .full-editor .workflow-actions button {
   min-height: 22px;
   padding: 2px 4px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--dim);
 }
 .full-editor .workflow-filters {
@@ -7379,6 +7369,38 @@ input[type='range'] {
 .full-editor .native-bindings > .two-fields > label.field > span {
   margin: 0;
 }
+/* The audio inspector follows the same rule: level and fades are label-left rows. */
+.full-editor .audio-controls .two-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.full-editor .audio-controls .two-fields > label.field,
+.full-editor .audio-controls .audio-level-head {
+  display: grid;
+  grid-template-columns: minmax(72px, 36%) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  margin: 0;
+}
+.full-editor .audio-controls .two-fields > label.field > span {
+  margin: 0;
+}
+.full-editor .audio-controls .audio-level-head input {
+  width: auto !important;
+}
+.full-editor .audio-controls .field > span,
+.full-editor .audio-controls .audio-level-head {
+  font-size: 11px;
+}
+.full-editor .audio-controls .field > .small {
+  font-size: 10px;
+  color: var(--dim);
+}
+.full-editor .audio-controls .outline {
+  min-height: 28px;
+  font-size: 11px;
+}
 .full-editor .native-bindings :is(input:not([type='file']), select) {
   height: 28px;
   padding: 3px 8px;
@@ -7428,14 +7450,6 @@ input[type='range'] {
 }
 .full-editor .audio-clip.no-audio .no-audio-label {
   color: var(--faint);
-}
-.full-editor .music-empty {
-  border-color: var(--line2);
-  color: var(--faint);
-}
-.full-editor .music-empty:hover {
-  border-color: var(--dim);
-  color: var(--text);
 }
 /* A narrow viewer drops the duration readout and shortens the preview menu so the transport never overlaps. */
 .full-editor .viewer {
@@ -7768,12 +7782,8 @@ input[type='range'] {
   background: var(--accent);
   pointer-events: none;
 }
-/* Fitted tracks (track-layout.js) can be shorter than their headers' two lines:
-   headers keep one line and smaller toggles. */
-.full-editor.tracks-fitted .track-title small {
-  display: none;
-}
-.full-editor.tracks-fitted .track-label.audio .track-toggle {
+/* Fitted tracks (track-layout.js) can be shorter than their headers: smaller toggles. */
+.full-editor.tracks-fitted .track-label .track-toggle {
   height: 16px;
   min-height: 16px;
   font-size: 9px;

@@ -84,9 +84,45 @@ The recording is data, not code. It stays out of Git and is published as
    These change only the recording, never the project. `--keep-media` records
    the replies again and reuses media already in DIR.
 
-   It asks the host for every playback copy at the project size and waits for
+   The edit can also be arranged in the demo itself. Edit it in the browser,
+   then save what the demo answers for the project from the browser console:
+
+   ```js
+   fetch(location.pathname + 'spool/api/projects/ID').then(r => r.blob()).then(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'demo-edit.json'; a.click(); })
+   ```
+
+   `--edit demo-edit.json` records that edit instead of the host's, in place of
+   the options above. `--max-takes 4` keeps the take in the edit and the latest
+   other takes the rail shows, up to four per clip; hidden takes and the media
+   of every take left out stay out of the data. The coral demo is recorded
+   with both:
+
+   ```powershell
+   python pages/build.py record --host http://127.0.0.1:PORT --project ID --data DIR --name "Coral Palace" `
+     --keep-media --edit coral-demo-edit.json --max-takes 4
+   ```
+
+   In the coral demo, every shot except c11 (FLUX 3) uses **MiniMax H3 ·
+   Image to Video** from the library, so the inspector shows that workflow's
+   inputs. The workflow was dropped on each clip in the studio on the recording
+   host. Dropping it puts the selected take in First frame and sets Duration to
+   the clip's length on the timeline. The demo instead shows each shot's own
+   source picture, the duration it was generated at, and 2.4 megapixels, the
+   size of its takes. Make these changes in the studio before saving the edit.
+   To save the edit from the host rather than a demo page, ask for the form
+   the studio reads, without render evidence:
+
+   ```powershell
+   curl.exe -H "X-Spool-View: editor" http://127.0.0.1:PORT/spool/api/projects/ID -o coral-demo-edit.json
+   ```
+
+   Recording asks the host for every playback copy at the project size and waits for
    them. It re-encodes video to 960 pixels wide (H.264, a keyframe every 12
    frames, same frames and timing) and shrinks the posters.
+   Recording stops if a take in the edit has no playback copy, or if a take's
+   review or playback copy has fewer frames than the take: a damaged copy on the
+   host re-encodes into a clean but shorter video that cannot be scrubbed to its
+   end. Rebuild that copy from the take's original and record again.
 
    It also removes this computer from the replies: no Cloud key, no folders, no
    file manager. Values that are whole absolute paths keep only their last two
@@ -103,7 +139,10 @@ The recording is data, not code. It stays out of Git and is published as
    `serve.py` serves the site under its base path with byte ranges, as Pages
    does, so video seeks.
 5. Zip the contents of DIR as `spool-demo-data.zip`, replace the asset on the
-   `demo-data` release, and run the **Online demo** workflow by hand.
+   `demo-data` release, and run the **Online demo** workflow by hand. Wait a
+   minute after the upload: a run that starts at once can still download the
+   previous asset. Browsers keep the site's files for up to ten minutes, so check
+   the result with a hard reload.
 
 ## Keeping it current
 
@@ -136,9 +175,14 @@ reply is caught before visitors see it.
 Pages must use **GitHub Actions** as its source (Settings → Pages). The site
 root redirects to `demo/`.
 
+## Credits
+
+The workflow library's posters in the demo come from Comfy-Org's
+`comfyui-workflow-templates` packages, which are MIT licensed.
+
 ## Size
 
-The coral demo records to about 240 MB: playback copies, review copies, input
-pictures and posters, for 11 shots and their takes. Pages allows 1 GB per site
-and about 100 GB of traffic a month. The browser loads media only when the
-studio shows it, so a visit usually costs far less than the whole project.
+The coral demo records to about 130 MB: playback copies, review copies, input
+pictures and posters, for 10 shots and up to four takes each. Pages allows 1 GB
+per site and about 100 GB of traffic a month. The browser loads media only when
+the studio shows it, so a visit usually costs far less than the whole project.

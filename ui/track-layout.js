@@ -105,36 +105,46 @@ export function createTrackLayout({
     } catch (error) {}
   }
   function renderAudioTrackHeaders(count) {
-    const header = $('sourceTrackHeader'),
-      key = 'source:' + count;
-    header.hidden = T.sourceTrackHidden(getState(), count);
-    header.style.height = 'var(--source-height-' + count + ')';
-    header.querySelector('.track-title b').textContent = count > 1 ? 'A1 / V' + count : 'A1';
-    header.title = 'Clip audio from V' + count + '. M/S controls affect all A1 clip audio.';
-    if (header.querySelector('[data-track-resize]')?.dataset.trackResize !== key) {
-      header.querySelector('[data-track-resize]')?.remove();
-      header.insertAdjacentHTML('beforeend', trackResizeHandle(key, 'A1 clip audio from V' + count));
+    // The mute and solo header sits on the topmost source lane that is shown, so A1
+    // keeps them when a higher video track's audio lane is hidden.
+    const shown = Array.from({ length: count }, (_, i) => count - i).filter(
+        track => !T.sourceTrackHidden(getState(), track),
+      ),
+      top = shown[0],
+      header = $('sourceTrackHeader'),
+      key = 'source:' + top;
+    header.hidden = !top;
+    if (top) {
+      header.style.height = 'var(--source-height-' + top + ')';
+      header.querySelector('.track-title b').textContent = T.sourceLaneLabel(top);
+      header.title = 'Clip audio from V' + top + '. M/S controls affect all A1 clip audio.';
+      if (header.querySelector('[data-track-resize]')?.dataset.trackResize !== key) {
+        header.querySelector('[data-track-resize]')?.remove();
+        header.insertAdjacentHTML('beforeend', trackResizeHandle(key, 'A1 clip audio from V' + top));
+      }
     }
     draw(
       'sourceExtraTrackLabels',
-      Array.from({ length: count - 1 }, (_, i) => {
-        const track = count - i - 1;
-        if (T.sourceTrackHidden(getState(), track)) return '';
-        return (
-          '<div class="track-label audio source-track-label" style="height:var(--source-height-' +
-          track +
-          ')"><span class="track-title"><b>A1 / V' +
-          track +
-          '</b><small>Clip audio</small></span>' +
-          trackResizeHandle('source:' + track, 'A1 clip audio from V' + track) +
-          '</div>'
-        );
-      }).join(''),
+      shown
+        .slice(1)
+        .map(
+          track =>
+            '<div class="track-label audio source-track-label" style="height:var(--source-height-' +
+            track +
+            ')" title="Clip audio from V' +
+            track +
+            '"><span class="track-title"><b>' +
+            T.sourceLaneLabel(track) +
+            '</b></span>' +
+            trackResizeHandle('source:' + track, 'A1 clip audio from V' + track) +
+            '</div>',
+        )
+        .join(''),
     );
     const music = $('musicTrackHeader');
     music.style.height = 'var(--music-height)';
     if (!music.querySelector('[data-track-resize]'))
-      music.insertAdjacentHTML('beforeend', trackResizeHandle('music', 'A2 soundtrack'));
+      music.insertAdjacentHTML('beforeend', trackResizeHandle('music', 'A2'));
   }
   return { trackAt, trackResizeHandle, setStyle, applyTrackHeights, storeTrackHeights, renderAudioTrackHeaders };
 }

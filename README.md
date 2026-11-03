@@ -16,6 +16,7 @@
 
 <p align="center">
   <a href="https://youtu.be/Z5H-dzL2kUU"><img src="docs/images/watch-the-film.webp" alt="Watch the Spool launch film on YouTube" width="360"></a>
+  <a href="https://doubletwisted.github.io/ComfyUI-Spool/demo/"><img src="docs/images/try-the-demo.webp" alt="Try the Spool online demo in your browser" width="360"></a>
 </p>
 
 Spool turns ComfyUI into a place to make a film, not just a shot. Lay out shots
@@ -24,6 +25,10 @@ them, and choose the take that goes in the edit. Takes render on this computer,
 on Comfy Cloud or on a Deadline farm.
 
 Your workflows stay as they are: Spool needs no custom nodes in the graph.
+
+To look around first, [try the online demo](https://doubletwisted.github.io/ComfyUI-Spool/demo/):
+the studio in your browser with a finished project. You can play the edit,
+review takes and change the edit there; generating takes needs Spool with ComfyUI.
 
 ![The Spool studio: an eight-shot sequence on the timeline, the first shot selected with its four takes beside the viewer and its workflow inputs on the right](docs/images/studio.webp)
 

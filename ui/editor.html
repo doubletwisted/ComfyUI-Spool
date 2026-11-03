@@ -84,8 +84,18 @@
             <span class="bin-title" id="binTitle">Workflow templates</span
             ><input id="poolSearch" type="search" aria-label="Search project media" placeholder="Search" />
             <div class="media-view-controls" id="mediaViewControls" role="group" aria-label="Media display">
-              <button id="mediaViewgrid" aria-pressed="true" title="Small thumbnails">Grid</button
-              ><button id="mediaViewlist" aria-pressed="false" title="Media list with file details">List</button>
+              <button id="mediaViewgrid" aria-pressed="true" title="Small thumbnails" aria-label="Grid">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="4" y="4" width="7" height="7" rx="1" />
+                  <rect x="13" y="4" width="7" height="7" rx="1" />
+                  <rect x="4" y="13" width="7" height="7" rx="1" />
+                  <rect x="13" y="13" width="7" height="7" rx="1" />
+                </svg></button
+              ><button id="mediaViewlist" aria-pressed="false" title="Media list with file details" aria-label="List">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1" />
+                </svg>
+              </button>
             </div>
           </div>
           <div class="panel-scroll"><div class="bin-grid" id="binGrid"></div></div>
@@ -416,44 +426,32 @@
             <div id="videoTrackLabels"></div>
             <div id="sourceTrackLabels">
               <div class="track-label audio source-track-label" id="sourceTrackHeader">
-                <span class="track-title"><b>A1</b><small>Clip audio</small></span
+                <span class="track-title"><b>A1</b></span
                 ><button
                   class="track-toggle"
                   id="trackMute"
-                  title="Mute A1 clip audio in the mix"
-                  aria-label="Mute clip audio"
+                  title="Mute A1 in the mix"
+                  aria-label="Mute A1"
                   aria-pressed="false"
                 >
                   M</button
-                ><button
-                  class="track-toggle"
-                  id="trackSolo"
-                  title="Solo clip audio"
-                  aria-label="Solo clip audio"
-                  aria-pressed="false"
-                >
+                ><button class="track-toggle" id="trackSolo" title="Solo A1" aria-label="Solo A1" aria-pressed="false">
                   S
                 </button>
               </div>
               <div id="sourceExtraTrackLabels"></div>
             </div>
             <div class="track-label audio" id="musicTrackHeader">
-              <span class="track-title"><b>A2</b><small>Soundtrack</small></span
+              <span class="track-title"><b>A2</b></span
               ><button
                 class="track-toggle"
                 id="musicMute"
-                title="Mute soundtrack in the mix"
-                aria-label="Mute soundtrack"
+                title="Mute A2 in the mix"
+                aria-label="Mute A2"
                 aria-pressed="false"
               >
                 M</button
-              ><button
-                class="track-toggle"
-                id="musicSolo"
-                title="Solo soundtrack"
-                aria-label="Solo soundtrack"
-                aria-pressed="false"
-              >
+              ><button class="track-toggle" id="musicSolo" title="Solo A2" aria-label="Solo A2" aria-pressed="false">
                 S
               </button>
             </div>

@@ -176,15 +176,8 @@ def demo_edit(document, leave_out, move_to_end, close_gaps, overlay=()):
             clip["videoTrack"], clip["gapBefore"] = 2, start - end
             document["clips"].append(clip)
             end = start + clip["out"] - clip["in"]
-    used = {
-        value
-        for item in document["clips"] + document.get("audioClips", [])
-        for media in [item.get("media", {})] + [t.get("media", {}) for t in item.get("takes", [])]
-        for value in (media.get("id"), media.get("originalFile"))
-        if value
-    }
     if leave_out:
-        document["media"] = [m for m in document.get("media", []) if {m.get("id"), m.get("originalFile")} & used]
+        prune_media(document)
     tracks = [c.get("videoTrack", 1) for c in document["clips"]]
     document["videoTracks"] = max(tracks, default=1)
     document["videoTailGaps"] = {k: v for k, v in document.get("videoTailGaps", {}).items() if int(k) in tracks}
@@ -193,6 +186,50 @@ def demo_edit(document, leave_out, move_to_end, close_gaps, overlay=()):
         for track in set(tracks) or {1}
     )
     document["exportRange"] = {"start": 0, "end": length}
+
+
+def prune_media(document):
+    """Leave out pool media that no clip or take in the edit uses."""
+    used = {
+        value
+        for item in document["clips"] + document.get("audioClips", [])
+        for media in [item.get("media", {})] + [t.get("media", {}) for t in item.get("takes", [])]
+        for value in (media.get("id"), media.get("originalFile"))
+        if value
+    }
+    document["media"] = [m for m in document.get("media", []) if {m.get("id"), m.get("originalFile")} & used]
+
+
+def use_edit(current, path):
+    """Record the edit saved from a demo page instead of the host's.
+
+    The file is what the demo answers for the project (saved in the browser; see
+    docs/dev/demo.md). Its edit fields replace the host's; records such as jobs
+    stay the host's, and its recipes join the host's.
+    """
+    saved = json.loads(Path(path).read_text(encoding="utf-8"))
+    fields = json.loads((ROOT / "tests" / "fixtures" / "document_fields.json").read_text(encoding="utf-8"))["edit"]
+    edit, document = saved.get("document", saved), current["document"]
+    for field in fields:
+        if field in edit:
+            document[field] = edit[field]
+        else:
+            document.pop(field, None)
+    current["recipes"] = {**(current.get("recipes") or {}), **(saved.get("recipes") or {})}
+    prune_media(document)
+
+
+def limit_takes(document, most):
+    """Keep at most `most` takes per clip: the take in the edit and the latest
+    others the take rail shows. Hidden takes go, so their media do too."""
+    for clip in document["clips"]:
+        hidden = set(clip.get("hiddenTakeIds") or [])
+        shown = [t for t in clip["takes"] if t["id"] != clip.get("takeId") and t["id"] not in hidden]
+        kept = {clip.get("takeId")} | {t["id"] for t in shown[max(0, len(shown) - (most - 1)) :] if most > 1}
+        if len(kept & {t["id"] for t in clip["takes"]}) < len(clip["takes"]):
+            clip["takes"] = [t for t in clip["takes"] if t["id"] in kept]
+            clip.pop("hiddenTakeIds", None)
+            print(f"Kept {len(clip['takes'])} takes of {clip['name']}", flush=True)
 
 
 def overlay_spec(value):
@@ -260,9 +297,24 @@ def record(args):
 
     current = get(host, f"projects/{project}", view=True)
     document = current["document"]
+    # A clip split or copied in a saved edit is new to the host; its takes' setups
+    # are read through the host clip that holds them.
+    host_clips = {c["id"] for c in document["clips"]}
+    holder = {}
+    for visible in (True, False):
+        for clip in document["clips"]:
+            hidden = set(clip.get("hiddenTakeIds") or []) - {clip.get("takeId")}
+            for take in clip.get("takes", []):
+                if not take.get("placeholder") and (take["id"] not in hidden) == visible:
+                    holder.setdefault(take["id"], clip["id"])
     overlay = [overlay_spec(value) for value in args.overlay]
     if args.leave_out or args.move_to_end or args.close_gaps or overlay:
         demo_edit(document, args.leave_out, args.move_to_end, args.close_gaps, overlay)
+    if args.edit:
+        use_edit(current, args.edit)
+    if args.max_takes:
+        limit_takes(document, args.max_takes)
+        prune_media(document)
     keep("GET", f"projects/{project}", current)
     for path in ("capabilities", "builtin-workflows", "templates", "comfy"):
         keep("GET", path, get(host, path))
@@ -275,8 +327,10 @@ def record(args):
             path = f"projects/{project}/takes/{urllib.parse.quote(take['id'])}"
             keep("GET", path, get_or_error(host, path))
             # Use take reads the take's workflow before it puts the take in the edit.
+            source = clip["id"] if clip["id"] in host_clips else holder.get(take["id"], clip["id"])
+            read = f"projects/{project}/take-workflow/{urllib.parse.quote(source)}/{urllib.parse.quote(take['id'])}"
             path = f"projects/{project}/take-workflow/{urllib.parse.quote(clip['id'])}/{urllib.parse.quote(take['id'])}"
-            keep("GET", path, get_or_error(host, path))
+            keep("GET", path, get_or_error(host, read))
             versions.add((take.get("batch") or {}).get("workflowVersion"))
     for version in sorted(v for v in versions if v):
         path = "workflows/" + urllib.parse.quote(version)
@@ -285,7 +339,12 @@ def record(args):
         give_inputs(current, replies, project, args.inputs_like)
 
     size = {**document["resolution"], "fps": document["fps"]}
-    records = {m["id"]: m for m in media_records(document) if m.get("id")}
+    # Unlinked audio shares its take's media id as kind "audio"; the picture still
+    # needs its playback copy, so a video or image record wins the id.
+    records = {}
+    for m in media_records(document):
+        if m.get("id") and records.get(m["id"], {}).get("kind") not in ("video", "image"):
+            records[m["id"]] = m
     for index, (identity, media) in enumerate(sorted(records.items()), 1):
         if media.get("kind") in ("video", "image"):
             print(f"Preparing playback {index}/{len(records)}: {media.get('name')}", flush=True)
@@ -341,6 +400,21 @@ def record(args):
             shrink(target, args.video_width)
         print(f"Media {index}/{len(found)}: {relative} {target.stat().st_size // 1024} KiB", flush=True)
 
+    missing = [
+        clip["name"]
+        for clip in document["clips"]
+        for take in clip.get("takes", [])
+        if take["id"] == clip.get("takeId")
+        and (take.get("media") or {}).get("kind") in ("video", "image")
+        and key("POST", f"projects/{project}/media/{urllib.parse.quote(take['media']['id'])}/preview") not in replies
+    ]
+    if missing:
+        raise SystemExit("No playback copy recorded for the take in the edit of " + ", ".join(missing))
+    short = short_videos(current["document"], replies, project, media_root)
+    for line in short:
+        print("Video shorter than its take:", line, file=sys.stderr)
+    if short:
+        raise SystemExit("Recorded videos are cut short; rebuild them on the host and record again")
     record_static(host, current, replies, data / "static")
     (data / "api" / "replies.json").write_text(json.dumps(replies, separators=(",", ":")), encoding="utf-8")
     manifest = {
@@ -434,6 +508,34 @@ def small_poster(body, width=320):
         return out.getvalue() if out.tell() < len(body) else body
 
 
+def short_videos(document, replies, project, media_root):
+    """Takes whose review or playback copy in the data has fewer frames than the
+    take: a damaged source survives re-encoding as a shorter, clean video."""
+    found = []
+    for clip in document["clips"]:
+        for take in clip.get("takes", []):
+            media = take.get("media") or {}
+            if media.get("kind") != "video" or not media.get("frames"):
+                continue
+            preview = replies.get(key("POST", f"projects/{project}/media/{urllib.parse.quote(media['id'])}/preview"))
+            for relative in {media.get("file"), (preview or {}).get("file")} - {None}:
+                path = media_root / relative
+                if not path.is_file():
+                    continue
+                probe = subprocess.run(
+                    ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets"]
+                    + ["-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", str(path)],
+                    capture_output=True,
+                    text=True,
+                )
+                frames = int(probe.stdout.strip() or 0) if probe.stdout.strip().isdigit() else 0
+                if frames < media["frames"]:
+                    found.append(
+                        f"{clip['name']} take {take.get('number')}: {relative} has {frames} of {media['frames']} frames"
+                    )
+    return found
+
+
 def shrink(path, width):
     """Re-encode for the web: same frames and timing, smaller picture, seekable."""
     temporary = path.with_name(path.stem + ".demo" + path.suffix)
@@ -525,6 +627,8 @@ def main():
     rec.add_argument(
         "--overlay", action="append", default=[], metavar="CLIP@SECONDS", help="move a clip to V2, starting there"
     )
+    rec.add_argument("--edit", metavar="FILE", help="record the edit saved from a demo page")
+    rec.add_argument("--max-takes", type=int, metavar="N", help="keep at most N takes per clip")
     rec.add_argument("--inputs-like", metavar="CLIP", help="give shots without inputs the inputs of this clip")
     rec.add_argument("--close-gaps", action="store_true", help="remove every gap and hear the shots' own audio")
     rec.add_argument("--video-width", type=int, default=960)

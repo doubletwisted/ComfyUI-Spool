@@ -22,7 +22,7 @@ under the clip. **A2** is the soundtrack lane for independent audio.
   lower ones; the sound of all enabled tracks mixes together.
 - Click a track label to choose where new clips go. Drop footage or workflows on
   a lane, or drag a clip up or down to another track.
-- The eye beside a V track hides its picture and linked sound without changing
+- The eye right of a V track's name hides its picture and linked sound without changing
   timing. Right-click a track header for **Delete track**; one video track always
   stays.
 - Drag the lower edge of a track header to resize that lane. Double-click the edge
@@ -77,12 +77,14 @@ including a group move, is one undo step.
 ## Audio
 
 - **Add audio** (the waveform button) places the full sound of an audio or video
-  file on A2. You can also drop a Media item onto A1 or A2, or right-click it for
-  **Use audio only**.
+  file on A2. You can also drop a Media item or a file from your computer onto A1
+  or A2, or right-click a Media item for **Use audio only**.
 - Right-click a clip or its A1 audio for **Unlink audio and video**. The audio
   becomes an independent A1 clip with the same trims, level and fades, and stays
   put when the video is moved, trimmed or replaced. Undo restores the link.
-- Each lane has mute and solo. Clips have gain and fades.
+- A1 and A2 each have mute and solo, beside the track name. A1's cover the clip
+  audio of every video track. A higher video track's clip audio has its own lane,
+  such as **A1 / V2**, until you delete that lane. Clips have gain and fades.
 
 ## Takes
 

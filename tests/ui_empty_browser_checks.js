@@ -25,6 +25,7 @@
     'Empty inspector explains selection without a dead generation button',
     !!$('inspectorContent').querySelector('.selection-empty') && !visible($('generate')),
   );
+  check('An empty A2 lane is plain, with nothing that looks like a clip', !$('musicLane').children.length);
   const revision = n.revision,
     input = $('mediaFiles'),
     click = input.click,

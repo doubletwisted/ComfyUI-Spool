@@ -118,7 +118,17 @@ export function createTimelineRenderer({
           (!T.videoTrackEnabled(getState(), track) ? ' disabled-track' : '') +
           '" style="height:var(--video-height-' +
           track +
-          ')"><button class="track-toggle video-track-toggle" data-toggle-video-track="' +
+          ')"><button class="track-select' +
+          (track === getActiveTrack() ? ' active' : '') +
+          '" data-select-track="' +
+          track +
+          '" aria-pressed="' +
+          (track === getActiveTrack()) +
+          '" title="Add new clips to V' +
+          track +
+          '">V' +
+          track +
+          '</button><button class="track-toggle video-track-toggle" data-toggle-video-track="' +
           track +
           '" aria-label="' +
           (T.videoTrackEnabled(getState(), track) ? 'Disable' : 'Enable') +
@@ -132,16 +142,6 @@ export function createTimelineRenderer({
           track +
           ' picture and linked audio">' +
           svg(T.videoTrackEnabled(getState(), track) ? 'eye' : 'eyeOff') +
-          '</button><button class="track-select' +
-          (track === getActiveTrack() ? ' active' : '') +
-          '" data-select-track="' +
-          track +
-          '" aria-pressed="' +
-          (track === getActiveTrack()) +
-          '" title="Add new clips to V' +
-          track +
-          '">V' +
-          track +
           '</button>' +
           trackResizeHandle('video:' + track, 'video track V' + track) +
           '</div>'

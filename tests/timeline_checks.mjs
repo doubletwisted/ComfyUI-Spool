@@ -245,7 +245,12 @@ check('Soundtrack gestures remain independent', () => {
   d.audioClips = [bed('x', 0)];
   assert.equal(
     T.resolveGesture(d, { id: 'x', audio: true }, { d: true }).blocked,
-    'Soundtrack stays independent. Move or slip it directly.',
+    'Audio on A2 stays independent. Move or slip it directly.',
+  );
+  d.audioClips = [{ ...bed('y', 0), track: 'source' }];
+  assert.equal(
+    T.resolveGesture(d, { id: 'y', audio: true }, { d: true }).blocked,
+    'Audio on A1 stays independent. Move or slip it directly.',
   );
 });
 check('Export fills video gaps and soundtrack tail with black frames', () => {

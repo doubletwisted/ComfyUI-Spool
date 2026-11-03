@@ -51,8 +51,30 @@ All notable changes to Spool are recorded here. Versions follow
 - API version 2: the project document has a `cast`, which older studios would not
   keep.
 
+### Online demo
+
+- An [online demo](https://doubletwisted.github.io/ComfyUI-Spool/demo/) of the
+  studio opens a finished project in the browser. Edits reset on reload, and
+  generating takes needs Spool with ComfyUI.
+
+### Studio
+
+- The same kind of control looks the same in every panel: tab bars, track names
+  and toggles, single-choice filters (media type now matches workflow location),
+  Grid and List icons, search fields, section titles and panel buttons. Audio
+  clip names use the video clips' type and read over the volume line.
+- The audio inspector's level slider shows its track again, its fields follow the
+  Inputs tab's label-left rows, and it names the audio by its track (A1 or A2).
+- Generate reads "1 take" and "1 clip", not "1 takes" and "1 clips".
+
 ### Timeline
 
+- Track headers show just V1, A1, A2 and so on, without "Clip audio" and
+  "Soundtrack" under them, and keep the eye, mute and solo right of the name. A1
+  keeps mute and solo when a higher video track's audio lane is hidden.
+- An empty A2 lane is plain, without the dashed "Add audio" box that looked like
+  a clip on the track. The waveform button adds audio, and files still drop onto
+  A2.
 - The mouse wheel zooms the timeline around the pointer, without Ctrl, and zooms
   out past the end of the edit. Shift+wheel pans; Alt+wheel scrolls the tracks.
 - Adding, removing or trimming clips no longer changes the timeline's zoom; clips
