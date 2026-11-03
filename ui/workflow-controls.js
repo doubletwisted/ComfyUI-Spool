@@ -96,7 +96,7 @@ export function createWorkflowControls({
         description = source
           ? timeline
             ? 'Timeline video · ' + c.name
-            : generationSourceLabel(source)
+            : generationSourceLabel(source, b)
           : empty
             ? 'No ' + b.slot + ' selected'
             : String(value).split('/').at(-1);

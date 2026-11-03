@@ -4,6 +4,8 @@
   media pool and export.
 - [Generation](generation.md): adding workflows, clip inputs, Edit in Comfy,
   seeds, Renders, Comfy Cloud and clip notes.
+- [Directing tools](directing.md): transitions, extending shots, recast, the
+  cast, prompt checks and drafts.
 - [Projects and storage](projects.md): project folders, external takes, saving,
   running without ComfyUI and diagnostics.
 - [Agents and automation](automation.md): the scoped command API, the CLI and

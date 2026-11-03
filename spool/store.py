@@ -109,6 +109,19 @@ def validate_capture(capture):
             or not all(isinstance(k, str) and isinstance(v, str) for k, v in bypass.items())
         ):
             raise ValueError("An optional input names its group and the nodes it leaves out")
+        span = binding.get("span")
+        if span is not None and (
+            binding.get("slot") != "video"
+            or not isinstance(span, dict)
+            or span.get("edge") not in ("start", "end")
+            or type(span.get("frames")) is not int
+            or not 1 <= span["frames"] <= 240
+        ):
+            raise ValueError("A video input can read up to 240 frames from the start or end of its clip")
+        if "draft" in binding and (
+            binding["draft"] is not True or binding.get("slot") != "video" or not binding.get("optional") or span
+        ):
+            raise ValueError("The draft input is an optional video input that reads a whole take")
     rules = capture.get("inputRules", [])
     if not isinstance(rules, list) or not all(
         isinstance(r, dict)

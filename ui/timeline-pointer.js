@@ -1,5 +1,6 @@
 import * as T from './timeline.js';
 import * as L from './ledger.js';
+import { extensionsOf } from './direction.js';
 
 // Pointer thresholds, gesture application, cancellation and release ordering.
 export function createTimelinePointer({
@@ -97,7 +98,8 @@ export function createTimelinePointer({
     setSelectedCut(shared ? { id, edge, audio: false } : null);
     setNudgeGroup(null);
     if (linked) setInspectorTab('audio');
-    const ids = selectionIds().slice();
+    // Moving a shot takes the extensions attached after it; trimming touches one clip.
+    const ids = edge ? selectionIds().slice() : extensionsOf(getState(), selectionIds());
     setDrag({
       ...T.beginEdit(getState(), {
         id,

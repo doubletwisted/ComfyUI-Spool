@@ -65,6 +65,7 @@ class WorkflowAssignmentTests(unittest.TestCase):
             "seedMode": "increment",
             "shotInputs": [{"key": "image", "source": "selected"}],
             "generationBase": {"takeId": "t"},
+            "direction": {"kind": "extend", "head": 22},
             "inputValues": {"old": 1},
         }
 
@@ -75,7 +76,7 @@ class WorkflowAssignmentTests(unittest.TestCase):
         self.assertEqual(clip["inputValues"], {"image": "example.png", "seed": 7})
         self.assertEqual(clip["executionTarget"], "local")
         self.assertEqual(clip["seedMode"], "same")
-        for key in ("seedKey", "shotInputs", "generationBase", "workflow"):
+        for key in ("seedKey", "shotInputs", "generationBase", "workflow", "direction"):
             self.assertNotIn(key, clip)
 
     def test_cloud_recipes_run_on_cloud_and_built_ins_ask_for_their_own_sources(self):

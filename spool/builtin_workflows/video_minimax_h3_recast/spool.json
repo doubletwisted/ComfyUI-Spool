@@ -1,0 +1,81 @@
+{
+  "family": "MiniMax H3",
+  "name": "Recast",
+  "task": "ref",
+  "target": "local",
+  "thumbnail": "video_minimax_h3_r2v",
+  "result": "80",
+  "inputs": [
+    {
+      "node": "14",
+      "label": "Clip",
+      "slot": "video",
+      "audio": true
+    },
+    {
+      "node": "15",
+      "label": "Character",
+      "slot": "reference"
+    },
+    {
+      "node": "16",
+      "label": "Scene reference",
+      "slot": "reference",
+      "optional": true,
+      "alsoRemove": [
+        "17"
+      ],
+      "bypass": {
+        "45": "on_false"
+      }
+    },
+    {
+      "node": "18",
+      "input": "value",
+      "label": "Person 1 (who becomes who)",
+      "type": "STRING"
+    },
+    {
+      "node": "19",
+      "input": "value",
+      "label": "Person 2",
+      "type": "STRING"
+    },
+    {
+      "node": "20",
+      "input": "value",
+      "label": "Person 3",
+      "type": "STRING"
+    },
+    {
+      "node": "21",
+      "input": "aspect_ratio",
+      "label": "Aspect ratio",
+      "role": "resolution",
+      "options": [
+        "1:1 (Square)",
+        "2:3 (Portrait Photo)",
+        "3:2 (Photo)",
+        "3:4 (Portrait Standard)",
+        "4:3 (Standard)",
+        "9:16 (Portrait Widescreen)",
+        "16:9 (Widescreen)",
+        "21:9 (Ultrawide)"
+      ]
+    },
+    {
+      "node": "21",
+      "input": "megapixels",
+      "label": "Resolution (megapixels)",
+      "role": "resolution",
+      "type": "FLOAT"
+    },
+    {
+      "node": "22",
+      "input": "noise_seed",
+      "label": "Seed",
+      "role": "seed",
+      "type": "INT"
+    }
+  ]
+}

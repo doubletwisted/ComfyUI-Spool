@@ -47,6 +47,8 @@ export const mayStayEmpty = (b, bindings, rules = []) =>
 export function visibleInputs(bindings, values, settings) {
   const offered = new Set();
   return bindings.filter(b => {
+    // The draft input only carries the take Make final refines; it is never set by hand.
+    if (b.draft) return false;
     if (!b.group || inputFilled(b, values, settings)) return true;
     if (offered.has(b.group)) return false;
     offered.add(b.group);

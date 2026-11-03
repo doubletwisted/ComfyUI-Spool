@@ -70,6 +70,20 @@ class CommandTests(unittest.TestCase):
         jsonschema.validate(wire(data), schema)
         return value
 
+    def test_set_cast_replaces_the_cast_and_status_reports_it(self):
+        cast = [{"id": "cast-mara", "name": "Mara", "description": "diver", "images": ["mara.png"]}]
+        self.execute(self.envelope("set_cast", {"cast": cast}, capability="edit"))
+        project = self.store.get(self.project["id"])
+        self.assertEqual(project["document"]["cast"], cast)
+        self.assertEqual(commands.status(self.store, self.project["id"])["cast"], cast)
+        for bad in (
+            [{**cast[0], "name": "two words"}],
+            [cast[0], {**cast[0], "id": "other"}],
+            [{**cast[0], "images": []}],
+        ):
+            with self.assertRaises(Exception):
+                commands.validate_envelope(self.envelope("set_cast", {"cast": bad}, capability="edit"))
+
     def test_scoped_rename_and_trim_replay_preserve_following_positions(self):
         document = self.project["document"]
         clip = document["clips"][0]
@@ -437,6 +451,60 @@ class CommandTests(unittest.TestCase):
         self.assertEqual((clip["takeId"], clip["in"], clip["out"]), ("short", 0, 10))
         self.assertEqual(self.store.get(self.project["id"])["document"]["tailGap"], 14)
         self.assertEqual(clip["workflowVersion"], version, "Choosing a take does not adopt its workflow")
+
+    def test_choose_take_starts_a_directed_clip_after_its_anchored_frames(self):
+        fixture = json.loads((Path(__file__).parent / "fixtures/directed_takes.json").read_text(encoding="utf-8"))
+        for case in fixture["cases"]:
+            with self.subTest(case["name"]):
+                clip, take = copy.deepcopy(fixture["clip"]), case["take"]
+                document = {"clips": [clip], "tailGap": 0}
+                request = {"request": {"workflowVersion": take["workflowVersion"]}} if take["generated"] else {}
+                operations.choose_take(document, clip, take["id"], take["frames"], {**take, **request})
+                self.assertEqual(clip["in"], case["in"])
+
+    def test_use_take_only_chooses_a_clips_own_directed_or_draft_take(self):
+        own = {"generated": True, "summary": {"workflowVersion": "v2"}}
+        directed = {"workflowVersion": "v2", "direction": {"kind": "extend", "head": 22}}
+        self.assertTrue(operations.keeps_recipe(directed, own, {"bindings": []}))
+        self.assertTrue(
+            operations.keeps_recipe(directed, {"generated": True, "request": {"workflowVersion": "v2"}}, {})
+        )
+        self.assertFalse(operations.keeps_recipe(directed, {**own, "summary": {"workflowVersion": "v1"}}, {}))
+        self.assertFalse(operations.keeps_recipe(directed, {"generated": False}, {}))
+        self.assertFalse(operations.keeps_recipe({"workflowVersion": "v2"}, own, {"bindings": []}))
+        self.assertTrue(operations.keeps_recipe({"workflowVersion": "v2"}, own, {"bindings": [{"draft": True}]}))
+
+    def test_use_take_of_a_directed_clips_own_take_keeps_its_recipe_links_and_start(self):
+        document = self.project["document"]
+        version = document["clips"][0]["workflowVersion"]
+        document["clips"][0].update(
+            direction={"kind": "extend", "head": 22},
+            generationBase={"takeId": "original"},
+            shotInputs=[{"key": "source", "source": "previous"}],
+        )
+        self.project = self.store.save(self.project["id"], self.project["revision"], document)
+        # Generated takes come from attempts; give the projection one made with the clip's recipe.
+        made = {
+            "id": "made",
+            "generated": True,
+            "summary": {"workflowVersion": version},
+            "media": {**document["clips"][0]["takes"][0]["media"], "id": "made-media", "frames": 100},
+        }
+        attach = commands.ledger.attach
+
+        def with_made(document, attempts):
+            projected = attach(document, attempts)
+            next(c for c in projected["clips"] if c["id"] == "shot")["takes"].append(copy.deepcopy(made))
+            return projected
+
+        clip = copy.deepcopy(self.store.clip(self.project["id"], "shot"))
+        clip["takes"].append(made)
+        with patch.object(self.store, "clip", return_value=clip), patch.object(commands.ledger, "attach", with_made):
+            self.execute(self.envelope("use_take", {"clipId": "shot", "takeId": "made", "capture": None}))
+        clip = self.store.get(self.project["id"])["document"]["clips"][0]
+        self.assertEqual((clip["takeId"], clip["workflowVersion"], clip["in"]), ("made", version, 22))
+        self.assertEqual(clip["shotInputs"], [{"key": "source", "source": "previous"}])
+        self.assertNotIn("generationBase", clip, "Its settings are the clip's own recipe")
 
     def test_apply_workflow_resets_target_seed_and_take_setup_like_the_library(self):
         document = self.project["document"]

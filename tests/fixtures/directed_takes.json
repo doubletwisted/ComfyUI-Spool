@@ -1,0 +1,10 @@
+{
+  "about": "Where Use take starts a directed clip's take: ui/timeline.js:directedIn and spool/operations.py:directed_in.",
+  "clip": {"id": "transition", "in": 140, "out": 203, "workflowVersion": "v2", "direction": {"kind": "transition", "head": 22}},
+  "cases": [
+    {"name": "its own take starts after the anchored frames", "take": {"id": "made", "generated": true, "workflowVersion": "v2", "frames": 107}, "in": 22},
+    {"name": "footage keeps the trim", "take": {"id": "original", "generated": false, "frames": 300}, "in": 140},
+    {"name": "a take of another recipe keeps the trim", "take": {"id": "older", "generated": true, "workflowVersion": "v1", "frames": 300}, "in": 140},
+    {"name": "a short take moves the start back to fit", "take": {"id": "short", "generated": true, "workflowVersion": "v2", "frames": 70}, "in": 7}
+  ]
+}

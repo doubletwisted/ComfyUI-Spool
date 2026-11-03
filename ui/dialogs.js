@@ -12,6 +12,7 @@ export function createDialogs({ $, esc, svg, pause, cancelCapture, stopDiagnosti
       'shortcut-dialog',
       'review-dialog',
       'activity-dialog',
+      'direct-modal',
     );
     pause();
     // Redrawing an open dialog keeps the focus target from before it opened.

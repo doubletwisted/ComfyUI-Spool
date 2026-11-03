@@ -2,6 +2,7 @@ import * as T from './timeline.js';
 import { pictureAt } from './picture.js';
 import { createPreviews } from './preview.js';
 import { videoFrameCount } from './video-seek-guard.js';
+import { KINDS, attachedParent, directionLabel, neighbor } from './direction.js';
 
 // Owns viewer presentation, media elements, seeking and the playback clock.
 export function createViewer({
@@ -44,6 +45,8 @@ export function createViewer({
   trackAudible,
   audioEnvelope,
   fileUrl,
+  pendingJobs,
+  submitting = _clip => false,
 }) {
   const setStatus = textStatus;
   const url = fileUrl;
@@ -76,18 +79,55 @@ export function createViewer({
   placeholderState.innerHTML =
     '<span class="empty-symbol">' +
     svg('nodes') +
-    '</span><strong id="placeholderTitle"></strong><p id="placeholderHint"></p>';
+    '</span><div class="placeholder-direct" id="placeholderDirect" hidden></div><strong id="placeholderTitle"></strong><p id="placeholderHint"></p>';
   $('emptyStage').after(placeholderState);
+  let directPreview = '';
+  // An ungenerated transition shows the frames it joins; an extension, the end of its shot.
+  function renderDirectPreview(c) {
+    const kind = c?.direction?.kind,
+      extension = kind === 'extend',
+      before = kind && (extension ? attachedParent(getState(), c) : neighbor(getState(), c, 'previous')),
+      after = kind && !extension && neighbor(getState(), c, 'next'),
+      usable = x => x && !T.takeOf(x).placeholder,
+      show = extension ? usable(before) : kind === 'transition' && usable(before) && usable(after),
+      signature = show
+        ? [c.id, before.id, before.takeId, before.out, after?.id, after?.takeId, after?.in].join('|')
+        : '';
+    $('placeholderDirect').hidden = !show;
+    placeholderState.classList.toggle('directed', show);
+    if (signature === directPreview) return;
+    directPreview = signature;
+    if (!show) {
+      $('placeholderDirect').innerHTML = '';
+      return;
+    }
+    $('placeholderDirect').innerHTML =
+      '<span class="direct-pair' +
+      (after ? '' : ' single') +
+      '"><img alt="">' +
+      (after ? '<img alt="">' : '') +
+      '</span><em>' +
+      svg(KINDS[kind].icon) +
+      (after ? directionLabel(c.direction) : 'Continues ' + esc(before.name)) +
+      '</em>';
+    const [a, b] = $('placeholderDirect').querySelectorAll('img');
+    thumbnails.bind(a, T.takeOf(before).media, Math.max(before.in, before.out - 1), getFps());
+    if (after) thumbnails.bind(b, T.takeOf(after).media, after.in, getFps());
+  }
   function renderPlaceholderState(d = viewerData()) {
     placeholderState.hidden = !d?.take?.placeholder;
+    renderDirectPreview(placeholderState.hidden ? null : d.clip);
     if (!placeholderState.hidden) {
-      const available = T.realTakes(d.clip).length > 0;
-      text('placeholderTitle', available ? 'Choose a take' : 'Not generated yet');
+      const available = T.realTakes(d.clip).length > 0,
+        working = pendingJobs(d.clip).length || submitting(d.clip);
+      text('placeholderTitle', available ? 'Choose a take' : working ? 'Generating' : 'Not generated yet');
       text(
         'placeholderHint',
         available
           ? 'Generated takes are ready in Takes. Use a take to add it to the edit.'
-          : 'Generate a take to preview this clip.',
+          : working
+            ? 'The take appears in Takes when it is ready.'
+            : 'Generate a take to preview this clip.',
       );
     }
   }
@@ -213,12 +253,15 @@ export function createViewer({
     syncAudio(d);
     if (!src && d.next) {
       const n = d.next.clip,
-        m = ((review.audition?.clipId === n.id && n.takes.find(t => t.id === review.audition.takeId)) || take(n)).media;
+        t = (review.audition?.clipId === n.id && n.takes.find(t => t.id === review.audition.takeId)) || take(n),
+        // A joined extension takes over a few frames before its start (timeline.js:joinedTake).
+        joined = T.joinedTake(getState(), n, t),
+        m = joined || t.media;
       if (m.kind === 'video') {
         const v = videoFor(m);
         if (v && v !== shownVideo) {
           videoTiming(v, m);
-          seekVideo(v, n.in / getFps());
+          seekVideo(v, (n.in - (joined?.blend || 0)) / getFps());
         }
       }
     }

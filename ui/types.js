@@ -15,6 +15,11 @@
  * @property {number} [width]
  * @property {number} [height]
  * @property {boolean} [audio]
+ * @property {JoinedMedia} [join]
+ */
+/**
+ * An extension take's joined copy (spool/joins.py): the take's media, plus where it joins its shot.
+ * @typedef {Media & { overlap: number, blend: number, drift: number, parent: { clipId: string, takeId: string, in: number, out: number } }} JoinedMedia
  */
 /**
  * @typedef {object} Take

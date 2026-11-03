@@ -503,7 +503,7 @@ export function createRenderQueue({
     });
     return data;
   }
-  function generationSourceLabel(setting) {
+  function generationSourceLabel(setting, binding = null) {
     if (!setting) return 'Workflow file';
     if (setting.source === 'track')
       return setting.track === 'music'
@@ -514,6 +514,14 @@ export function createRenderQueue({
         [...getState().clips, ...(getState().audioClips || [])].find(c => c.id === setting.clipId)?.name ||
         'Removed audio clip'
       );
+    if (setting.source === 'previous' || setting.source === 'next') {
+      const before = setting.source === 'previous';
+      // A motion input reads a second of footage at the cut; a video input the whole clip.
+      if (binding?.slot === 'video' && binding.span)
+        return before ? 'Last second of the clip before' : 'First second of the clip after';
+      if (binding?.slot === 'video') return before ? 'The clip before' : 'The clip after';
+      return before ? 'Last frame of the clip before' : 'First frame of the clip after';
+    }
     return setting.source === 'original' ? 'Original shot' : 'Selected take';
   }
   async function reviewGeneration(clips) {
@@ -660,7 +668,7 @@ export function createRenderQueue({
   function queueReason(c) {
     const recipe = getNativeRecipes()[c?.workflowVersion];
     return (
-      workflowStatus(c, workflows[c?.workflow], recipe, definitionsFor(c)).reason ||
+      workflowStatus(c, workflows[c?.workflow], recipe, definitionsFor(c), false, getState().cast).reason ||
       (c?.executionTarget === 'deadline' &&
       !G.hasDeadlineLauncher(recipe) &&
       productCapabilities.deadlineExecution !== true

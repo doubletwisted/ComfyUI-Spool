@@ -21,8 +21,15 @@ export function createQueueActions({
   flushNative,
   toast,
   renderQueueList,
+  getQuality = () => 'final',
+  onSubmissionChange = (_status, _body) => {},
 }) {
-  const queueSubmission = G.createQueueSubmission({ storage, key: retryKey, submit: submitQueue });
+  const queueSubmission = G.createQueueSubmission({
+    storage,
+    key: retryKey,
+    submit: submitQueue,
+    onChange: onSubmissionChange,
+  });
   async function submitQueue(body) {
     const { seedUpdates = [], ...payload } = body;
     await projectEdit.change(() => request('projects/' + projectKey + '/queue', payload));
@@ -62,25 +69,60 @@ export function createQueueActions({
           : 'Requests saved; waiting for Comfy.',
     );
   }
+  // Draft takes are a request setting, only for workflows that can finish a draft.
+  const withQuality = items =>
+    getQuality() === 'draft'
+      ? items.map(i => (G.canDraft(getClips().find(c => c.id === i.clipId)) ? { ...i, quality: 'draft' } : i))
+      : items;
   function queueClips(clips, reviewed = null) {
+    return (
+      queueSubmission
+        .start(async () => {
+          if (!clips.length) return;
+          for (const c of clips) {
+            const reason = queueReason(c);
+            if (reason) throw Error(c.name + ': ' + reason);
+          }
+          if (!reviewed && clips.some(c => (c.count || 1) > 1)) {
+            await reviewGeneration(clips);
+            return;
+          }
+          await flushNative();
+          const items = withQuality(
+            reviewed || G.generationItems(clips, { ...getCloudDefinitions(), ...getDefinitions() }, getRecipes()),
+          );
+          return {
+            revision: projectEdit.revision,
+            items,
+            seedUpdates: G.seedUpdates(clips, items),
+            operationId: crypto.randomUUID(),
+          };
+        })
+        // Resolves true when submitted; a conflict stays quiet for a person to press Generate
+        // again, and callers that queue on their own retry it.
+        .then(() => true)
+        .catch(error => {
+          if (error.status !== 409) toast(error.message);
+          return error;
+        })
+        .finally(() => {
+          if ($('queueList')) renderQueueList();
+        })
+    );
+  }
+  /** Refine a draft take to full size with the clip's workflow; the final keeps the draft's motion. */
+  function queueFinal(c, take) {
     return queueSubmission
       .start(async () => {
-        if (!clips.length) return;
-        for (const c of clips) {
-          const reason = queueReason(c);
-          if (reason) throw Error(c.name + ': ' + reason);
-        }
-        if (!reviewed && clips.some(c => (c.count || 1) > 1)) {
-          await reviewGeneration(clips);
-          return;
-        }
+        const reason = queueReason(c);
+        if (reason) throw Error(c.name + ': ' + reason);
+        if (take.summary?.workflowVersion && take.summary.workflowVersion !== c.workflowVersion)
+          throw Error('This draft came from another workflow. Use it again before making it final.');
+        if (!G.canDraft(c)) throw Error('This workflow cannot finish drafts.');
         await flushNative();
-        const items =
-          reviewed || G.generationItems(clips, { ...getCloudDefinitions(), ...getDefinitions() }, getRecipes());
         return {
           revision: projectEdit.revision,
-          items,
-          seedUpdates: G.seedUpdates(clips, items),
+          items: [{ clipId: c.id, count: 1, finish: take.id }],
           operationId: crypto.randomUUID(),
         };
       })
@@ -91,5 +133,5 @@ export function createQueueActions({
         if ($('queueList')) renderQueueList();
       });
   }
-  return { queueClips, queueSubmission };
+  return { queueClips, queueFinal, queueSubmission };
 }

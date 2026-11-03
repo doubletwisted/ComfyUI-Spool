@@ -1,0 +1,1225 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNETLoader"
+    }
+  },
+  "2": {
+    "inputs": {
+      "shift_video": 12,
+      "shift_audio": 3,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "MiniMaxH3SigmaShift",
+    "_meta": {
+      "title": "MiniMaxH3SigmaShift"
+    }
+  },
+  "3": {
+    "inputs": {
+      "attention": "comfy kitchen attention",
+      "model": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "ModelAttentionBackend",
+    "_meta": {
+      "title": "ModelAttentionBackend"
+    }
+  },
+  "4": {
+    "inputs": {
+      "lora_name": "minimax_h3_character_swap_v1.0_ref2va_r64_gl.safetensors",
+      "strength_model": 1,
+      "model": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Character swap LoRA (BFS)"
+    }
+  },
+  "5": {
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "CLIPLoader"
+    }
+  },
+  "6": {
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "VAELoader"
+    }
+  },
+  "7": {
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "VAELoader"
+    }
+  },
+  "8": {
+    "inputs": {
+      "unet_name": "qwen_image_edit_2511_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNETLoader"
+    }
+  },
+  "9": {
+    "inputs": {
+      "shift": 3.1,
+      "sampling": "flow",
+      "model": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "ModelSamplingAuraFlow"
+    }
+  },
+  "10": {
+    "inputs": {
+      "strength": 1,
+      "pre_cfg": false,
+      "model": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "CFGNorm",
+    "_meta": {
+      "title": "CFGNorm"
+    }
+  },
+  "11": {
+    "inputs": {
+      "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "strength_model": 1,
+      "model": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    }
+  },
+  "12": {
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "CLIPLoader"
+    }
+  },
+  "13": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "VAELoader"
+    }
+  },
+  "14": {
+    "inputs": {
+      "file": ""
+    },
+    "class_type": "LoadVideo",
+    "_meta": {
+      "title": "Clip"
+    }
+  },
+  "15": {
+    "inputs": {
+      "image": ""
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Character"
+    }
+  },
+  "16": {
+    "inputs": {
+      "image": ""
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Scene reference"
+    }
+  },
+  "17": {
+    "inputs": {
+      "value": true
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {
+      "title": "Boolean (Use the scene reference)"
+    }
+  },
+  "18": {
+    "inputs": {
+      "value": ""
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Person 1"
+    }
+  },
+  "19": {
+    "inputs": {
+      "value": ""
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Person 2"
+    }
+  },
+  "20": {
+    "inputs": {
+      "value": ""
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Person 3"
+    }
+  },
+  "21": {
+    "inputs": {
+      "aspect_ratio": "16:9 (Widescreen)",
+      "megapixels": 0.9,
+      "multiple": 32
+    },
+    "class_type": "ResolutionSelector",
+    "_meta": {
+      "title": "Resolution Selector (Size)"
+    }
+  },
+  "22": {
+    "inputs": {
+      "noise_seed": 1460
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "RandomNoise"
+    }
+  },
+  "23": {
+    "inputs": {
+      "video": [
+        "14",
+        0
+      ]
+    },
+    "class_type": "GetVideoComponents",
+    "_meta": {
+      "title": "Clip frames"
+    }
+  },
+  "24": {
+    "inputs": {
+      "image": [
+        "23",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Clip length"
+    }
+  },
+  "25": {
+    "inputs": {
+      "expression": "a - (a - 5) % 17 if a >= 5 else a",
+      "values.a": [
+        "24",
+        2
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "Frames (17n+5)"
+    }
+  },
+  "26": {
+    "inputs": {
+      "expression": "a / 24",
+      "values.a": [
+        "25",
+        1
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "Seconds"
+    }
+  },
+  "27": {
+    "inputs": {
+      "batch_index": 0,
+      "length": [
+        "25",
+        1
+      ],
+      "image": [
+        "23",
+        0
+      ]
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Clip in whole blocks"
+    }
+  },
+  "28": {
+    "inputs": {
+      "start_index": 0,
+      "duration": [
+        "26",
+        0
+      ],
+      "audio": [
+        "23",
+        1
+      ]
+    },
+    "class_type": "TrimAudioDuration",
+    "_meta": {
+      "title": "Clip sound"
+    }
+  },
+  "29": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": [
+        "21",
+        0
+      ],
+      "height": [
+        "21",
+        1
+      ],
+      "crop": "center",
+      "image": [
+        "27",
+        0
+      ]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Guide at the chosen size"
+    }
+  },
+  "30": {
+    "inputs": {
+      "image": [
+        "29",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Guide size"
+    }
+  },
+  "31": {
+    "inputs": {
+      "batch_index": 0,
+      "length": 1,
+      "image": [
+        "27",
+        0
+      ]
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "First frame"
+    }
+  },
+  "32": {
+    "inputs": {
+      "image": [
+        "31",
+        0
+      ]
+    },
+    "class_type": "FluxKontextImageScale",
+    "_meta": {
+      "title": "FluxKontextImageScale"
+    }
+  },
+  "33": {
+    "inputs": {
+      "value": "Edit image 1: {t1} becomes the person from image 2, {d1}, with that person's face, hair and clothing. {others} Keep everything else in image 1 exactly as it is: every pose, position and gesture, the camera framing, the place, the light and the colours."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Edit instruction"
+    }
+  },
+  "34": {
+    "inputs": {
+      "string_a": [
+        "19",
+        0
+      ],
+      "string_b": [
+        "20",
+        0
+      ],
+      "delimiter": ". "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Other people"
+    }
+  },
+  "35": {
+    "inputs": {
+      "string": [
+        "33",
+        0
+      ],
+      "find": "{t1}",
+      "replace": [
+        "58",
+        0
+      ]
+    },
+    "class_type": "StringReplace",
+    "_meta": {
+      "title": "StringReplace"
+    }
+  },
+  "36": {
+    "inputs": {
+      "string": [
+        "35",
+        0
+      ],
+      "find": "{d1}",
+      "replace": [
+        "59",
+        0
+      ]
+    },
+    "class_type": "StringReplace",
+    "_meta": {
+      "title": "StringReplace"
+    }
+  },
+  "37": {
+    "inputs": {
+      "string": [
+        "36",
+        0
+      ],
+      "find": "{others}",
+      "replace": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "StringReplace",
+    "_meta": {
+      "title": "StringReplace"
+    }
+  },
+  "38": {
+    "inputs": {
+      "prompt": [
+        "37",
+        0
+      ],
+      "clip": [
+        "12",
+        0
+      ],
+      "vae": [
+        "13",
+        0
+      ],
+      "image1": [
+        "32",
+        0
+      ],
+      "image2": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "_meta": {
+      "title": "TextEncodeQwenImageEditPlus"
+    }
+  },
+  "39": {
+    "inputs": {
+      "prompt": "",
+      "clip": [
+        "12",
+        0
+      ],
+      "vae": [
+        "13",
+        0
+      ],
+      "image1": [
+        "32",
+        0
+      ],
+      "image2": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "_meta": {
+      "title": "TextEncodeQwenImageEditPlus"
+    }
+  },
+  "40": {
+    "inputs": {
+      "reference_latents_method": "index_timestep_zero",
+      "conditioning": [
+        "38",
+        0
+      ]
+    },
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "_meta": {
+      "title": "FluxKontextMultiReferenceLatentMethod"
+    }
+  },
+  "41": {
+    "inputs": {
+      "reference_latents_method": "index_timestep_zero",
+      "conditioning": [
+        "39",
+        0
+      ]
+    },
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "_meta": {
+      "title": "FluxKontextMultiReferenceLatentMethod"
+    }
+  },
+  "42": {
+    "inputs": {
+      "pixels": [
+        "32",
+        0
+      ],
+      "vae": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode"
+    }
+  },
+  "43": {
+    "inputs": {
+      "seed": 1460,
+      "steps": 4,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "11",
+        0
+      ],
+      "positive": [
+        "40",
+        0
+      ],
+      "negative": [
+        "41",
+        0
+      ],
+      "latent_image": [
+        "42",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "44": {
+    "inputs": {
+      "samples": [
+        "43",
+        0
+      ],
+      "vae": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Edited frame"
+    }
+  },
+  "45": {
+    "inputs": {
+      "switch": [
+        "17",
+        0
+      ],
+      "on_false": [
+        "44",
+        0
+      ],
+      "on_true": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "If/Else Switch (Scene reference)"
+    }
+  },
+  "46": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "megapixels": 0.5,
+      "resolution_steps": 1,
+      "image": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Scene reference at 0.5 MP"
+    }
+  },
+  "47": {
+    "inputs": {
+      "string": [
+        "18",
+        0
+      ]
+    },
+    "class_type": "StringLength",
+    "_meta": {
+      "title": "StringLength"
+    }
+  },
+  "48": {
+    "inputs": {
+      "string": [
+        "19",
+        0
+      ]
+    },
+    "class_type": "StringLength",
+    "_meta": {
+      "title": "StringLength"
+    }
+  },
+  "49": {
+    "inputs": {
+      "string": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "StringLength",
+    "_meta": {
+      "title": "StringLength"
+    }
+  },
+  "50": {
+    "inputs": {
+      "expression": "max((a > 0) * 1, (b > 0) * 2, (c > 0) * 3)",
+      "values.a": [
+        "47",
+        0
+      ],
+      "values.b": [
+        "48",
+        0
+      ],
+      "values.c": [
+        "49",
+        0
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "People"
+    }
+  },
+  "51": {
+    "inputs": {
+      "expression": "a >= 2",
+      "values.a": [
+        "50",
+        1
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "Two or more"
+    }
+  },
+  "52": {
+    "inputs": {
+      "expression": "a >= 3",
+      "values.a": [
+        "50",
+        1
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "Three"
+    }
+  },
+  "53": {
+    "inputs": {
+      "value": "body_swap:  subject_definitions: <Subject 1> is {d1} shown in <Picture 1>, whose identity, face, head, hair or fur, skin, body shape, proportions and clothing define the character in the target video. The guide video provides the scene and the performance: its background, environment, lighting, camera, framing, body pose, hand and arm movement, head rotation, gaze direction, lip movement and facial expression, frame by frame; only {t1} is replaced: its face, hair, body and clothing become <Subject 1>.  summary: [video generation + reference] Replace {t1} with <Subject 1>, keeping the scene, camera and the complete motion and performance of the guide video.  detailed_description: [Shot 1] <Subject 1> takes the exact place of {t1} and moves with the same timing, body pose, gestures, head motion, gaze, speech and facial expressions, while keeping the complete look from <Picture 1>: head, face, skin, hair, body shape and clothing stay stable in every frame, with no trace of the original subjects' faces, hair or clothing. The background, lighting, colors and camera of the guide video are preserved. Prevent identity drift, clothing changes, texture crawling and flicker. The result is a real, photographic video."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Caption for 1 person"
+    }
+  },
+  "54": {
+    "inputs": {
+      "value": "body_swap:  subject_definitions: <Subject 1> is {d1} shown on the left of <Picture 1>, and <Subject 2> is {d2} shown on the right of <Picture 1>; their identity, face, head, hair, skin, body shape, proportions and clothing define the two characters in the target video. The guide video provides the scene and the performance: its background, environment, lighting, camera, framing, body pose, hand and arm movement, head rotation, gaze direction, lip movement and facial expression, frame by frame; only the two people are replaced: {t1} on the left becomes <Subject 1> and {t2} on the right becomes <Subject 2>, their face, hair, body and clothing.  summary: [video generation + reference] Replace {t1} with <Subject 1> and {t2} with <Subject 2> in the guide video, keeping the scene, camera and the complete motion and performance of the guide video.  detailed_description: [Shot 1] <Subject 1> takes the exact place of {t1} and <Subject 2> takes the exact place of {t2}; all both move with the same timing, body pose, gestures, head motion, gaze, speech and facial expressions as the person they replace, while keeping the complete look from <Picture 1>: head, face, skin, hair, body shape and clothing stay stable in every frame, with no trace of the original subjects' faces, hair or clothing. The background, lighting, colors and camera of the guide video are preserved. Prevent identity drift, clothing changes, texture crawling and flicker. The result is a real, photographic video."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Caption for 2 people"
+    }
+  },
+  "55": {
+    "inputs": {
+      "value": "body_swap:  subject_definitions: <Subject 1> is {d1} shown on the left of <Picture 1>, <Subject 2> is {d2} shown in the middle of <Picture 1>, and <Subject 3> is {d3} shown on the right of <Picture 1>; their identity, face, head, hair, skin, body shape, proportions and clothing define the three characters in the target video. The guide video provides the scene and the performance: its background, environment, lighting, camera, framing, body pose, hand and arm movement, head rotation, gaze direction, lip movement and facial expression, frame by frame; only the three people are replaced: {t1} on the left becomes <Subject 1>, {t2} in the middle becomes <Subject 2> and {t3} on the right becomes <Subject 3>, their face, hair, body and clothing.  summary: [video generation + reference] Replace {t1} with <Subject 1>, {t2} with <Subject 2> and {t3} with <Subject 3> in the guide video, keeping the scene, camera and the complete motion and performance of the guide video.  detailed_description: [Shot 1] <Subject 1> takes the exact place of {t1}, <Subject 2> takes the exact place of {t2} and <Subject 3> takes the exact place of {t3}; all three move with the same timing, body pose, gestures, head motion, gaze, speech and facial expressions as the person they replace, while keeping the complete look from <Picture 1>: head, face, skin, hair, body shape and clothing stay stable in every frame, with no trace of the original subjects' faces, hair or clothing. The background, lighting, colors and camera of the guide video are preserved. Prevent identity drift, clothing changes, texture crawling and flicker. The result is a real, photographic video."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Caption for 3 people"
+    }
+  },
+  "56": {
+    "inputs": {
+      "switch": [
+        "51",
+        2
+      ],
+      "on_false": [
+        "53",
+        0
+      ],
+      "on_true": [
+        "54",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "If/Else Switch (Two people)"
+    }
+  },
+  "57": {
+    "inputs": {
+      "switch": [
+        "52",
+        2
+      ],
+      "on_false": [
+        "56",
+        0
+      ],
+      "on_true": [
+        "55",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "If/Else Switch (Three people)"
+    }
+  },
+  "58": {
+    "inputs": {
+      "string": [
+        "18",
+        0
+      ],
+      "regex_pattern": "^\\s*(.+?)\\s+(?:becomes|turns into|->|→|=)\\s+(.+?)[\\s.]*$",
+      "mode": "First Group",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "group_index": 1
+    },
+    "class_type": "RegexExtract",
+    "_meta": {
+      "title": "Person 1 now"
+    }
+  },
+  "59": {
+    "inputs": {
+      "string": [
+        "18",
+        0
+      ],
+      "regex_pattern": "^\\s*(.+?)\\s+(?:becomes|turns into|->|→|=)\\s+(.+?)[\\s.]*$",
+      "mode": "First Group",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "group_index": 2
+    },
+    "class_type": "RegexExtract",
+    "_meta": {
+      "title": "Person 1 becomes"
+    }
+  },
+  "60": {
+    "inputs": {
+      "string": [
+        "19",
+        0
+      ],
+      "regex_pattern": "^\\s*(.+?)\\s+(?:becomes|turns into|->|→|=)\\s+(.+?)[\\s.]*$",
+      "mode": "First Group",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "group_index": 1
+    },
+    "class_type": "RegexExtract",
+    "_meta": {
+      "title": "Person 2 now"
+    }
+  },
+  "61": {
+    "inputs": {
+      "string": [
+        "19",
+        0
+      ],
+      "regex_pattern": "^\\s*(.+?)\\s+(?:becomes|turns into|->|→|=)\\s+(.+?)[\\s.]*$",
+      "mode": "First Group",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "group_index": 2
+    },
+    "class_type": "RegexExtract",
+    "_meta": {
+      "title": "Person 2 becomes"
+    }
+  },
+  "62": {
+    "inputs": {
+      "string": [
+        "20",
+        0
+      ],
+      "regex_pattern": "^\\s*(.+?)\\s+(?:becomes|turns into|->|→|=)\\s+(.+?)[\\s.]*$",
+      "mode": "First Group",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "group_index": 1
+    },
+    "class_type": "RegexExtract",
+    "_meta": {
+      "title": "Person 3 now"
+    }
+  },
+  "63": {
+    "inputs": {
+      "string": [
+        "20",
+        0
+      ],
+      "regex_pattern": "^\\s*(.+?)\\s+(?:becomes|turns into|->|→|=)\\s+(.+?)[\\s.]*$",
+      "mode": "First Group",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "group_index": 2
+    },
+    "class_type": "RegexExtract",
+    "_meta": {
+      "title": "Person 3 becomes"
+    }
+  },
+  "64": {
+    "inputs": {
+      "string": [
+        "57",
+        0
+      ],
+      "find": "{d1}",
+      "replace": [
+        "59",
+        0
+      ]
+    },
+    "class_type": "StringReplace",
+    "_meta": {
+      "title": "StringReplace"
+    }
+  },
+  "65": {
+    "inputs": {
+      "string": [
+        "64",
+        0
+      ],
+      "find": "{t1}",
+      "replace": [
+        "58",
+        0
+      ]
+    },
+    "class_type": "StringReplace",
+    "_meta": {
+      "title": "StringReplace"
+    }
+  },
+  "66": {
+    "inputs": {
+      "string": [
+        "65",
+        0
+      ],
+      "find": "{d2}",
+      "replace": [
+        "61",
+        0
+      ]
+    },
+    "class_type": "StringReplace",
+    "_meta": {
+      "title": "StringReplace"
+    }
+  },
+  "67": {
+    "inputs": {
+      "string": [
+        "66",
+        0
+      ],
+      "find": "{t2}",
+      "replace": [
+        "60",
+        0
+      ]
+    },
+    "class_type": "StringReplace",
+    "_meta": {
+      "title": "StringReplace"
+    }
+  },
+  "68": {
+    "inputs": {
+      "string": [
+        "67",
+        0
+      ],
+      "find": "{d3}",
+      "replace": [
+        "63",
+        0
+      ]
+    },
+    "class_type": "StringReplace",
+    "_meta": {
+      "title": "StringReplace"
+    }
+  },
+  "69": {
+    "inputs": {
+      "string": [
+        "68",
+        0
+      ],
+      "find": "{t3}",
+      "replace": [
+        "62",
+        0
+      ]
+    },
+    "class_type": "StringReplace",
+    "_meta": {
+      "title": "StringReplace"
+    }
+  },
+  "70": {
+    "inputs": {
+      "prompt": [
+        "69",
+        0
+      ],
+      "width": [
+        "30",
+        0
+      ],
+      "height": [
+        "30",
+        1
+      ],
+      "length": [
+        "30",
+        2
+      ],
+      "ref_image_size": "match",
+      "clip": [
+        "5",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ],
+      "audio_vae": [
+        "7",
+        0
+      ],
+      "ref_images.ref_image_0": [
+        "46",
+        0
+      ]
+    },
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "_meta": {
+      "title": "MiniMaxH3ReferenceToVideo"
+    }
+  },
+  "71": {
+    "inputs": {
+      "width": [
+        "30",
+        0
+      ],
+      "height": [
+        "30",
+        1
+      ],
+      "length": [
+        "30",
+        2
+      ]
+    },
+    "class_type": "EmptyMiniMaxH3LatentAV",
+    "_meta": {
+      "title": "EmptyMiniMaxH3LatentAV"
+    }
+  },
+  "72": {
+    "inputs": {
+      "frame_idx": 0,
+      "positive": [
+        "70",
+        0
+      ],
+      "latent": [
+        "71",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ],
+      "audio_vae": [
+        "7",
+        0
+      ],
+      "image": [
+        "29",
+        0
+      ],
+      "audio": [
+        "28",
+        0
+      ]
+    },
+    "class_type": "MiniMaxH3AddGuide",
+    "_meta": {
+      "title": "Pin the clip as the guide"
+    }
+  },
+  "73": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "72",
+        0
+      ],
+      "negative": [
+        "72",
+        0
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "CFGGuider"
+    }
+  },
+  "74": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "75": {
+    "inputs": {
+      "scheduler": "simple",
+      "steps": 20,
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "BasicScheduler",
+    "_meta": {
+      "title": "BasicScheduler"
+    }
+  },
+  "76": {
+    "inputs": {
+      "noise": [
+        "22",
+        0
+      ],
+      "guider": [
+        "73",
+        0
+      ],
+      "sampler": [
+        "74",
+        0
+      ],
+      "sigmas": [
+        "75",
+        0
+      ],
+      "latent_image": [
+        "71",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "77": {
+    "inputs": {
+      "av_latent": [
+        "76",
+        0
+      ]
+    },
+    "class_type": "LTXVSeparateAVLatent",
+    "_meta": {
+      "title": "LTXVSeparateAVLatent"
+    }
+  },
+  "78": {
+    "inputs": {
+      "samples": [
+        "77",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAEDecode"
+    }
+  },
+  "79": {
+    "inputs": {
+      "fps": 24,
+      "bit_depth": 8,
+      "color_space": "sRGB",
+      "codec": "none",
+      "images": [
+        "78",
+        0
+      ],
+      "audio": [
+        "28",
+        0
+      ]
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Create Video (the clip's sound)"
+    }
+  },
+  "80": {
+    "inputs": {
+      "filename_prefix": "video/MiniMax_H3_Recast",
+      "format": "auto",
+      "format.codec": "auto",
+      "codec": "auto",
+      "video": [
+        "79",
+        0
+      ]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "SaveVideo"
+    }
+  }
+}

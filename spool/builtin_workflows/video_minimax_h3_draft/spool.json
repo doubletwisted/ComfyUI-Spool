@@ -1,0 +1,20 @@
+{
+  "family": "MiniMax H3",
+  "name": "Draft and Final",
+  "task": "i2v",
+  "target": "local",
+  "thumbnail": "video_minimax_h3_i2v",
+  "result": "45",
+  "inputs": [
+    {"node": "14", "input": "value", "label": "Prompt", "role": "positive", "type": "STRING"},
+    {"node": "15", "label": "First frame", "slot": "firstFrame", "optional": true},
+    {"node": "16", "label": "Last frame", "slot": "lastFrame", "optional": true},
+    {"node": "26", "label": "Draft to finish", "slot": "video", "audio": true, "optional": true, "draft": true, "alsoRemove": ["27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43"], "bypass": {"44": "on_false"}},
+    {"node": "11", "input": "aspect_ratio", "label": "Aspect ratio", "role": "resolution", "options": ["1:1 (Square)", "2:3 (Portrait Photo)", "3:2 (Photo)", "3:4 (Portrait Standard)", "4:3 (Standard)", "9:16 (Portrait Widescreen)", "16:9 (Widescreen)", "21:9 (Ultrawide)"]},
+    {"node": "11", "input": "megapixels", "label": "Final resolution (megapixels)", "role": "resolution", "type": "FLOAT"},
+    {"node": "46", "input": "value", "label": "Draft resolution (megapixels)", "role": "draftSize", "type": "FLOAT"},
+    {"node": "12", "input": "value", "label": "Duration (seconds)", "role": "duration", "unit": "seconds", "type": "FLOAT"},
+    {"node": "18", "input": "noise_seed", "label": "Seed", "role": "seed", "type": "INT"},
+    {"node": "3", "input": "value", "label": "Turbo (8 steps)", "role": "speed", "type": "BOOLEAN"}
+  ]
+}

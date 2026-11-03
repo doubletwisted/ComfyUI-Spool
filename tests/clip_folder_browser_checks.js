@@ -76,10 +76,15 @@
         $('takeList').textContent.includes('Copy videos or images') &&
         !$('takeList').querySelector('[data-take]'),
     );
+    const takesBox = $('takes').getBoundingClientRect(),
+      viewerBox = d.querySelector('.viewer').getBoundingClientRect();
     check(
-      'Empty takes strip leaves room for the viewer',
-      $('takes').getBoundingClientRect().height < 120 &&
-        d.querySelector('.viewer').getBoundingClientRect().height > 100,
+      window.innerWidth > 1100
+        ? 'On a wide screen the empty take rail stays beside the viewer'
+        : 'Empty takes strip leaves room for the viewer',
+      window.innerWidth > 1100
+        ? Math.abs(takesBox.top - viewerBox.top) < 2 && takesBox.left >= viewerBox.right - 1
+        : takesBox.height < 120 && viewerBox.height > 100,
     );
     button.click();
     await wait(() => opened.length === 2);

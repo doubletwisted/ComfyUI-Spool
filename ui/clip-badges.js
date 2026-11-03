@@ -1,4 +1,5 @@
 import { keyText } from './keys.js';
+import { canDraft } from './generation.js';
 
 // Live getters and narrow actions keep this owner independent of editor initialization.
 export function createClipBadges({
@@ -55,6 +56,7 @@ export function createClipBadges({
     getCountLabel().hidden = true;
     getJobStatus().textContent = '';
     $('generate').hidden = !videos.length;
+    $('draftToggle').hidden = !videos.some(canDraft);
     $('generateLabel').textContent = 'Generate ' + videos.length + (videos.length === 1 ? ' clip' : ' clips');
     $('generate').title = selectionQueueReason() || 'Generate takes for the selected clips';
     draw(

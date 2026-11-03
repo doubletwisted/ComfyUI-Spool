@@ -10,6 +10,7 @@ import {
 import { isExactInt } from './wire.js';
 import { builtinInputs, controlnetInputs, dynamicSchema } from './builtin-workflows.js';
 import { inputProblem } from './input-groups.js';
+import { resolveMentions } from './cast.js';
 
 export function matchClipInputs(target, source, recipe, definitions, fps) {
   const take = source.takes.find(t => t.id === source.takeId);
@@ -19,7 +20,8 @@ export function matchClipInputs(target, source, recipe, definitions, fps) {
     settings = [],
     number = value => Number(isExactInt(value) ? value.__spool_int__ : value),
     integer = value => BigInt(isExactInt(value) ? value.__spool_int__ : value);
-  let reference = false,
+  // A workflow that reads the shot as video gets it there; its references show someone or something else.
+  let reference = media.kind === 'video' && target.bindings.some(b => b.asset && !b.draft && b.slot === 'video'),
     grouped = false;
   for (const b of target.bindings) {
     const node = recipe.prompt[b.nodeId],
@@ -27,6 +29,8 @@ export function matchClipInputs(target, source, recipe, definitions, fps) {
       schema =
         inputSchema(definitions, node.class_type, b.input) || dynamicSchema(definition?.input, b.input, node.inputs),
       options = b.options || (Array.isArray(schema?.[0]) ? schema[0] : schema?.[1]?.options);
+    // The draft input only carries the take Make final refines.
+    if (b.asset && b.draft) continue;
     if (b.asset) {
       const image =
           ['image', 'firstFrame', 'lastFrame', 'reference'].includes(b.slot) && ['image', 'video'].includes(media.kind),
@@ -95,7 +99,7 @@ export function matchClipInputs(target, source, recipe, definitions, fps) {
   if (settings.length) target.shotInputs = settings;
 }
 
-export function workflowStatus(clip, workflow, recipe, definitions = {}, embedded = false) {
+export function workflowStatus(clip, workflow, recipe, definitions = {}, embedded = false, cast = []) {
   const name =
     recipe?.provenance?.workflowName ||
     workflow?.name ||
@@ -115,13 +119,19 @@ export function workflowStatus(clip, workflow, recipe, definitions = {}, embedde
             : clip.inputValues?.[b.key],
         ]),
     );
-  const missing = recipe && inputProblem(clip.bindings || [], values, clip.shotInputs || [], recipe.inputRules);
+  // `@Name` mentions fill empty reference inputs when the request is frozen (spool/cast.py).
+  const resolved =
+    recipe &&
+    resolveMentions(cast, clip.bindings || [], { ...clip.inputValues, ...values }, clip.shotInputs || []).values;
+  const missing = recipe && inputProblem(clip.bindings || [], resolved, clip.shotInputs || [], recipe.inputRules);
+  // Footage chosen as the take carries no workflow: nothing is wrong, there is just nothing to run yet.
+  const footage = !!clip?.generationBase && !clip.workflowVersion && clip.generationBase.takeId === clip.takeId;
   const reason =
     clip?.generationBase && clip.generationBase.takeId !== clip.takeId
       ? 'Use the take again to update generation settings.'
       : !clip?.workflowVersion
         ? clip?.generationBase
-          ? 'This take has no executable metadata. Choose a workflow from the library.'
+          ? 'Drop a workflow from the library on this clip to generate from it'
           : 'Capture an executable workflow first.'
         : !recipe
           ? 'Reopen the saved recipe before queueing.'
@@ -133,7 +143,7 @@ export function workflowStatus(clip, workflow, recipe, definitions = {}, embedde
     name,
     reason,
     ready: !reason,
-    problem: !!reason && !!(clip?.generationBase || clip?.workflowVersion),
+    problem: !!reason && !footage && !!(clip?.generationBase || clip?.workflowVersion),
     note: !reason
       ? 'Ready to generate'
       : clip?.generationBase || clip?.workflowVersion
@@ -142,7 +152,7 @@ export function workflowStatus(clip, workflow, recipe, definitions = {}, embedde
           ? 'Use this take to set up generation'
           : workflow
             ? 'Prepare this workflow to generate'
-            : 'Use a take or choose a workflow from the library',
+            : 'Drop a workflow from the library on this clip to generate from it',
   };
 }
 
@@ -260,6 +270,10 @@ export function createWorkflowSetup({ edit, flush, clip, dialog, save }) {
               ambiguous: false,
             };
           });
+          // Apply keeps the order the clip's inputs had (new ones last); Comfy lists them in execution order.
+          const before = b =>
+            (previous?.bindings || []).findIndex(old => old.nodeId === b.nodeId && old.input === b.input) >>> 0;
+          sources.sort((a, b) => before(a) - before(b));
           const labels = new Map();
           for (const b of sources) {
             const same = labels.get(b.label) || [];

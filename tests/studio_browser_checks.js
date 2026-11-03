@@ -26,7 +26,7 @@
       if (!b) throw Error('Missing ' + selector);
       b.click();
     };
-  await wait(() => document.querySelectorAll('[data-builtin]').length === 23, 'Curated templates');
+  await wait(() => document.querySelectorAll('[data-builtin]').length === 27, 'Curated templates');
   check(
     'Compact URL opens the full studio',
     !$('#editor').classList.contains('compact') && !new URL(location.href).searchParams.has('mode'),
@@ -34,8 +34,9 @@
   check('Workflows is the primary sidebar tab', $('#mediaPanel').dataset.tab === 'workflows');
   const catalog = await (await fetch('/spool/api/templates')).json();
   check(
-    'Catalog has nine local and fourteen cloud workflows',
-    catalog.filter(t => t.section === 'local').length === 9 && catalog.filter(t => t.section === 'cloud').length === 14,
+    'Catalog has thirteen local and fourteen cloud workflows',
+    catalog.filter(t => t.section === 'local').length === 13 &&
+      catalog.filter(t => t.section === 'cloud').length === 14,
   );
   if (innerWidth <= 1100) click('#workflowLibraryToggle');
   else {
@@ -46,7 +47,7 @@
   click('[data-workflow-task="flf"]');
   check(
     'First/Last filter includes both execution locations',
-    document.querySelectorAll('[data-builtin]').length === 4,
+    document.querySelectorAll('[data-builtin]').length === 5,
   );
   click('[data-workflow-task="all"]');
   click('[data-workflow-view="list"]');
@@ -69,10 +70,16 @@
     await n.flush();
     const recipe = await (await fetch('/spool/api/workflows/' + c.workflowVersion)).json(),
       bindings = c.bindings;
+    // Workflows that remake a clip take its length from the clip; Recast writes its prompt from the Person lines.
+    const remake = { video_minimax_h3_recast: 0, video_minimax_h3_regenerate: 1 }[t.id];
     check(
       t.id + ' appends an automatically bound shot',
-      bindings.filter(b => b.role === 'positive').length === 1 &&
-        bindings.filter(b => b.role === 'duration').length === 1 &&
+      (remake === undefined
+        ? bindings.filter(b => b.role === 'positive').length === 1 &&
+          bindings.filter(b => b.role === 'duration').length === 1
+        : bindings.filter(b => b.role === 'positive').length === remake &&
+          !bindings.some(b => b.role === 'duration') &&
+          bindings.some(b => b.slot === 'video')) &&
         bindings.filter(b => b.role === 'seed').length === 1 &&
         bindings.some(b => b.role === 'resolution') &&
         $('#modalOverlay').hidden,

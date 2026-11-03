@@ -1,3 +1,4 @@
+import { attachedParent } from './direction.js';
 import { inheritLineage } from './ledger.js';
 // Authored timeline operations mutate the supplied document. UI and persistence stay in the editor.
 const MIN_FRAMES = 6,
@@ -113,6 +114,37 @@ export function visibleRow(doc, frame) {
       .filter(r => videoEnabled(doc, r.clip) && frame >= r.start && frame < r.end)
       .sort((a, b) => videoTrack(b.clip) - videoTrack(a.clip))[0] || null
   );
+}
+/**
+ * The joined copy of an extension's take (spool/joins.py): its overlap is the shot's own frames,
+ * dissolving into the extension over `blend` frames before the cut. It stands in for the take while
+ * the shot right before it is the take and trim it was made from and the extension starts where the
+ * copy's new frames do; otherwise the take plays as it rendered.
+ */
+export function joinedTake(doc, c, t = takeOf(c), takeFor = x => takeOf(x)) {
+  const j = t?.media?.join,
+    p = j && c.direction?.kind === 'extend' && c.in === j.overlap ? attachedParent(doc, c) : null;
+  return p &&
+    p.id === j.parent?.clipId &&
+    takeFor(p)?.id === j.parent.takeId &&
+    p.out === j.parent.out &&
+    p.out - p.in > j.blend
+    ? j
+    : null;
+}
+/**
+ * What the picture at `frame` comes from: the visible row's take, or, in a shot's last frames,
+ * its extension's joined copy dissolving out of them. `takeFor` picks the take a clip shows.
+ */
+export function pictureSource(doc, frame, takeFor = c => takeOf(c)) {
+  let row = visibleRow(doc, frame);
+  if (!row) return null;
+  const next = layout(doc).find(r => r.start === row.end && attachedParent(doc, r.clip) === row.clip),
+    early = next && joinedTake(doc, next.clip, takeFor(next.clip), takeFor);
+  if (early && frame >= row.end - early.blend && videoEnabled(doc, next.clip)) row = next;
+  const take = takeFor(row.clip),
+    joined = joinedTake(doc, row.clip, take, takeFor);
+  return { row, take, media: joined || take.media, frame: row.clip.in + frame - row.start, lead: joined?.blend || 0 };
 }
 export function gapAfter(doc, index) {
   const c = doc.clips[index],
@@ -353,20 +385,25 @@ export function exportPlan(doc, range = { start: 0, end: total(doc) }) {
   const clips = [],
     audioClips = [],
     rows = layout(doc),
+    // A joined extension takes over its shot's last frames (joinedTake).
+    leads = rows.flatMap(r => {
+      const j = joinedTake(doc, r.clip);
+      return j ? [r.start - j.blend] : [];
+    }),
     points = [
       ...new Set([
         range.start,
         range.end,
         ...rows.flatMap(r => [r.start, r.end]).filter(f => f > range.start && f < range.end),
+        ...leads.filter(f => f > range.start && f < range.end),
       ]),
     ].sort((a, b) => a - b);
   for (let i = 0; i < points.length - 1; i++) {
     const start = points[i],
       end = points[i + 1],
-      r = visibleRow(doc, start),
-      c = r?.clip,
-      m = c && takeOf(c).media,
-      offset = c ? c.in + start - r.start : 0,
+      p = pictureSource(doc, start),
+      m = p?.media,
+      offset = p ? p.frame : 0,
       file = m?.file || 'assets/black.png',
       last = clips.at(-1);
     if (last && last.file === file && (file === 'assets/black.png' || last.out === offset)) last.out += end - start;
@@ -410,13 +447,20 @@ export function timelinePlan(doc, range = { start: 0, end: total(doc) }) {
       enabled: videoTrackEnabled(doc, track),
       clips: rows
         .filter(r => videoTrack(r.clip) === track)
-        .map(r =>
-          cut(r.clip, r.start, {
-            file: takeOf(r.clip).media.file,
+        .map(r => {
+          // A joined extension starts `blend` frames early, over the end of its shot (joinedTake).
+          // Only an enabled one does, as in the viewer; a clip can both start early and end early.
+          const joined = c => (videoEnabled(doc, c) ? joinedTake(doc, c) : null),
+            own = joined(r.clip),
+            next = rows.find(n => n.start === r.end && attachedParent(doc, n.clip) === r.clip),
+            lead = next ? joined(next.clip)?.blend || 0 : 0,
+            shown = { ...r.clip, in: r.clip.in - (own?.blend || 0), out: r.clip.out - lead };
+          return cut(shown, r.start - (own?.blend || 0), {
+            file: (own || takeOf(r.clip).media).file,
             takeId: takeOf(r.clip).id,
             enabled: enabled(r.clip),
-          }),
-        )
+          });
+        })
         .filter(Boolean),
     });
   const lane = (key, name, track) => {
@@ -930,6 +974,16 @@ export function closeGap(doc, index) {
   else doc.tailGap = 0;
   return true;
 }
+/**
+ * Where a directed clip's take starts in the edit, as spool/operations.py:directed_in
+ * decides. Its own takes repeat the anchored frames of the clips beside it, so they
+ * start after them (`head`); other takes keep the trim.
+ */
+function directedIn(c, t) {
+  const d = c.direction;
+  if (!d) return null;
+  return t.generated && t.summary?.workflowVersion === c.workflowVersion && Number.isInteger(d.head) ? d.head : null;
+}
 export function chooseTake(doc, clipId, id) {
   const c = doc.clips.find(c => c.id === clipId);
   if (!c || c.takeId === id || !realTakes(c).some(t => t.id === id)) return { changed: false, addedGap: 0 };
@@ -937,7 +991,7 @@ export function chooseTake(doc, clipId, id) {
   c.takeId = id;
   const max = takeOf(c).media.frames,
     newLength = Math.min(length, max);
-  c.in = clamp(c.in, 0, max - newLength);
+  c.in = clamp(directedIn(c, takeOf(c)) ?? c.in, 0, max - newLength);
   c.out = c.in + newLength;
   const addedGap = length - newLength;
   if (addedGap) {

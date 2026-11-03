@@ -34,8 +34,34 @@ def fit_to_take(document, clip, frames):
         tails[str(track)] = tails.get(str(track), 0) + length - new_length
 
 
-def choose_take(document, clip, take_id, frames):
+def keeps_recipe(clip, take, capture):
+    """Whether Use take only chooses this take, as ui/clip-tools.js decides: a directed clip's
+    take, or a draft or final, made with the clip's own recipe keeps that recipe and its links."""
+    made_with = (take.get("summary") or take.get("request") or {}).get("workflowVersion")
+    drafting = any(b.get("draft") for b in (capture or {}).get("bindings", []))
+    return bool(
+        (clip.get("direction") or drafting) and take.get("generated") and made_with == clip.get("workflowVersion")
+    )
+
+
+def directed_in(clip, take):
+    """Where a directed clip's take starts, as ui/timeline.js:directedIn decides. Its own
+    takes repeat the anchored frames of the clips beside it, so they start after them;
+    other takes keep the trim."""
+    direction = clip.get("direction") or {}
+    # The studio sees a take's summary; commands see the attempt's request.
+    made_with = (take.get("summary") or take.get("request") or {}).get("workflowVersion")
+    head = direction.get("head") if take.get("generated") and made_with == clip.get("workflowVersion") else None
+    return head if type(head) is int else None
+
+
+def choose_take(document, clip, take_id, frames, take=None):
     """Put a take in the edit. Its workflow is not adopted; see Store.capture for Use take."""
+    start = directed_in(clip, take) if take else None
+    if start is not None:
+        length = clip["out"] - clip["in"]
+        clip["in"] = max(0, min(start, frames - min(length, frames)))
+        clip["out"] = clip["in"] + length
     fit_to_take(document, clip, frames)
     clip["takeId"] = take_id
 
@@ -62,7 +88,8 @@ def assign_workflow(clip, version, capture):
         clip["workflow"] = library
     else:
         clip.pop("workflow", None)
-    for key in ("shotInputs", "seedKey", "generationBase"):
+    # A directing tool made the clip with its own workflow; another workflow's takes start at the trim.
+    for key in ("shotInputs", "seedKey", "generationBase", "direction"):
         clip.pop(key, None)
     clip["seedMode"] = "same"
 

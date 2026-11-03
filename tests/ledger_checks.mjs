@@ -187,6 +187,7 @@ const sample = {
   hiddenMediaIds: ['m'],
   deletedTakeIds: ['t'],
   deletedMediaIds: ['d'],
+  cast: [{ id: 'cast-a', name: 'A', images: ['a.png'] }],
   jobs: [{ id: 'j' }],
   recoverableResults: [{ id: 'r' }],
   media: [{ id: 'm' }],

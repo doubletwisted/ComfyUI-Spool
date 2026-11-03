@@ -146,8 +146,8 @@ class WorkflowSaveTests(unittest.IsolatedAsyncioTestCase):
                 if binding.get("asset"):
                     self.assertEqual(self.project["document"]["clips"][-1]["inputValues"][binding["key"]], "")
         reopened = Workspace(self.workspace.root).get(self.project["id"])
-        self.assertEqual(len(reopened["recipes"]), 23)
-        self.assertEqual(len(self.store.export_project(self.project["id"])["recipes"]), 23)
+        self.assertEqual(len(reopened["recipes"]), 27)
+        self.assertEqual(len(self.store.export_project(self.project["id"])["recipes"]), 27)
         self.assertEqual(reopened["document"]["jobs"], [])
 
     async def test_invalid_or_stale_capture_rolls_back_both_workflow_and_shot(self):

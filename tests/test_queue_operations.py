@@ -15,7 +15,7 @@ from spool import attempts, requests
 from spool.execution import LocalExecutor
 from spool.media import Media
 from spool.ownership import ExecutorLock
-from spool.store import Conflict, Store, empty_project
+from spool.store import Conflict, Store, empty_project, validate_capture
 
 
 class QueueOperationTests(unittest.TestCase):
@@ -160,6 +160,182 @@ class QueueOperationTests(unittest.TestCase):
         self.assertEqual((bake.call_count, freeze.call_count), (1, 1))
         self.assertEqual(len({r["shotInputs"][0]["file"] for _, r in prepared}), 1)
         self.assertTrue(all(r["shotInputs"][0]["takeId"] == "original" for _, r in prepared))
+
+    def test_cast_mentions_fill_reference_slots_when_queued(self):
+        Image.new("RGB", (8, 8), "green").save(self.root / "input" / "mara.png")
+        document = copy.deepcopy(self.project["document"])
+        document["cast"] = [{"id": "cast-mara", "name": "Mara", "description": "", "images": ["mara.png"]}]
+        project = self.store.save(self.project["id"], self.project["revision"], document)
+        recipe = {
+            **self.recipe,
+            "prompt": {
+                **self.recipe["prompt"],
+                "text": {"class_type": "PrimitiveStringMultiline", "inputs": {"value": "<Picture 1> walks."}},
+                "load": {"class_type": "LoadImage", "inputs": {"image": ""}},
+            },
+            "bindings": [
+                {"key": "text", "nodeId": "text", "input": "value", "role": "positive"},
+                {
+                    "key": "ref",
+                    "nodeId": "load",
+                    "input": "image",
+                    "asset": True,
+                    "slot": "reference",
+                    "group": "Refs",
+                    "optional": True,
+                },
+            ],
+        }
+        project = self.store.capture(project["id"], project["revision"], "shot", recipe)
+        item = {"clipId": "shot", "count": 1, "values": {"text": "@Mara waves."}}
+        _, request = requests.prepare(self.store, self.media, project, [item])[0]
+        self.assertEqual(request["prompt"]["text"]["inputs"]["value"], "<Picture 1> waves.")
+        self.assertEqual(request["castMentions"], [{"id": "cast-mara", "name": "Mara", "pictures": [1]}])
+        self.assertEqual([a["source"] for a in request["assets"]], ["mara.png"])
+
+    def test_drafts_only_for_workflows_that_finish_them(self):
+        bindings = [
+            {"key": "mp", "role": "resolution", "contract": {"inputType": "FLOAT"}},
+            {"key": "ratio", "role": "resolution", "options": ["16:9 (Widescreen)", "1:1 (Square)"]},
+            {"key": "draft", "role": "draftSize"},
+            {"key": "seed", "role": "seed"},
+            {"key": "turbo", "role": "speed"},
+        ]
+        values = {"mp": 0.9, "ratio": "1:1 (Square)", "draft": 0.3, "seed": 4, "turbo": False}
+        self.assertEqual(
+            requests.draft_values(bindings, values),
+            {"mp": 0.3, "ratio": "1:1 (Square)", "draft": 0.3, "seed": 4, "turbo": True},
+        )
+        # An ordinary workflow cannot refine a draft into its final, so it makes no drafts.
+        with self.assertRaisesRegex(ValueError, "cannot make drafts"):
+            requests.prepare(self.store, self.media, self.project, [{"clipId": "shot", "count": 1, "quality": "draft"}])
+        with self.assertRaisesRegex(ValueError, "draft or final"):
+            requests.prepare(self.store, self.media, self.project, [{"clipId": "shot", "count": 1, "quality": "best"}])
+
+        draft = {
+            "key": "draftFile/file",
+            "nodeId": "draftFile",
+            "input": "file",
+            "slot": "video",
+            "asset": True,
+            "optional": True,
+            "draft": True,
+            "omit": ["draftFile"],
+        }
+        recipe = {
+            **self.recipe,
+            "prompt": {**self.recipe["prompt"], "draftFile": {"class_type": "LoadVideo", "inputs": {"file": ""}}},
+            "bindings": [draft],
+        }
+        validate_capture(recipe)
+        for wrong in ({"draft": "yes"}, {"slot": "image"}, {"optional": False}, {"span": {"edge": "end", "frames": 5}}):
+            with self.assertRaisesRegex(ValueError, "draft input|240 frames"):
+                validate_capture({**recipe, "bindings": [{**draft, **wrong}]})
+        project = self.store.capture(self.project["id"], self.project["revision"], "shot", recipe)
+        _, request = requests.prepare(
+            self.store, self.media, project, [{"clipId": "shot", "count": 1, "quality": "draft"}]
+        )[0]
+        self.assertEqual(request["quality"], "draft")
+        self.assertNotIn("draftFile", request["prompt"], "Without a take to finish, the finish is left out")
+
+        take = {"id": "draft-take", "generated": True, "media": {"kind": "video", "frames": 141}}
+        project = copy.deepcopy(project)
+        project["document"]["clips"][0]["takes"].append(take)
+        (self.root / "input" / "baked.mp4").write_bytes(b"draft")
+        with patch.object(self.media, "bake_shot", return_value={"file": "baked.mp4"}) as bake:
+            _, request = requests.prepare(
+                self.store, self.media, project, [{"clipId": "shot", "count": 1, "finish": "draft-take"}]
+            )[0]
+        bake.assert_called_once_with(take["media"], 0, 141, 24, "video", None, True)
+        self.assertEqual(request["finishes"], "draft-take")
+        # A link to the selected take cannot replace the draft being finished.
+        linked = copy.deepcopy(project)
+        linked["document"]["clips"][0]["shotInputs"] = [{"key": "draftFile/file", "source": "selected"}]
+        with patch.object(self.media, "bake_shot", return_value={"file": "baked.mp4"}) as bake:
+            requests.prepare(self.store, self.media, linked, [{"clipId": "shot", "count": 1, "finish": "draft-take"}])
+        bake.assert_called_once_with(take["media"], 0, 141, 24, "video", None, True)
+        self.assertNotIn("quality", request)
+        self.assertIn("baked.mp4", [a["source"] for a in request["assets"]])
+        for item in (
+            {"clipId": "shot", "count": 1, "finish": "missing"},
+            {"clipId": "shot", "count": 2, "finish": "draft-take"},
+            {"clipId": "shot", "count": 1, "finish": "draft-take", "quality": "draft"},
+        ):
+            with self.assertRaisesRegex(ValueError, "draft take of this clip"):
+                requests.prepare(self.store, self.media, project, [item])
+
+    def test_neighbour_rule_matches_the_studio(self):
+        fixture = json.loads((Path(__file__).parent / "fixtures" / "neighbours.json").read_text(encoding="utf-8"))
+        for case in fixture["cases"]:
+            clip = next(c for c in fixture["clips"] if c["id"] == case["clip"])
+            for side in ("previous", "next"):
+                found = requests.neighbor(fixture, clip, side)
+                self.assertEqual(found and found["id"], case[side], case["clip"] + " " + side)
+
+    def test_neighbour_inputs_read_the_clips_beside_a_shot_when_queued(self):
+        document = copy.deepcopy(self.project["document"])
+        image = {"id": "source", "kind": "image", "file": "assets/black.png", "frames": 120}
+        document["clips"] = [
+            {
+                "id": "before",
+                "name": "Before",
+                "in": 10,
+                "out": 40,
+                "takes": [{"id": "a", "media": image}],
+                "takeId": "a",
+            },
+            {**document["clips"][0], "in": 0, "out": 24},
+            {"id": "after", "name": "After", "in": 5, "out": 30, "takes": [{"id": "b", "media": image}], "takeId": "b"},
+            {"id": "other", "name": "Other track", "videoTrack": 2, "in": 0, "out": 9, "takes": [], "takeId": None},
+        ]
+        project = self.store.save(self.project["id"], self.project["revision"], document)
+        recipe = {
+            **self.recipe,
+            "prompt": {
+                **self.recipe["prompt"],
+                "last": {"class_type": "LoadImage", "inputs": {"image": "source.png"}},
+            },
+            "bindings": [
+                {"key": "first", "nodeId": "load", "input": "image", "asset": True, "slot": "firstFrame"},
+                {"key": "last", "nodeId": "last", "input": "image", "asset": True, "slot": "lastFrame"},
+            ],
+        }
+        project = self.store.capture(project["id"], project["revision"], "shot", recipe)
+        links = [{"key": "first", "source": "previous"}, {"key": "last", "source": "next"}]
+        with patch.object(self.media, "bake_shot", wraps=self.media.bake_shot) as bake:
+            _, request = requests.prepare(
+                self.store, self.media, project, [{"clipId": "shot", "count": 1, "shotInputs": links}]
+            )[0]
+        calls = [(c.args[1], c.args[2], c.args[5], c.kwargs["exact_frame"]) for c in bake.call_args_list]
+        self.assertEqual(calls, [(10, 40, "last", True), (5, 30, "first", True)])
+        self.assertEqual(
+            [(s["source"], s["clipId"], s["takeId"]) for s in request["shotInputs"]],
+            [("previous", "before", "a"), ("next", "after", "b")],
+        )
+        document = copy.deepcopy(project["document"])
+        document["clips"] = document["clips"][1:]
+        project = self.store.save(project["id"], project["revision"], document)
+        with self.assertRaisesRegex(ValueError, "needs a clip before it"):
+            requests.prepare(self.store, self.media, project, [{"clipId": "shot", "count": 1, "shotInputs": links}])
+
+    def test_motion_inputs_read_only_the_frames_beside_the_cut(self):
+        owner = {"in": 10, "out": 70}
+        video = {"slot": "video", "span": {"edge": "end", "frames": 22}}
+        self.assertEqual(requests.span_range(owner, video), (48, 70))
+        self.assertEqual(requests.span_range(owner, {**video, "span": {"edge": "start", "frames": 22}}), (10, 32))
+        self.assertEqual(requests.span_range({"in": 0, "out": 9}, video), (0, 9), "A short clip gives what it has")
+        self.assertEqual(requests.span_range(owner, {"slot": "video"}), (10, 70))
+        recipe = {
+            **self.recipe,
+            "prompt": {**self.recipe["prompt"], "clip": {"class_type": "LoadVideo", "inputs": {"file": ""}}},
+            "bindings": [{**video, "key": "clip", "nodeId": "clip", "input": "file", "asset": True}],
+        }
+        validate_capture(recipe)
+        for span in ({"edge": "middle", "frames": 22}, {"edge": "end", "frames": 0}, {"edge": "end", "frames": 1.5}):
+            with self.assertRaisesRegex(ValueError, "240 frames"):
+                validate_capture({**recipe, "bindings": [{**recipe["bindings"][0], "span": span}]})
+        with self.assertRaisesRegex(ValueError, "240 frames"):
+            validate_capture({**recipe, "bindings": [{**recipe["bindings"][0], "slot": "image"}]})
 
     def test_concurrent_duplicate_operations_accept_once(self):
         with ThreadPoolExecutor(max_workers=4) as pool:

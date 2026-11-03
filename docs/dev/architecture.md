@@ -235,6 +235,43 @@ Comfy templates without touching the user's graph.
 | API version | `spool/protocol.py` | `ui/protocol.js` | `tests/fixtures/protocol_versions.json` |
 | Project push hints | `spool/projects.py`, `spool/routes.py` | `ui/project-sync.js` | `tests/fixtures/project_updates.json` |
 | Bridge messages | — | `ui/bridge.js` | `tests/bridge_checks.mjs` |
+| Neighbour inputs | `spool/requests.py` | `ui/direction.js` | `tests/fixtures/neighbours.json` |
+| Cast mentions | `spool/cast.py` | `ui/cast.js` | `tests/fixtures/cast_mentions.json` |
+| Directed take start | `spool/operations.py` | `ui/timeline.js` | `tests/fixtures/directed_takes.json` |
+
+## Directing tools
+
+Transitions and extensions are ordinary clips with built-in
+workflows, so execution, takes and Edit in Comfy need no new paths. What they add
+is resolved when a request is frozen, never stored as baked files: neighbour inputs
+read the clips beside the shot, cast mentions fill reference inputs, and draft
+quality lowers resolution. A draft is offered only where the workflow can finish it
+from the draft take itself (a `draft` video input feeding an Open-H3-Regenerate
+style refine behind a lazy switch): rendering again at another resolution with the
+same seed gives a different video, so a draft that cannot be refined is a preview
+of nothing. Joining footage is anchored as a short clip (a video
+binding's `span`) rather than a frame where the workflow allows, because one frame
+restarts any movement under way at the cut. A request records what each resolved to
+(`shotInputs[].clipId`, `castMentions`, `quality`, `finishes`), so a take stays explainable
+after the edit changes. The command API exposes the same pieces on existing clips
+(`set_shot_inputs`, `set_cast`, draft variants); creating the clips stays a studio
+action, as other clip creation is. A technique that needs no place on the
+timeline, such as Recast, is a built-in workflow only, with no dialog of its own.
+
+One output is baked: an extension's joined copy (`spool/joins.py`). The take
+re-renders the shot frames it was given, so a cut to it pops, it can slip a frame,
+and H3 dims its first new frames. When the result is collected (local, Cloud and
+Deadline alike), Spool writes a copy whose overlap is the frozen shot frames,
+dissolving into the render over `BLEND` frames, with the new frames measured into
+place and their brightness eased; it is recorded as the take media's `join`, and the
+render and its receipt stay as they were. Playing it in the edit is a rule, not an
+edit (`ui/timeline.js:joinedTake`): while the shot is still the take and trim the
+request froze and the extension starts where the copy's new frames do, the viewer,
+the MP4 export and the timeline export switch to the copy `BLEND` frames before the
+cut. Anything else is a plain cut to the take as rendered, so the document never
+changes on its own. The copy is made from the request alone, which is why it is
+baked at collection rather than mixed live: the two exports and the viewer then
+show the same frames.
 
 ## Constraints
 

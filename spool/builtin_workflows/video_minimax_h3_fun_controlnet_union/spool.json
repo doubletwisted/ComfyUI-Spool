@@ -12,6 +12,7 @@
     {"node": "115", "input": "megapixels", "label": "Resolution (megapixels)", "role": "resolution", "type": "FLOAT"},
     {"node": "132", "input": "value", "label": "Duration (seconds)", "role": "duration", "unit": "seconds", "type": "FLOAT"},
     {"node": "129", "input": "noise_seed", "label": "Seed", "role": "seed", "type": "INT"},
+    {"node": "146", "input": "value", "label": "Turbo (4 steps)", "role": "speed", "type": "BOOLEAN"},
     {"node": "172", "input": "strength", "label": "Control strength", "role": "controlnet", "type": "FLOAT"},
     {"node": "172", "input": "start_percent", "label": "Control start", "role": "controlnet", "type": "FLOAT"},
     {"node": "172", "input": "end_percent", "label": "Control end", "role": "controlnet", "type": "FLOAT"},

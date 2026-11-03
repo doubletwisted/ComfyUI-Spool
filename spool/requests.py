@@ -3,7 +3,7 @@
 import copy
 import re
 
-from . import attempts, cloud, system
+from . import attempts, cast, cloud, system
 from .media import SAVER_GROUPS, contained, sha256
 from .store import Conflict, uid, encode
 from .workflow_inputs import LOADERS, compact_groups, input_problem, leave_out
@@ -86,9 +86,15 @@ def validate_shot_input(binding, setting):
         or binding.get("slot") not in ("image", "video", "firstFrame", "lastFrame", "reference", "audio")
     ):
         raise ValueError("Choose a verified image, video or audio binding")
-    sources = ("original", "selected", "clip", "track") if binding["slot"] == "audio" else ("original", "selected")
+    sources = (
+        ("original", "selected", "clip", "track")
+        if binding["slot"] == "audio"
+        else ("original", "selected", "previous", "next")
+    )
     if setting.get("source") not in sources:
         raise ValueError("Choose a supported source for this generation input")
+    if setting.get("frame") is not None and setting["frame"] not in ("first", "last", "middle"):
+        raise ValueError("Choose the first, middle or last frame")
     if setting["source"] == "clip" and not isinstance(setting.get("clipId"), str):
         raise ValueError("Choose a timeline clip for the audio input")
     if setting["source"] == "track" and (
@@ -97,6 +103,36 @@ def validate_shot_input(binding, setting):
         or setting.get("lane", 1) < 1
     ):
         raise ValueError("Choose an audio track to align with this shot")
+
+
+def draft_values(bindings, values):
+    """Settings for a draft take: the workflow's own draft size and its speed switch on."""
+    values = dict(values)
+    size = next((b for b in bindings if b.get("role") == "draftSize" and b["key"] in values), None)
+    for b in bindings:
+        if b.get("role") == "speed" and type(values.get(b["key"])) is bool:
+            values[b["key"]] = True
+        if size and b.get("role") == "resolution" and b.get("contract", {}).get("inputType") == "FLOAT":
+            values[b["key"]] = float(values[size["key"]])
+    return values
+
+
+def span_range(owner, binding):
+    """The part of a clip a video input reads: all of it, or a few frames at one end
+    when the workflow anchors motion there."""
+    span = binding.get("span") if binding.get("slot") == "video" else None
+    if not span:
+        return owner["in"], owner["out"]
+    frames = min(span["frames"], owner["out"] - owner["in"])
+    return (owner["out"] - frames, owner["out"]) if span["edge"] == "end" else (owner["in"], owner["in"] + frames)
+
+
+def neighbor(document, clip, side):
+    """The clip just before or after this one on its video track, in sequence order."""
+    track = clip.get("videoTrack", 1)
+    row = [c for c in document["clips"] if c.get("videoTrack", 1) == track]
+    index = row.index(clip) + (-1 if side == "previous" else 1)
+    return row[index] if 0 <= index < len(row) else None
 
 
 def audio_input_segments(document, clip, setting):
@@ -192,6 +228,9 @@ def prepare(store, media, project, items, freeze=True):
     requests, audio_bakes, shot_bakes, frozen_assets = [], {}, {}, {}
     for variant_index, item in enumerate(items):
         count = item["count"]
+        quality = item.get("quality", "final")
+        if quality not in ("draft", "final"):
+            raise ValueError("Choose draft or final quality")
         if type(count) is not int or not 1 <= count <= 16:
             raise ValueError("Choose 1-16 takes per clip")
         clip = next((c for c in project["document"]["clips"] if c["id"] == item["clipId"]), None)
@@ -200,6 +239,20 @@ def prepare(store, media, project, items, freeze=True):
         if clip.get("generationBase") and clip["generationBase"]["takeId"] != clip.get("takeId"):
             raise ValueError("Use the take again to update generation settings before queueing")
         capture = store.workflow(clip.get("workflowVersion"))
+        # Drafts exist only where the workflow can finish one: it refines the draft take
+        # itself to full size, so the final keeps the draft's motion and framing.
+        drafting = next((b for b in capture.get("bindings", []) if b.get("draft")), None)
+        finish = item.get("finish")
+        if quality == "draft" and not drafting:
+            raise ValueError("This workflow cannot make drafts")
+        draft_take = None
+        if finish is not None:
+            draft_take = next(
+                (t for t in clip.get("takes", []) if t["id"] == finish and t.get("generated") and t.get("media")),
+                None,
+            )
+            if not drafting or quality == "draft" or count != 1 or draft_take is None:
+                raise ValueError("Choose one draft take of this clip to make final")
         launchers = [node_id for node_id, node in capture["prompt"].items() if node["class_type"] in LAUNCHERS]
         if len(launchers) > 1:
             raise ValueError("Choose a workflow with one explicit Deadline submit node")
@@ -229,10 +282,33 @@ def prepare(store, media, project, items, freeze=True):
                 raise ValueError("Variations can change only explicitly bound literal controls")
             values.update(overrides)
             bindings = capture.get("bindings", [])
+            if quality == "draft":
+                values = draft_values(bindings, values)
+            if drafting:
+                # The draft input only ever holds the take being finished, never a chosen file.
+                values[drafting["key"]] = ""
+                if draft_take:
+                    metadata = draft_take["media"]
+                    values[drafting["key"]] = media.bake_shot(
+                        metadata, 0, metadata["frames"], project["document"].get("fps", 24), "video", None, True
+                    )["file"]
             for binding in bindings:
                 if binding.get("asset"):
                     values.setdefault(binding["key"], capture["prompt"][binding["nodeId"]]["inputs"][binding["input"]])
-            values, settings = compact_groups(bindings, values, item.get("shotInputs", clip.get("shotInputs", [])))
+            settings = item.get("shotInputs", clip.get("shotInputs", []))
+            if drafting:
+                settings = [s for s in settings if s.get("key") != drafting["key"]]
+            values, settings = compact_groups(bindings, values, settings)
+            positive = next((b for b in bindings if b.get("role") == "positive"), None)
+            values, cast_mentions = cast.resolve(
+                project["document"].get("cast", []),
+                bindings,
+                values,
+                settings,
+                cast.tag_style(capture["prompt"][positive["nodeId"]]["inputs"].get(positive["input"]))
+                if positive
+                else "angle",
+            )
             problem = input_problem(bindings, values, settings, capture.get("inputRules", []))
             if problem:
                 raise ValueError(problem)
@@ -253,33 +329,59 @@ def prepare(store, media, project, items, freeze=True):
                     values[binding["key"]] = baked["file"]
                     shot_inputs.append({**setting, **baked})
                     continue
+                owner, frame = clip, setting.get("frame")
+                if source in ("previous", "next"):
+                    # Transitions and extensions read the clip beside them when queued,
+                    # so they follow the edit: a new take, trim or order on the neighbour counts.
+                    owner = neighbor(project["document"], clip, source)
+                    if owner is None:
+                        raise ValueError(
+                            "This shot needs a clip " + ("before" if source == "previous" else "after") + " it"
+                        )
+                    frame = frame or ("last" if source == "previous" else "first")
                 take = (
-                    next((t for t in clip.get("takes", []) if t["id"] == clip.get("takeId")), None)
-                    if source == "selected"
-                    else next(
-                        (t for t in clip.get("takes", []) if not t.get("generated") and not t.get("placeholder")), None
+                    next(
+                        (t for t in owner.get("takes", []) if not t.get("generated") and not t.get("placeholder")), None
                     )
                     if source == "original"
-                    else None
+                    else next((t for t in owner.get("takes", []) if t["id"] == owner.get("takeId")), None)
                 )
                 if not take or take.get("placeholder"):
-                    raise ValueError("This shot has no usable original or selected take")
+                    raise ValueError(
+                        "Generate or choose a take for " + owner.get("name", "the clip beside this one") + " first"
+                        if owner is not clip
+                        else "This shot has no usable original or selected take"
+                    )
+                start, end = span_range(owner, binding)
                 key = encode(
-                    [clip["id"], take["id"], binding["slot"], setting.get("frame"), bool(setting.get("audio", False))]
+                    [owner["id"], take["id"], binding["slot"], frame, bool(setting.get("audio", False))]
+                    + ([owner["in"], owner["out"]] if owner is not clip else [])
+                    + ([start, end] if binding.get("span") else [])
                 )
                 if key not in shot_bakes:
                     shot_bakes[key] = media.bake_shot(
                         take["media"],
-                        clip["in"],
-                        clip["out"],
+                        start,
+                        end,
                         project["document"].get("fps", 24),
                         binding["slot"],
-                        setting.get("frame"),
+                        frame,
                         setting.get("audio", False),
+                        exact_frame=owner is not clip,
                     )
                 baked = shot_bakes[key]
                 values[binding["key"]] = baked["file"]
-                shot_inputs.append({"key": binding["key"], "source": source, "takeId": take["id"], **baked})
+                shot_inputs.append(
+                    {
+                        "key": binding["key"],
+                        "source": source,
+                        "takeId": take["id"],
+                        **(
+                            {"clipId": owner["id"], "in": owner["in"], "out": owner["out"]} if owner is not clip else {}
+                        ),
+                        **baked,
+                    }
+                )
             for binding in capture.get("bindings", []):
                 original = prompt[binding["nodeId"]]["inputs"][binding["input"]]
                 value = values.get(binding["key"], original)
@@ -344,6 +446,9 @@ def prepare(store, media, project, items, freeze=True):
                         "prompt": prompt,
                         "inputValues": values,
                         "shotInputs": shot_inputs,
+                        **({"castMentions": cast_mentions} if cast_mentions else {}),
+                        **({"quality": "draft"} if quality == "draft" else {}),
+                        **({"finishes": finish} if finish is not None else {}),
                         "variantValues": overrides,
                         "variantIndex": variant_index,
                         "repeatIndex": repeat_index,

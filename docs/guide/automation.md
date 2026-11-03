@@ -76,13 +76,27 @@ needs:
 | --- | --- |
 | `set_inputs`, `set_shot_inputs`, `set_execution` | `inputs` |
 | `apply_workflow` | `workflow` |
-| `brief`, `rename_clip`, `trim_clip` | `edit` |
+| `brief`, `set_cast`, `rename_clip`, `trim_clip` | `edit` |
 | `feedback` | `feedback` |
 | `choose_take` | `choose_take` |
 | `use_take` | `use_take` |
 | `cancel` | `cancel` |
 | `recover_submission` | `recover` |
 | `add_note`, `edit_note`, `address_note`, `reopen_note` | `notes` |
+
+`set_cast` takes `{cast:[{id,name,description,images}]}` and replaces the project's
+cast. Names are one word of letters, digits, `_` or `-`; `images` lists one to four
+Comfy input file names. `@Name` in a prompt then fills the workflow's reference
+image inputs when it generates (see [Directing tools](directing.md#cast)); a queued
+request records what each mention became in `castMentions`.
+
+`set_shot_inputs` accepts `{"key": KEY, "source": "previous"}` or `"next"` for an
+image or video input: the last frame of the clip before, or the first frame of the
+clip after, read when the request is queued. Add `"frame": "first" | "middle" |
+"last"` to choose another frame. For a workflow that can finish drafts, an
+experiment variant with `"quality": "draft"` renders a draft take, as the studio's
+**Draft** does, and `"finish": TAKE_ID` refines that draft take to full size, as
+**Make final** does. Other workflows refuse both.
 
 `rename_clip` takes `{clipId,name}`. `trim_clip` takes `{clipId,edge:"in"|"out",frame}`
 in absolute project/source frames. These commands target video clips. Trims use

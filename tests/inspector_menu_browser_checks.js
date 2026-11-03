@@ -75,7 +75,8 @@
   context(d.querySelector('[data-clip="shot"]'));
   check(
     'Still-image clip context has no track, queue, paste or irrelevant media actions',
-    JSON.stringify(labels()) === JSON.stringify(['Disable clip', 'Open workflow in Comfy', 'Delete']),
+    JSON.stringify(labels().filter(label => !label.startsWith('Add transition'))) ===
+      JSON.stringify(['Disable clip', 'Open workflow in Comfy', 'Extend shot…', 'Delete']),
   );
   close();
   $('duplicate').click();
@@ -87,7 +88,8 @@
   context(d.querySelector('[data-clip="next"]'));
   check(
     'Video footage offers audio and cut actions without unavailable workflows',
-    JSON.stringify(labels()) === JSON.stringify(['Disable clip', 'Unlink audio and video', 'Detect cuts…', 'Delete']),
+    JSON.stringify(labels().filter(label => !label.startsWith('Add transition'))) ===
+      JSON.stringify(['Disable clip', 'Unlink audio and video', 'Detect cuts…', 'Extend shot…', 'Delete']),
   );
   action('Unlink audio and video').click();
   await n.flush();

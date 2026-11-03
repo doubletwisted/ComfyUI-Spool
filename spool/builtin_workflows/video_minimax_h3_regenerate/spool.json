@@ -1,0 +1,59 @@
+{
+  "family": "MiniMax H3",
+  "name": "Regenerate",
+  "task": "ref",
+  "target": "local",
+  "thumbnail": "video_minimax_h3_i2v",
+  "result": "32",
+  "inputs": [
+    {
+      "node": "7",
+      "label": "Clip",
+      "slot": "video",
+      "audio": true
+    },
+    {
+      "node": "8",
+      "input": "value",
+      "label": "Prompt",
+      "role": "positive",
+      "type": "STRING"
+    },
+    {
+      "node": "9",
+      "input": "aspect_ratio",
+      "label": "Aspect ratio",
+      "role": "resolution",
+      "options": [
+        "1:1 (Square)",
+        "2:3 (Portrait Photo)",
+        "3:2 (Photo)",
+        "3:4 (Portrait Standard)",
+        "4:3 (Standard)",
+        "9:16 (Portrait Widescreen)",
+        "16:9 (Widescreen)",
+        "21:9 (Ultrawide)"
+      ]
+    },
+    {
+      "node": "9",
+      "input": "megapixels",
+      "label": "Final resolution (megapixels)",
+      "role": "resolution",
+      "type": "FLOAT"
+    },
+    {
+      "node": "10",
+      "input": "value",
+      "label": "Strength",
+      "type": "FLOAT"
+    },
+    {
+      "node": "11",
+      "input": "noise_seed",
+      "label": "Seed",
+      "role": "seed",
+      "type": "INT"
+    }
+  ]
+}

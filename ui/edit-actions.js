@@ -25,6 +25,8 @@ export function createWorkflowAssignment({
     );
     c.executionTarget = workflowTarget(c, recipe);
     delete c.generationBase;
+    // A directing tool made the clip with its own workflow; another workflow's takes start at the trim.
+    delete c.direction;
     delete c.shotInputs;
     delete c.seedKey;
     c.seedMode = 'same';

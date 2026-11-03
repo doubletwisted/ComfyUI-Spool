@@ -85,6 +85,38 @@ module contracts are in [architecture.md](architecture.md).
   Only Use take changes the authored choice; playback and hover decoding stay
   outside this module.
 
+## Directing
+
+- **Direction**: `clip.direction`, how a directing tool made a clip (`kind`:
+  transition or extend, and the user's words). An extension also records `parent`,
+  the shot it continues; while that shot is right before it with no gap it is
+  **attached** (`ui/direction.js:attachedParent`): it draws joined to the shot and
+  moves with it. The request still reads the clip before it. It drives the timeline label
+  and the inspector card; the clip's workflow and inputs are ordinary. Applying
+  another workflow to the clip clears it. `head` is
+  where the clip's own takes start (after the anchored frames); **Use take** reads it
+  (`ui/timeline.js:directedIn`, mirrored by
+  `spool/operations.py:directed_in`). Owned by `ui/directing.js`; suggestions and
+  prompts in `ui/direction.js`.
+- **Neighbour input**: a shot input with `source` `previous` or `next`. When a
+  request is frozen it reads the selected take of the clip before or after on the
+  same video track, with that clip's trim (`spool/requests.py:neighbor`, mirrored by
+  `ui/direction.js:neighbor`).
+- **Motion input**: a video binding with `span` (`{edge, frames}`) reads only that
+  many frames at the start or end of its clip (`spool/requests.py:span_range`).
+  Continue Between Clips anchors them as moving footage on each side of a gap.
+- **Cast**: `document.cast`, named members with pictures. `@Name` in a positive
+  prompt fills empty reference inputs when a request is frozen (`spool/cast.py`,
+  mirrored by `ui/cast.js`); the request records `castMentions`.
+- **Draft take**: a take queued with `quality: "draft"`, only for a workflow with a
+  draft input. Freezing sets its float resolution to the `draftSize` control and
+  turns on `speed` switches (`requests.draft_values`); the take summary keeps
+  `quality`.
+- **Draft input**: a workflow's optional video input flagged `draft`. It is never
+  set by hand: Make final queues the clip with `finish: TAKE_ID`, the take is baked
+  whole into that input, and the workflow refines it instead of generating. The
+  final take's summary records `finishes`.
+
 ## Integration
 
 - **Bridge**: the per-Comfy-tab BroadcastChannel (`spool-comfy-<id>`) the studio uses

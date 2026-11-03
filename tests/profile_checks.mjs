@@ -580,12 +580,17 @@ videoSource.out = 24 + 24 * 20;
 applied = target();
 matchClipInputs(applied, videoSource, recipe, defs, 24);
 check(
-  'Video replacement supplies video, audio and sampled first/last frames',
-  applied.shotInputs.length === 5 &&
+  'Video replacement supplies video, audio and sampled first/last frames, but no reference',
+  applied.shotInputs.length === 4 &&
     applied.shotInputs.some(s => s.key === 'source4') &&
-    applied.shotInputs.some(s => s.key === 'source5'),
+    applied.shotInputs.some(s => s.key === 'source5') &&
+    !applied.shotInputs.some(s => ['source2', 'source3'].includes(s.key)),
 );
 check('Duration respects the target node maximum', applied.inputValues.seconds === 10);
+applied = target();
+applied.bindings.find(b => b.key === 'source4').draft = true;
+matchClipInputs(applied, videoSource, recipe, defs, 24);
+check('The hidden draft input is never linked to the shot', !applied.shotInputs.some(s => s.key === 'source4'));
 const placeholder = structuredClone(source);
 placeholder.takes[0].placeholder = true;
 applied = target();

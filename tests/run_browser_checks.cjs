@@ -133,6 +133,29 @@ async function timelineDragFixture() {
   });
   return { id: created.id };
 }
+// Three touching shots for the directing tools (tests/directing_browser_checks.js).
+async function directingFixture() {
+  const created = await api('projects', {
+    document: {
+      project: 'Directing tools QA',
+      fps: 24,
+      resolution: { width: 960, height: 540 },
+      media: [],
+      audioClips: [],
+      importedWorkflows: [],
+      tailGap: 0,
+      // Five-second shots leave room to retake a part with a second of footage on each side.
+      clips: timelineClips(3).map((c, i) => ({
+        ...c,
+        out: 120,
+        id: 'shot-' + 'abc'[i],
+        name: 'Shot ' + 'ABC'[i],
+        takes: c.takes.map(t => ({ ...t, media: { ...t.media, kind: 'video', name: 'shot-' + i + '.mp4' } })),
+      })),
+    },
+  });
+  return { id: created.id };
+}
 // A group move is refused when it would overlap another clip, so a group needs free
 // space to move into: this timeline leaves a gap after every clip.
 async function timelineGroupFixture() {
@@ -844,6 +867,7 @@ const CHECKS = {
     file: 'panel_controls_browser_checks.js',
   },
   'clip-attention': { fixture: clipAttentionFixture, modes: ['full'], file: 'clip_attention_browser_checks.js' },
+  directing: { fixture: directingFixture, modes: ['full'], file: 'directing_browser_checks.js' },
   'clip-attention-narrow': {
     fixture: clipAttentionFixture,
     modes: ['full'],

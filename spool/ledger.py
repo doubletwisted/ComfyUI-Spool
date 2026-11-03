@@ -24,6 +24,7 @@ EDIT_FIELDS = (
     "hiddenMediaIds",
     "deletedTakeIds",
     "deletedMediaIds",
+    "cast",
 )
 RECORD_FIELDS = ("jobs", "recoverableResults", "media", "importedWorkflows", "clearedRenderIds")
 VIEW_FIELDS = (
@@ -50,7 +51,7 @@ VIEW_KEYS = SERVER_OWNED + VIEW_FIELDS
 # stored once per media id, addressed by the `evidence` marker left behind.
 EVIDENCE_KEYS = ("probe", "workflow", "prompt", "workflowData", "provenance")
 EDITOR_TAKE_FIELDS = ("id", "number", "revision", "seed", "generated", "media", "summary", "recipeGraph")
-TAKE_SUMMARY_FIELDS = ("attemptId", "workflowVersion", "inputValues", "bindings")
+TAKE_SUMMARY_FIELDS = ("attemptId", "workflowVersion", "inputValues", "bindings", "quality", "finishes")
 
 
 def media_records(document):

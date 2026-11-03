@@ -16,7 +16,8 @@ filter button beside the search shows the task chips and marks a task filter in 
 - **Click** a card to add a shot at the end of the timeline.
 - **Drag** it to a cut or empty space to insert a shot there.
 - **Drop** it on a clip to replace that clip's workflow, keeping its takes and
-  timing.
+  timing. The clip's footage fills the new workflow's inputs that can take it: its
+  video input, or else its first, last and one reference image.
 
 Built-in workflows choose their output and expose their main inputs without
 questions. Example source images are not included: pick your own source in the

@@ -3,7 +3,53 @@
 All notable changes to Spool are recorded here. Versions follow
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 0.1.1 (2026-11-03)
+
+### Directing tools
+
+- **Add transition** at a cut (the button on the cut, the clip menu or **T**)
+  renders the move between two shots as one continuous take, 4 seconds by default.
+  Its prompt is a timeline around what you write for the middle, with an
+  instruction to keep one take; optional suggestions add wording.
+- **Extend shot…** in the clip menu (or **E**) adds the next moment of a shot as its own
+  clip, attached to the shot: they draw joined on the timeline, move together, and
+  the extension renders at the shot's size (up to 0.9 MP). The inspector has no
+  Extend button.
+- An extension joins its shot without a jump: Spool makes a joined copy of each
+  take as it arrives, dissolving out of the shot's last 2 frames, measuring where
+  the new frames start and easing out H3's brightness dip. The viewer and both
+  exports play it; the take's file is kept as rendered.
+- A new local workflow, **MiniMax H3 · Continue Between Clips**, anchors the last
+  second of the clip before and the first second of the clip after, with their
+  sound, so movement carries through transitions and extensions instead of
+  restarting from a still frame. It is the default for both, and its
+  encoder sees the first and last frame of the take. The directing tools offer only
+  MiniMax H3 workflows.
+- A workflow's video input can read only the start or end of its clip (`span`),
+  and **Use take** starts a directed clip's take after its anchored frames.
+- **MiniMax H3 · Recast**, a built-in workflow, puts other people into a shot and
+  keeps its set, camera, movement and sound (after H3 Recast and the BFS character
+  swap LoRA). Drop it on a clip, add a picture of the new person and say who
+  becomes who.
+- **MiniMax H3 · Regenerate**, a built-in workflow, refines any clip at a higher
+  resolution with the Open-H3-Regenerate refiner.
+- A workflow dropped on a clip that takes the clip as video no longer also puts a
+  frame of it in a reference input.
+- A **Cast** tab keeps characters with pictures; `@Name` in a prompt fills the
+  workflow's reference inputs and becomes the tag the model reads.
+- Prompt checks under the prompt, and `@` suggestions from the cast. Editing
+  instructions such as "no cuts" are not flagged as negative phrasing.
+- **Draft** renders quick takes for workflows that can finish their own drafts, such
+  as the new **MiniMax H3 · Draft and Final**. **Make final** refines the chosen
+  draft to full size with the Open-H3-Regenerate refiner, so the final keeps the
+  draft's motion and framing. Other workflows offer no Draft.
+- Image and video inputs can read the clip before or after a shot when it is
+  queued (`previous` and `next` shot inputs), also through `set_shot_inputs`.
+- The local MiniMax H3 Reference to Video workflow shows its **Turbo (4 steps)**
+  switch.
+- Agents can set the cast (`set_cast`) and queue draft variants.
+- API version 2: the project document has a `cast`, which older studios would not
+  keep.
 
 ### Online demo
 
@@ -20,6 +66,14 @@ All notable changes to Spool are recorded here. Versions follow
 - The audio inspector's level slider shows its track again, its fields follow the
   Inputs tab's label-left rows, and it names the audio by its track (A1 or A2).
 - Generate reads "1 take" and "1 clip", not "1 takes" and "1 clips".
+- The take rail stays beside the viewer when the selected clip has no takes, so the
+  viewer no longer changes size as you select clips. Imported footage is labelled
+  **Footage** in the inspector, with a line on how to generate from it.
+- Using a take that is plain footage no longer shows a warning about missing
+  executable metadata; the inspector calls it **Footage** and says how to generate.
+- A clip with a take on the way says **Generating** in the viewer, from the moment
+  Generate is pressed, instead of "Not generated yet", and an extension without a take shows the end of the shot it
+  continues.
 
 ### Timeline
 

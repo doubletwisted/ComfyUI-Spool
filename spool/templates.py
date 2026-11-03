@@ -161,6 +161,9 @@ def own_capture(template_id):
                     entry["label"],
                     entry["slot"],
                     **({"optional": True, **removal} if entry.get("optional") else {}),
+                    **({"audio": True} if entry.get("audio") else {}),
+                    **({"span": entry["span"]} if "span" in entry else {}),
+                    **({"draft": True} if entry.get("draft") else {}),
                 )
             )
         else:
@@ -232,6 +235,9 @@ def asset(template_id, extension):
         raise NotFound("Unknown studio template")
     if get_asset_path is None:
         raise ValueError("Install the ComfyUI workflow templates package")
+    # A workflow of Spool's own that the templates package does not ship borrows a picture.
+    if extension == "webp" and template_id in OWN:
+        template_id = read(template_id, "spool.json").get("thumbnail", template_id)
     filename = template_id + (".json" if extension == "json" else "-1.webp")
     path = Path(get_asset_path(template_id, filename))
     if not path.is_file():

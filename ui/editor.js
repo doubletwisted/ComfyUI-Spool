@@ -29,6 +29,8 @@ import { createActionMenu } from './action-menu.js';
 import { createQueueActions } from './queue-submission.js';
 import { createInputActions } from './input-actions.js';
 import { createInputReplacements } from './input-replacement.js';
+import { createDirecting } from './directing.js';
+import { familyOf } from './direction.js';
 import { keyText } from './keys.js';
 // Native editor runtime. Demo source is not loaded or transformed.
 let initialization;
@@ -89,6 +91,9 @@ async function startEditor(isFailed) {
     close: '<path d="m6 6 12 12M18 6 6 18"/>',
     check: '<path d="m5 12 4 4L20 5"/>',
     warning: '<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.3"/>',
+    transition: '<path d="M3 5v14l9-7zM21 5v14l-9-7z"/>',
+    extend: '<path d="M3 5h8v14H3zM14 12h7M18 8l4 4-4 4"/>',
+    cast: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14a5 5 0 0 1 6.5 5"/>',
   };
   let diagnosticsTimer = 0;
   const $ = id => document.getElementById(id);
@@ -283,8 +288,9 @@ async function startEditor(isFailed) {
     m = null,
     placement = null,
     workflowVersion = null,
+    setup = null,
   ) {
-    return workflowRegistryOwner.addImportedWorkflowClip(workflow, index, m, placement, workflowVersion);
+    return workflowRegistryOwner.addImportedWorkflowClip(workflow, index, m, placement, workflowVersion, setup);
   }
   const { applyPreparedWorkflow } = createWorkflowAssignment({
     inputReplacements,
@@ -310,6 +316,7 @@ async function startEditor(isFailed) {
   let exportRangeDrag = null;
   let state = copy(INITIAL),
     binTab = 'workflows',
+    directing = null,
     workflowLocked = false,
     ppf = 1,
     drag = null,
@@ -659,10 +666,13 @@ async function startEditor(isFailed) {
     return true;
   }
   function syncTimelineSelection() {
-    const ids = new Set(selectionIds());
+    const ids = new Set(selectionIds()),
+      // A shot and its attached extensions show as one family when any of them is selected.
+      family = new Set(familyOf(state, [...ids]));
     for (const node of $('timelineContent').querySelectorAll('[data-clip],[data-audio],[data-linked-audio]')) {
       const on = ids.has(node.dataset.clip || node.dataset.audio || node.dataset.linkedAudio);
       node.classList.toggle('selected', on);
+      if (node.dataset.clip) node.classList.toggle('family', !on && family.has(node.dataset.clip));
       if (node.hasAttribute('aria-pressed')) node.setAttribute('aria-pressed', on);
     }
   }
@@ -767,6 +777,7 @@ async function startEditor(isFailed) {
     getPause: () => pause,
     getFinishViewerPan: () => finishViewerPan,
     getDecimal: () => decimal,
+    getDirecting: () => directing,
   });
   const mediaImportOwner = createMediaImport({
     $,
@@ -897,6 +908,12 @@ async function startEditor(isFailed) {
   const takeName = t =>
     t.placeholder ? 'Not generated' : t.original ? 'Original clip' : 'Take ' + String(t.number).padStart(2, '0');
   const pendingJobs = c => visibleJobs().filter(j => j.clipId === c.id && G.PENDING.includes(j.status)),
+    // Clips whose generation request is on its way: from Generate until their job appears.
+    submitted = new Map(),
+    submitting = c => {
+      const sent = submitted.get(c.id);
+      return !!sent && Date.now() - sent.at < 20000 && visibleJobs().filter(j => j.clipId === c.id).length <= sent.jobs;
+    },
     failedJobs = c => visibleJobs().filter(j => j.clipId === c.id && j.status === 'failed');
   const clipBadgesOwner = createClipBadges({
     $,
@@ -990,6 +1007,7 @@ async function startEditor(isFailed) {
     getOpenNativeWorkflow: () => openNativeWorkflow,
     getPrepareWorkflow: () => prepareWorkflow,
     deadlineExecution: () => productCapabilities.deadlineExecution === true,
+    getDirecting: () => directing,
   });
   const takeRendererOwner = createTakeRenderer({
     $,
@@ -1022,6 +1040,7 @@ async function startEditor(isFailed) {
     getPlay: () => play,
     selectedAudio,
     getDecimal: () => decimal,
+    getQueueFinal: () => queueFinal,
   });
 
   // Consecutive takes generated from the same inputs form one batch; seeds may differ within it.
@@ -1336,6 +1355,7 @@ async function startEditor(isFailed) {
     applyTrackHeights,
     selectionIds,
     refreshGestureHints,
+    getDirecting: () => directing,
   });
   const { renderTimeline } = timelineRenderer;
   function selectClip(id, seekTo = false, modifiers = {}, preserve = false) {
@@ -1393,6 +1413,7 @@ async function startEditor(isFailed) {
     getCloseClipMenu: () => closeClipMenu,
     getShowActionMenu: () => showActionMenu,
     getPlaceMenu: () => placeMenu,
+    getDirecting: () => directing,
   });
   function chooseTake(clipId, id) {
     return clipToolsOwner.chooseTake(clipId, id);
@@ -1781,6 +1802,8 @@ async function startEditor(isFailed) {
 
   const viewer = createViewer({
     getState: () => state,
+    pendingJobs,
+    submitting,
     getPixelScale: () => ppf,
     isTimelinePanning: () => !!timelinePan,
     resetProjectPoll: () => {
@@ -2561,6 +2584,15 @@ async function startEditor(isFailed) {
       e.preventDefault();
       e.stopPropagation();
       $('snap').click();
+      return;
+    }
+    if (['t', 'e'].includes(key) && !e.shiftKey && !e.repeat) {
+      e.preventDefault();
+      e.stopPropagation();
+      const c = selectedAudio() ? null : selected();
+      if (key === 't') directing.transitionAtPlayhead(c ? T.videoTrack(c) : activeVideoTrack);
+      else if (!c) toast('Select a shot first.');
+      else directing.extendDialog(c.id);
       return;
     }
     if (
@@ -3441,7 +3473,7 @@ async function startEditor(isFailed) {
       toast(error.message);
     }
   };
-  const { queueClips, queueSubmission } = createQueueActions({
+  const { queueClips, queueFinal, queueSubmission } = createQueueActions({
     storage: sessionStorage,
     retryKey: STORAGE_KEY + ':queue-request',
     getClips: () => state.clips,
@@ -3461,6 +3493,58 @@ async function startEditor(isFailed) {
     flushNative,
     toast,
     renderQueueList,
+    getQuality: () => (draftMode ? 'draft' : 'final'),
+    onSubmissionChange: (status, body) => {
+      for (const { clipId } of body?.items || []) {
+        if (status === 'failed') submitted.delete(clipId);
+        else if (status === 'sending')
+          submitted.set(clipId, { at: Date.now(), jobs: visibleJobs().filter(j => j.clipId === clipId).length });
+      }
+      viewer.renderPlaceholderState();
+    },
+  });
+  // Draft mode belongs to this browser, like other view preferences.
+  let draftMode = localStorage.getItem('spool:draft-mode') === '1';
+  function syncDraftToggle() {
+    $('draftToggle').setAttribute('aria-pressed', String(draftMode));
+    $('draftToggle').classList.toggle('active', draftMode);
+    $('generateLabel').textContent = draftMode ? 'Generate drafts' : 'Generate';
+  }
+  $('draftToggle').onclick = () => {
+    draftMode = !draftMode;
+    try {
+      localStorage.setItem('spool:draft-mode', draftMode ? '1' : '0');
+    } catch (error) {}
+    syncDraftToggle();
+  };
+  syncDraftToggle();
+  directing = createDirecting({
+    $,
+    esc,
+    svg,
+    api,
+    projectKey,
+    getState: () => state,
+    edits,
+    getFps: () => fps,
+    thumbnails,
+    take,
+    rowFor,
+    addBuiltinShot,
+    getTemplate: id => (builtinCaptures[id] ? workflowLibrary?.template(id) || { id } : null),
+    getTemplateBindings: id => builtinCaptures[id]?.bindings || [],
+    queueClips,
+    showModal,
+    closeModal,
+    toast,
+    setStatus,
+    selectClip,
+    editView,
+    pause: () => pause(),
+    render,
+    getBinTab: () => binTab,
+    getRecipe: c => nativeRecipes[c.workflowVersion],
+    flush: flushNative,
   });
   // Renders is a panel, not a modal: editing, playback and shortcuts continue while it is open.
   function closeRenders() {
@@ -3529,8 +3613,8 @@ async function startEditor(isFailed) {
     experimentRetry = JSON.parse(sessionStorage.getItem(experimentRetryKey) || 'null');
   } catch (error) {}
 
-  function generationSourceLabel(setting) {
-    return renderQueueOwner.generationSourceLabel(setting);
+  function generationSourceLabel(setting, binding) {
+    return renderQueueOwner.generationSourceLabel(setting, binding);
   }
   function reviewGeneration(clips) {
     return renderQueueOwner.reviewGeneration(clips);

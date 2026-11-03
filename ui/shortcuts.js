@@ -29,6 +29,8 @@ const SHORTCUTS = Object.freeze([
       [['Ctrl', 'Shift', 'Z'], 'Redo (also Ctrl+Y)', '+'],
       [[',', '.'], 'Nudge the selected cut one frame; with Shift, five'],
       [['N'], 'Toggle snapping'],
+      [['T'], 'Add a transition at the cut nearest the playhead'],
+      [['E'], 'Extend the selected shot'],
       [['I', 'O'], 'Set the export range start or end at the playhead'],
       [['Ctrl', 'S'], 'Save now', '+'],
     ],

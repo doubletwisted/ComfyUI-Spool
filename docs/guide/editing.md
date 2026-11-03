@@ -89,9 +89,9 @@ including a group move, is one undo step.
 ## Takes
 
 The **Takes** rail beside the viewer lists the selected clip's takes from top to
-bottom, so **↑** and **↓** in Source step through them in the order you see. When a
-clip has no takes yet, or the window is narrower than 1100 pixels, takes show as a
-strip under the viewer instead. New, unreviewed takes carry a **New** badge, and
+bottom, so **↑** and **↓** in Source step through them in the order you see. It
+stays in place when a clip has no takes yet, so the viewer keeps its size; when the
+window is narrower than 1100 pixels, takes show as a strip under the viewer instead. New, unreviewed takes carry a **New** badge, and
 the clip shows a blue count on the timeline. A take stops being new once you
 review it in Source or Compare, or use it; hovering does not count.
 

@@ -24,12 +24,14 @@ export function createLibraryRenderer({
   getPause,
   getFinishViewerPan,
   getDecimal,
+  getDirecting,
 }) {
   function renderBin() {
     applyMediaView();
     syncImportedWorkflows();
     getWorkflowLibrary()?.render();
     renderFullLibrary();
+    getDirecting()?.renderCast();
   }
   function mediaRemoveButton(m) {
     return (

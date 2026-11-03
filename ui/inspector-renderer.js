@@ -41,6 +41,7 @@ export function createInspectorRenderer({
   getOpenNativeWorkflow,
   getPrepareWorkflow,
   deadlineExecution,
+  getDirecting,
 }) {
   // Deadline is a choice for local workflows when this host can submit to it, or
   // while a clip is still set to it. A workflow with its own submit node needs none.
@@ -134,7 +135,10 @@ export function createInspectorRenderer({
     $('generate').hidden = false;
     $('generate').disabled = !!reason;
     $('generate').title = reason || 'Generate new takes with these settings';
-    $('generateLabel').textContent = 'Generate';
+    const drafting = bindings.some(b => b.draft);
+    if ($('draftToggle')) $('draftToggle').hidden = !drafting;
+    $('generateLabel').textContent =
+      drafting && $('draftToggle')?.getAttribute('aria-pressed') === 'true' ? 'Generate drafts' : 'Generate';
     getCountLabel().hidden = !!reason;
     $('nativeCount').value = c.count || 1;
     $('nativeCount').onchange = e => {
@@ -158,14 +162,17 @@ export function createInspectorRenderer({
       getNativeRecipes()[c.workflowVersion],
       definitionsFor(c),
       embedded,
+      getState().cast,
     );
     const workflowLabel = c.generationBase
-      ? 'Workflow from take'
+      ? c.workflowVersion
+        ? 'Workflow from take'
+        : 'Footage'
       : c.workflowVersion
         ? 'Clip workflow'
         : embedded
           ? 'Workflow from take'
-          : 'Choose a take with a workflow';
+          : 'Footage';
     draw(
       'inspectorContent',
       '<div class="clip-workflow-heading' +
@@ -190,6 +197,7 @@ export function createInspectorRenderer({
             '>Local ComfyUI · Partner Nodes</option></select></label>'
           : '') +
         deadlineControls(c, recipe) +
+        (getDirecting()?.directionCard(c) || '') +
         '<div class="native-bindings">' +
         essential
           .filter(({ b }) => b.role !== 'pose')
@@ -253,6 +261,8 @@ export function createInspectorRenderer({
           }),
       );
     getBindImageInputs()(c);
+    getDirecting()?.bindDirectionCard(c);
+    getDirecting()?.bindPromptTools(c);
     $('inspectorContent')
       .querySelectorAll('[data-clear-input]')
       .forEach(

@@ -33,6 +33,7 @@ export function createTakeRenderer({
   getPlay,
   selectedAudio,
   getDecimal,
+  getQueueFinal,
 }) {
   function takeMidpoint(c, t) {
     return (Math.min(c.in, t.media.frames - 1) + Math.min(c.out, t.media.frames)) / 2;
@@ -58,7 +59,15 @@ export function createTakeRenderer({
         ? new Date(job.createdAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : '';
     let summary = 'Generated';
-    if (previous) {
+    // A final is the draft it finishes, refined; its settings differ from the draft's by design.
+    const draftOf =
+      t.summary?.finishes &&
+      getState()
+        .clips.flatMap(c => c.takes || [])
+        .find(d => d.id === t.summary.finishes);
+    if (draftOf) summary = 'Final of ' + takeName(draftOf);
+    else if (t.summary?.quality === 'draft') summary = previous ? 'Drafts' : 'Draft';
+    else if (previous) {
       const labels = new Map(
           (t.summary?.bindings || t.request?.capture?.bindings || []).map(b => [b.key, b.label || b.key]),
         ),
@@ -189,7 +198,13 @@ export function createTakeRenderer({
       thumbnails.stopScrub();
       draw(
         'takeList',
-        c ? '<div class="takes-empty">Copy videos or images into this clip’s folder to add takes.</div>' : '',
+        c
+          ? '<div class="takes-empty">' +
+              (c.workflowVersion
+                ? 'No takes yet. Generate to make one.'
+                : 'Copy videos or images into this clip’s folder to add takes.') +
+              '</div>'
+          : '',
       );
       return;
     }
@@ -220,6 +235,9 @@ export function createTakeRenderer({
                   '</span>'
                 : '') +
               fresh +
+              (t.summary?.quality === 'draft'
+                ? '<span class="take-badge draft" title="Quick low-resolution draft; Make final refines it">Draft</span>'
+                : '') +
               '</div><button class="take-thumb" data-view="' +
               t.id +
               '" aria-label="Preview ' +
@@ -235,6 +253,16 @@ export function createTakeRenderer({
                   '">Seed ' +
                   esc(getDecimal()(t.seed)) +
                   '</span>'
+                : '') +
+              (t.summary?.finishes
+                ? '<span class="take-badge final" title="Refined to full size from take ' +
+                  (c.takes.findIndex(d => d.id === t.summary.finishes) + 1) +
+                  '">Final</span>'
+                : '') +
+              (t.summary?.quality === 'draft' && G.canDraft(c)
+                ? '<button class="make-final" data-final="' +
+                  t.id +
+                  '" title="Refine this draft to full size; it keeps its motion and framing">Make final</button>'
                 : '') +
               (!setupChosen ? '<button class="use-take" data-use="' + t.id + '">Use take</button>' : '') +
               '</div>';
@@ -294,6 +322,16 @@ export function createTakeRenderer({
         };
       });
       list.querySelectorAll('[data-use]').forEach(b => (b.onclick = () => chooseTake(c.id, b.dataset.use)));
+      list.querySelectorAll('[data-final]').forEach(
+        b =>
+          (b.onclick = e => {
+            e.stopPropagation();
+            getQueueFinal()(
+              c,
+              c.takes.find(t => t.id === b.dataset.final),
+            );
+          }),
+      );
     }
     updateTakeSelection();
   }

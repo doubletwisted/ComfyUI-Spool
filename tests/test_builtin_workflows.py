@@ -58,9 +58,13 @@ class OwnWorkflowTests(unittest.TestCase):
                 "api_bfl_flux3_i2v",
                 "api_minimax_h3_max_r2v",
                 "api_minimax_h3_r2v",
+                "video_minimax_h3_bridge",
+                "video_minimax_h3_draft",
                 "video_minimax_h3_fun_controlnet_union",
                 "video_minimax_h3_multiframe_reference",
                 "video_minimax_h3_r2v",
+                "video_minimax_h3_recast",
+                "video_minimax_h3_regenerate",
             ],
         )
 
@@ -87,6 +91,8 @@ class OwnWorkflowTests(unittest.TestCase):
                 capture = templates.own_capture(template_id)
                 validate_capture(capture)
                 self.assertEqual(templates.CATALOG[template_id]["section"], manifest["target"])
+                # A workflow the templates package does not ship shows another template's picture.
+                self.assertIn(manifest.get("thumbnail", template_id), templates.CATALOG)
                 graph = {str(n["id"]): n["type"] for n in workflow["nodes"]}
                 self.assertEqual(
                     {k: v["class_type"] for k, v in prompt.items() if ":" not in k},
