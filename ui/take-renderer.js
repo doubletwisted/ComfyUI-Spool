@@ -198,7 +198,13 @@ export function createTakeRenderer({
       thumbnails.stopScrub();
       draw(
         'takeList',
-        c ? '<div class="takes-empty">Copy videos or images into this clip’s folder to add takes.</div>' : '',
+        c
+          ? '<div class="takes-empty">' +
+              (c.workflowVersion
+                ? 'No takes yet. Generate to make one.'
+                : 'Copy videos or images into this clip’s folder to add takes.') +
+              '</div>'
+          : '',
       );
       return;
     }

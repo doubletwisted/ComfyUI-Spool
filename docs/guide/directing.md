@@ -10,7 +10,7 @@ card at the top of the inspector that shows what it joins.
 | Tool | Where | Shortcut | Workflows |
 | --- | --- | --- | --- |
 | Add transition | The button on a cut, or the clip menu | **T** at the nearest cut | MiniMax H3 Continue Between Clips (local), MiniMax H3 First-Last Frame (Cloud) |
-| Extend shot | **Extend…** in the clip menu (right-click the shot) | **E** | MiniMax H3 Continue Between Clips or MiniMax H3 Image to Video (local), MiniMax H3 Max Image to Video (Cloud) |
+| Extend shot | **Extend shot…** in the clip menu (right-click the shot) | **E** | MiniMax H3 Continue Between Clips or MiniMax H3 Image to Video (local), MiniMax H3 Max Image to Video (Cloud) |
 
 Every dialog has **Add**, which only changes the edit, and **Add and generate**,
 which also queues one take. Generating never chooses a take for you.

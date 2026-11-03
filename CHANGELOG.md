@@ -11,7 +11,7 @@ All notable changes to Spool are recorded here. Versions follow
   renders the move between two shots as one continuous take, 4 seconds by default.
   Its prompt is a timeline around what you write for the middle, with an
   instruction to keep one take; optional suggestions add wording.
-- **Extend…** in the clip menu (or **E**) adds the next moment of a shot as its own
+- **Extend shot…** in the clip menu (or **E**) adds the next moment of a shot as its own
   clip, attached to the shot: they draw joined on the timeline, move together, and
   the extension renders at the shot's size (up to 0.9 MP). The inspector has no
   Extend button.
@@ -53,6 +53,12 @@ All notable changes to Spool are recorded here. Versions follow
   out past the end of the edit. Shift+wheel pans; Alt+wheel scrolls the tracks.
 - Adding, removing or trimming clips no longer changes the timeline's zoom; clips
   stay the same size on screen. During a clip drag the wheel scrolls the tracks.
+
+### Studio
+
+- The take rail stays beside the viewer when the selected clip has no takes, so the
+  viewer no longer changes size as you select clips. Imported footage is labelled
+  **Footage** in the inspector, with a line on how to generate from it.
 
 ## 0.1.0 (2026-10-30)
 

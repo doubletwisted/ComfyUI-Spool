@@ -6743,48 +6743,48 @@ input[type='range'] {
     z-index: 35;
     box-shadow: 12px 0 32px #0009;
   }
-  /* With real takes the strip under the viewer becomes a rail beside it. */
-  .editor.studio-sidebar.inspector-full > .workbench:has(> .takes.has-real-takes),
-  .editor.studio-sidebar:not(.inspector-full) > .workbench.hide-inspector:has(> .takes.has-real-takes) {
+  /* On a wide screen the takes sit in a rail beside the viewer, with or without takes, so the viewer keeps its size. */
+  .editor.studio-sidebar.inspector-full > .workbench:has(> .takes.rail),
+  .editor.studio-sidebar:not(.inspector-full) > .workbench.hide-inspector:has(> .takes.rail) {
     grid-template-columns: minmax(0, 1fr) var(--takes-width);
     grid-template-rows: minmax(0, 1fr);
     grid-template-areas: 'viewer takes';
   }
-  .editor.studio-sidebar:not(.inspector-full) > .workbench:not(.hide-inspector):has(> .takes.has-real-takes) {
+  .editor.studio-sidebar:not(.inspector-full) > .workbench:not(.hide-inspector):has(> .takes.rail) {
     grid-template-columns: minmax(0, 1fr) var(--takes-width) var(--inspector-width);
     grid-template-rows: minmax(0, 1fr);
     grid-template-areas: 'viewer takes inspector';
   }
-  .full-editor .takes.has-real-takes {
+  .full-editor .takes.rail {
     display: flex;
     flex-direction: column;
     border-top: 0;
     border-left: 1px solid var(--line);
   }
-  .full-editor .takes.has-real-takes .takes-head {
+  .full-editor .takes.rail .takes-head {
     flex-wrap: wrap;
     gap: 4px;
     height: auto;
     border-bottom: 1px solid var(--line);
   }
-  .takes.has-real-takes .take-selection-tools {
+  .takes.rail .take-selection-tools {
     display: contents;
   }
-  .takes.has-real-takes .takes-title {
+  .takes.rail .takes-title {
     order: 0;
   }
-  .full-editor .takes.has-real-takes .takes-clip {
+  .full-editor .takes.rail .takes-clip {
     display: none;
   }
-  .takes.has-real-takes #compareTakesStrip {
+  .takes.rail #compareTakesStrip {
     order: 1;
     margin-left: auto;
   }
-  .takes.has-real-takes #openClipFolder {
+  .takes.rail #openClipFolder {
     height: 24px;
     justify-content: center;
   }
-  .takes.has-real-takes #openClipFolder .folder-label {
+  .takes.rail #openClipFolder .folder-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -6792,28 +6792,28 @@ input[type='range'] {
     clip: rect(0 0 0 0);
     white-space: nowrap;
   }
-  .takes.has-real-takes .takes-head::after {
+  .takes.rail .takes-head::after {
     content: '';
     order: 3;
     flex-basis: 100%;
   }
-  .takes.has-real-takes #takeSelectionCount {
+  .takes.rail #takeSelectionCount {
     order: 4;
   }
-  .takes.has-real-takes .take-tools {
+  .takes.rail .take-tools {
     order: 6;
     margin-left: auto;
     flex-wrap: wrap;
     justify-content: flex-end;
   }
-  .full-editor .takes.has-real-takes .take-list {
+  .full-editor .takes.rail .take-list {
     flex: 1 1 0;
     flex-direction: column;
     overflow-x: hidden;
     overflow-y: auto;
     scrollbar-gutter: stable;
   }
-  .full-editor .takes.has-real-takes .take-card {
+  .full-editor .takes.rail .take-card {
     flex: none;
     width: 100%;
     max-width: none;
@@ -6827,18 +6827,18 @@ input[type='range'] {
     background: transparent;
     box-shadow: none;
   }
-  .full-editor .takes.has-real-takes .take-card:hover {
+  .full-editor .takes.rail .take-card:hover {
     background: var(--raised);
   }
-  .full-editor .takes.has-real-takes .take-card.chosen {
+  .full-editor .takes.rail .take-card.chosen {
     background: #2b271e;
     box-shadow: inset 3px 0 var(--accent);
   }
-  .full-editor .takes.has-real-takes .take-card.viewing:not(.chosen) {
+  .full-editor .takes.rail .take-card.viewing:not(.chosen) {
     border-color: var(--preview);
     background: #18292c;
   }
-  .full-editor .takes.has-real-takes .take-thumb {
+  .full-editor .takes.rail .take-thumb {
     grid-column: 1;
     grid-row: 1/3;
     width: 100%;
@@ -6847,7 +6847,7 @@ input[type='range'] {
     flex: none;
     align-self: center;
   }
-  .full-editor .takes.has-real-takes .take-heading {
+  .full-editor .takes.rail .take-heading {
     grid-column: 2;
     grid-row: 1;
     height: auto;
@@ -6855,28 +6855,28 @@ input[type='range'] {
     gap: 4px;
     padding-right: 18px;
   }
-  .full-editor .takes.has-real-takes .take-details {
+  .full-editor .takes.rail .take-details {
     grid-column: 2;
     grid-row: 2;
     flex-wrap: wrap;
     align-content: flex-start;
     gap: 2px 6px;
   }
-  .full-editor .takes.has-real-takes .take-seed {
+  .full-editor .takes.rail .take-seed {
     display: block;
     flex-basis: 100%;
   }
-  .full-editor .takes.has-real-takes .use-take {
+  .full-editor .takes.rail .use-take {
     right: 5px;
     bottom: 5px;
     margin: 0;
     opacity: 0;
     transition: opacity 0.12s;
   }
-  .full-editor .takes.has-real-takes .take-card:is(:hover, :focus-within, .viewing) .use-take {
+  .full-editor .takes.rail .take-card:is(:hover, :focus-within, .viewing) .use-take {
     opacity: 1;
   }
-  .takes.has-real-takes .take-group {
+  .takes.rail .take-group {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -6884,7 +6884,7 @@ input[type='range'] {
     font-size: 10px;
     color: var(--faint);
   }
-  .takes.has-real-takes .take-group span:first-child {
+  .takes.rail .take-group span:first-child {
     color: var(--dim);
     font-weight: 600;
     text-transform: uppercase;
@@ -6893,7 +6893,7 @@ input[type='range'] {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .takes.has-real-takes .take-group span:last-child {
+  .takes.rail .take-group span:last-child {
     flex-shrink: 0;
     font-family: var(--mono);
   }

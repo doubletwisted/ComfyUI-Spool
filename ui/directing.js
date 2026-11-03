@@ -871,7 +871,7 @@ export function createDirecting({
       ...(before ? [{ label: 'Add transition before…', run: () => transitionDialog(...before) }] : []),
       ...(after ? [{ label: 'Add transition after…', run: () => transitionDialog(...after) }] : []),
       {
-        label: 'Extend…',
+        label: 'Extend shot…',
         reason: t.placeholder ? 'Needs a take first.' : null,
         run: () => extendDialog(c.id),
       },
