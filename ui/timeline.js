@@ -121,12 +121,12 @@ export function visibleRow(doc, frame) {
  * the shot right before it is the take and trim it was made from and the extension starts where the
  * copy's new frames do; otherwise the take plays as it rendered.
  */
-export function joinedTake(doc, c, t = takeOf(c)) {
+export function joinedTake(doc, c, t = takeOf(c), takeFor = x => takeOf(x)) {
   const j = t?.media?.join,
     p = j && c.direction?.kind === 'extend' && c.in === j.overlap ? attachedParent(doc, c) : null;
   return p &&
     p.id === j.parent?.clipId &&
-    p.takeId === j.parent.takeId &&
+    takeFor(p)?.id === j.parent.takeId &&
     p.out === j.parent.out &&
     p.out - p.in > j.blend
     ? j
@@ -140,10 +140,10 @@ export function pictureSource(doc, frame, takeFor = c => takeOf(c)) {
   let row = visibleRow(doc, frame);
   if (!row) return null;
   const next = layout(doc).find(r => r.start === row.end && attachedParent(doc, r.clip) === row.clip),
-    early = next && joinedTake(doc, next.clip, takeFor(next.clip));
+    early = next && joinedTake(doc, next.clip, takeFor(next.clip), takeFor);
   if (early && frame >= row.end - early.blend && videoEnabled(doc, next.clip)) row = next;
   const take = takeFor(row.clip),
-    joined = joinedTake(doc, row.clip, take);
+    joined = joinedTake(doc, row.clip, take, takeFor);
   return { row, take, media: joined || take.media, frame: row.clip.in + frame - row.start, lead: joined?.blend || 0 };
 }
 export function gapAfter(doc, index) {
@@ -449,10 +449,12 @@ export function timelinePlan(doc, range = { start: 0, end: total(doc) }) {
         .filter(r => videoTrack(r.clip) === track)
         .map(r => {
           // A joined extension starts `blend` frames early, over the end of its shot (joinedTake).
-          const own = joinedTake(doc, r.clip),
+          // Only an enabled one does, as in the viewer; a clip can both start early and end early.
+          const joined = c => (videoEnabled(doc, c) ? joinedTake(doc, c) : null),
+            own = joined(r.clip),
             next = rows.find(n => n.start === r.end && attachedParent(doc, n.clip) === r.clip),
-            lead = next ? joinedTake(doc, next.clip)?.blend || 0 : 0,
-            shown = own ? { ...r.clip, in: r.clip.in - own.blend } : { ...r.clip, out: r.clip.out - lead };
+            lead = next ? joined(next.clip)?.blend || 0 : 0,
+            shown = { ...r.clip, in: r.clip.in - (own?.blend || 0), out: r.clip.out - lead };
           return cut(shown, r.start - (own?.blend || 0), {
             file: (own || takeOf(r.clip).media).file,
             takeId: takeOf(r.clip).id,

@@ -39,16 +39,17 @@ def resolve(cast, bindings, values, settings, style="angle"):
     if not members:
         return values, []
     slots = [b for b in bindings if b.get("asset") and b.get("slot") == "reference"]
-    used = sum(1 for b in slots if filled(b, values, settings))
+    # Chosen pictures can leave gaps; a picture's number is its slot's.
+    free = [i for i, b in enumerate(slots) if not filled(b, values, settings)]
     report = []
     for member in members:
         pictures = []
         for image in member.get("images", []):
-            if used >= len(slots):
+            if not free:
                 break
-            values[slots[used]["key"]] = image
-            used += 1
-            pictures.append(used)
+            slot = free.pop(0)
+            values[slots[slot]["key"]] = image
+            pictures.append(slot + 1)
         if pictures:
             replacement = tag(style, "Image", pictures[0])
         else:

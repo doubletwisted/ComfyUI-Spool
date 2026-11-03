@@ -12,6 +12,19 @@
   ],
   "cases": [
     {
+      "name": "a chosen picture after an empty slot stays",
+      "style": "angle",
+      "values": { "prompt": "@Mara and @Otto.", "r1": "", "r2": "guide.png", "r3": "" },
+      "settings": [],
+      "expected": {
+        "values": { "prompt": "<Picture 1> and Otto. <Picture 3> also show Mara.", "r1": "cast/mara-1.png", "r2": "guide.png", "r3": "cast/mara-2.png" },
+        "report": [
+          { "id": "cast-mara", "name": "Mara", "pictures": [1, 3] },
+          { "id": "cast-otto", "name": "Otto", "pictures": [] }
+        ]
+      }
+    },
+    {
       "name": "fills empty slots after the chosen ones",
       "style": "angle",
       "values": { "prompt": "@Otto waves at @mara.", "r1": "street.png", "r2": "", "r3": "" },

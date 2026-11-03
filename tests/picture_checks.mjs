@@ -96,7 +96,10 @@ const edit = { mode: 'edit', source: null, audition: null };
         in: 0,
         out: 50,
         takeId: 'shot-a',
-        takes: [{ id: 'shot-a', media: { id: 's', kind: 'video', file: 'shot.mp4', frames: 50 } }],
+        takes: [
+          { id: 'shot-a', media: { id: 's', kind: 'video', file: 'shot.mp4', frames: 50 } },
+          { id: 'shot-b', media: { id: 's2', kind: 'video', file: 'shot-b.mp4', frames: 50 } },
+        ],
       },
       {
         id: 'more',
@@ -155,6 +158,48 @@ const edit = { mode: 'edit', source: null, audition: null };
   const moved = make();
   moved.clips[1].gapBefore = 4;
   check('A detached extension plays as rendered', pictureAt(moved, edit, 54).media.file === 'more.mp4');
+  const chain = make();
+  chain.clips.push({
+    id: 'again',
+    in: 22,
+    out: 60,
+    takeId: 'again-a',
+    direction: { kind: 'extend', parent: 'more', head: 22 },
+    takes: [
+      {
+        id: 'again-a',
+        generated: true,
+        media: {
+          id: 'g',
+          kind: 'video',
+          file: 'again.mp4',
+          frames: 60,
+          join: {
+            ...joined(),
+            file: 'again-joined.mp4',
+            parent: { clipId: 'more', takeId: 'more-a', in: 22, out: 60 },
+          },
+        },
+      },
+    ],
+  });
+  const chained = timelinePlan(chain).tracks[0].clips;
+  check(
+    'An extension of an extension starts early and ends early in the editable export, without overlap',
+    chained[1].start === 48 &&
+      chained[1].in === 20 &&
+      chained[1].out === 58 &&
+      chained[2].start === chained[1].start + chained[1].out - chained[1].in &&
+      chained[2].in === 20,
+  );
+  const off = make();
+  off.clips[1].enabled = false;
+  check(
+    'A disabled extension leaves its shot whole in the editable export',
+    timelinePlan(off).tracks[0].clips[0].out === 50 && pictureAt(off, edit, 49).clipId === 'shot',
+  );
+  const trying = pictureAt(make(), { mode: 'edit', audition: { clipId: 'shot', takeId: 'shot-b' } }, 49);
+  check('Trying another take on the shot plays the plain cut', trying.clipId === 'shot');
 }
 
 console.log(JSON.stringify({ passed: checks.length, checks }, null, 2));

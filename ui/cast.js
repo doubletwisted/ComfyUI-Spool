@@ -41,15 +41,16 @@ export function resolveMentions(cast, bindings, values, settings, style = 'angle
     members = mentioned(cast, prompts.map(b => values[b.key]).join(' '));
   if (!members.length) return { values, report: [] };
   const slots = bindings.filter(b => b.asset && b.slot === 'reference');
-  let used = slots.filter(b => inputFilled(b, values, settings)).length;
-  const report = [];
+  // Chosen pictures can leave gaps; a picture's number is its slot's.
+  const free = slots.flatMap((b, i) => (inputFilled(b, values, settings) ? [] : [i])),
+    report = [];
   for (const member of members) {
     const pictures = [];
     for (const image of member.images || []) {
-      if (used >= slots.length) break;
-      values[slots[used].key] = image;
-      used++;
-      pictures.push(used);
+      if (!free.length) break;
+      const slot = /** @type {number} */ (free.shift());
+      values[slots[slot].key] = image;
+      pictures.push(slot + 1);
     }
     const description = (member.description || '').trim(),
       replacement = pictures.length
