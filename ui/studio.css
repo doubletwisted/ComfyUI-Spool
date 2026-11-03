@@ -2197,9 +2197,11 @@ input[type='range'] {
   color: var(--text);
   background: var(--raised);
 }
-.audio-controls .field input[type='range'] {
+.audio-controls .field input[type='range'],
+.full-editor .audio-controls .field input[type='range'] {
   padding: 0;
   border: 0;
+  background: var(--line2);
   accent-color: #79cba0;
   margin: 12px 0;
 }
