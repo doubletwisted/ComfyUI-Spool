@@ -270,6 +270,10 @@ export function createWorkflowSetup({ edit, flush, clip, dialog, save }) {
               ambiguous: false,
             };
           });
+          // Apply keeps the order the clip's inputs had (new ones last); Comfy lists them in execution order.
+          const before = b =>
+            (previous?.bindings || []).findIndex(old => old.nodeId === b.nodeId && old.input === b.input) >>> 0;
+          sources.sort((a, b) => before(a) - before(b));
           const labels = new Map();
           for (const b of sources) {
             const same = labels.get(b.label) || [];
