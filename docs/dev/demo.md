@@ -102,7 +102,21 @@ The recording is data, not code. It stays out of Git and is published as
      --keep-media --edit coral-demo-edit.json --max-takes 4
    ```
 
-   It asks the host for every playback copy at the project size and waits for
+   In the coral demo, every shot except c11 (FLUX 3) uses **MiniMax H3 ·
+   Image to Video** from the library, so the inspector shows that workflow's
+   inputs. The workflow was dropped on each clip in the studio on the recording
+   host. Dropping it puts the selected take in First frame and sets Duration to
+   the clip's length on the timeline. The demo instead shows each shot's own
+   source picture, the duration it was generated at, and 2.4 megapixels, the
+   size of its takes. Make these changes in the studio before saving the edit.
+   To save the edit from the host rather than a demo page, ask for the form
+   the studio reads, without render evidence:
+
+   ```powershell
+   curl.exe -H "X-Spool-View: editor" http://127.0.0.1:PORT/spool/api/projects/ID -o coral-demo-edit.json
+   ```
+
+   Recording asks the host for every playback copy at the project size and waits for
    them. It re-encodes video to 960 pixels wide (H.264, a keyframe every 12
    frames, same frames and timing) and shrinks the posters.
    Recording stops if a take in the edit has no playback copy, or if a take's
