@@ -5,7 +5,7 @@ import logging
 import subprocess
 import time
 
-from . import attempts, receipts, sidecars
+from . import attempts, joins, receipts, sidecars
 from .farm import FarmCollector
 from .folder_takes import FolderTakes
 from .store import Conflict
@@ -43,6 +43,7 @@ class Collector:
         try:
             result = receipts.verify(attempt, path, media)
             result = media.review_receipt(result, attempt["request"].get("sequenceFps", 24))
+            result = joins.attach(media, attempt["request"], result)
             result["dispatch"] = store.dispatch_record(attempt["id"])
             sidecars.write_result(store, media, attempt, result)
             return store.accept_execution(attempt["id"], attempt["prompt_id"], None, result)

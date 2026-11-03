@@ -258,6 +258,21 @@ after the edit changes. The command API exposes the same pieces on existing clip
 action, as other clip creation is. A technique that needs no place on the
 timeline, such as Recast, is a built-in workflow only, with no dialog of its own.
 
+One output is baked: an extension's joined copy (`spool/joins.py`). The take
+re-renders the shot frames it was given, so a cut to it pops, it can slip a frame,
+and H3 dims its first new frames. When the result is collected (local, Cloud and
+Deadline alike), Spool writes a copy whose overlap is the frozen shot frames,
+dissolving into the render over `BLEND` frames, with the new frames measured into
+place and their brightness eased; it is recorded as the take media's `join`, and the
+render and its receipt stay as they were. Playing it in the edit is a rule, not an
+edit (`ui/timeline.js:joinedTake`): while the shot is still the take and trim the
+request froze and the extension starts where the copy's new frames do, the viewer,
+the MP4 export and the timeline export switch to the copy `BLEND` frames before the
+cut. Anything else is a plain cut to the take as rendered, so the document never
+changes on its own. The copy is made from the request alone, which is why it is
+baked at collection rather than mixed live: the two exports and the viewer then
+show the same frames.
+
 ## Constraints
 
 - Ordinary workflows need no Spool nodes or graph rewrites.

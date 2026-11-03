@@ -9,7 +9,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import attempts, farm_protocol, sidecars, system
+from . import attempts, farm_protocol, joins, sidecars, system
 from .media import contained
 from .execution_targets import adapter_for
 
@@ -184,6 +184,7 @@ class FarmCollector:
                 "artifacts": artifacts,
                 "primary": next(a for a in artifacts if a["artifactId"] == receipt["primaryArtifactId"]),
             }
+            result = joins.attach(self.media, attempt["request"], result)
             sidecars.write_result(self.store, self.media, attempt, result)
             self.store.accept_execution(attempt["id"], receipt["executionId"], row["id"], result)
             if checkpoint == self.receipt_checkpoint(package, receipt, root):

@@ -253,12 +253,15 @@ export function createViewer({
     syncAudio(d);
     if (!src && d.next) {
       const n = d.next.clip,
-        m = ((review.audition?.clipId === n.id && n.takes.find(t => t.id === review.audition.takeId)) || take(n)).media;
+        t = (review.audition?.clipId === n.id && n.takes.find(t => t.id === review.audition.takeId)) || take(n),
+        // A joined extension takes over a few frames before its start (timeline.js:joinedTake).
+        joined = T.joinedTake(getState(), n, t),
+        m = joined || t.media;
       if (m.kind === 'video') {
         const v = videoFor(m);
         if (v && v !== shownVideo) {
           videoTiming(v, m);
-          seekVideo(v, n.in / getFps());
+          seekVideo(v, (n.in - (joined?.blend || 0)) / getFps());
         }
       }
     }

@@ -1,6 +1,7 @@
 // What the viewer shows at a frame, without a browser or decoders.
 // node tests/picture_checks.mjs
 import { pictureAt } from '../ui/picture.js';
+import { exportPlan, timelinePlan } from '../ui/timeline.js';
 
 const checks = [];
 const check = (label, ok) => {
@@ -74,6 +75,86 @@ const edit = { mode: 'edit', source: null, audition: null };
   );
   const loose = pictureAt(doc, { mode: 'source', source: { media }, frame: 0, length: 1 }, 0);
   check('Source can show media that belongs to no clip', loose.media === media && loose.clip === null);
+}
+
+{
+  // An extension's joined copy (spool/joins.py) takes over its shot's last `blend` frames.
+  const joined = () => ({
+    id: 'joined',
+    kind: 'video',
+    file: 'joined.mp4',
+    frames: 60,
+    overlap: 22,
+    blend: 2,
+    drift: 1,
+    parent: { clipId: 'shot', takeId: 'shot-a', in: 0, out: 50 },
+  });
+  const make = () => ({
+    clips: [
+      {
+        id: 'shot',
+        in: 0,
+        out: 50,
+        takeId: 'shot-a',
+        takes: [{ id: 'shot-a', media: { id: 's', kind: 'video', file: 'shot.mp4', frames: 50 } }],
+      },
+      {
+        id: 'more',
+        in: 22,
+        out: 60,
+        takeId: 'more-a',
+        direction: { kind: 'extend', parent: 'shot', head: 22 },
+        takes: [
+          {
+            id: 'more-a',
+            generated: true,
+            media: { id: 'm', kind: 'video', file: 'more.mp4', frames: 60, join: joined() },
+          },
+        ],
+      },
+    ],
+    audioClips: [],
+  });
+  const doc = make(),
+    at = f => pictureAt(doc, edit, f);
+  check('The shot plays until its last frames', at(47).clipId === 'shot' && at(47).frame === 47);
+  check(
+    'Its last frames come from the joined copy, which dissolves out of them',
+    at(48).clipId === 'more' && at(48).media.file === 'joined.mp4' && at(48).frame === 20 && at(49).frame === 21,
+  );
+  check('The extension then plays its joined copy', at(50).media.file === 'joined.mp4' && at(50).frame === 22);
+  check(
+    'The MP4 export cuts to the joined copy at the same frame',
+    JSON.stringify(exportPlan(doc).clips) ===
+      JSON.stringify([
+        { file: 'shot.mp4', in: 0, out: 48 },
+        { file: 'joined.mp4', in: 20, out: 60 },
+      ]),
+  );
+  const [v1] = timelinePlan(doc).tracks;
+  check(
+    'The editable export starts the joined copy over the end of its shot',
+    v1.clips[0].out === 48 &&
+      v1.clips[1].start === 48 &&
+      v1.clips[1].in === 20 &&
+      v1.clips[1].out === 60 &&
+      v1.clips[1].file === 'joined.mp4',
+  );
+  const trimmed = make();
+  trimmed.clips[0].out = 49;
+  check(
+    'A shot trimmed since the extension was made gets a plain cut to the take as rendered',
+    pictureAt(trimmed, edit, 47).clipId === 'shot' && pictureAt(trimmed, edit, 49).media.file === 'more.mp4',
+  );
+  const retrimmed = make();
+  retrimmed.clips[1].in = 24;
+  check(
+    'An extension trimmed past its join plays as rendered',
+    pictureAt(retrimmed, edit, 50).media.file === 'more.mp4',
+  );
+  const moved = make();
+  moved.clips[1].gapBefore = 4;
+  check('A detached extension plays as rendered', pictureAt(moved, edit, 54).media.file === 'more.mp4');
 }
 
 console.log(JSON.stringify({ passed: checks.length, checks }, null, 2));

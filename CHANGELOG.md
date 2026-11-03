@@ -15,6 +15,10 @@ All notable changes to Spool are recorded here. Versions follow
   clip, attached to the shot: they draw joined on the timeline, move together, and
   the extension renders at the shot's size (up to 0.9 MP). The inspector has no
   Extend button.
+- An extension joins its shot without a jump: Spool makes a joined copy of each
+  take as it arrives, dissolving out of the shot's last 2 frames, measuring where
+  the new frames start and easing out H3's brightness dip. The viewer and both
+  exports play it; the take's file is kept as rendered.
 - A new local workflow, **MiniMax H3 · Continue Between Clips**, anchors the last
   second of the clip before and the first second of the clip after, with their
   sound, so movement carries through transitions and extensions instead of

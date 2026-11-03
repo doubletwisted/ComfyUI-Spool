@@ -94,6 +94,16 @@ extension carries on from the end of the last one. If you move an extension away
 from its shot, its label and inspector card say so; it continues from whatever is
 right before it until you put it back.
 
+The extension renders the shot's last second again before it carries on, and a
+straight cut to that copy shows a small jump. When a take arrives, Spool makes a
+joined copy of it for the edit: the shot dissolves into the extension over its last
+2 frames, the new frames start exactly where the shot ends (the model can slip a
+frame), and the brightness dip H3 often renders in the first new frames is eased
+out. The viewer and both exports play the joined copy; the take's own file is kept
+as rendered. If you change the shot's take or trim, or trim the start of the
+extension, the join no longer fits and the two meet at a plain cut until you
+extend again.
+
 ## Recast and Regenerate
 
 These two are workflows in the library, not tools with dialogs. Drop one on a
