@@ -8,7 +8,6 @@
 <p align="center"><b>A video timeline studio inside ComfyUI</b></p>
 
 <p align="center">
-  <a href="https://doubletwisted.github.io/ComfyUI-Spool/demo/"><img alt="Try the demo" src="https://img.shields.io/badge/Try_the_demo-101113?style=flat&logo=googlechrome&logoColor=white"></a>
   <a href="docs/guide/README.md"><img alt="User guide" src="https://img.shields.io/badge/User_guide-101113?style=flat&logo=gitbook&logoColor=white"></a>
   <a href="CHANGELOG.md"><img alt="Changelog" src="https://img.shields.io/badge/Changelog-101113?style=flat&logo=keepachangelog&logoColor=white"></a>
   <a href="https://github.com/sponsors/doubletwisted"><img alt="Sponsor" src="https://img.shields.io/badge/Sponsor-101113?style=flat&logo=githubsponsors&logoColor=white"></a>
@@ -17,6 +16,7 @@
 
 <p align="center">
   <a href="https://youtu.be/Z5H-dzL2kUU"><img src="docs/images/watch-the-film.webp" alt="Watch the Spool launch film on YouTube" width="360"></a>
+  <a href="https://doubletwisted.github.io/ComfyUI-Spool/demo/"><img src="docs/images/try-the-demo.webp" alt="Try the Spool online demo in your browser" width="360"></a>
 </p>
 
 Spool turns ComfyUI into a place to make a film, not just a shot. Lay out shots
