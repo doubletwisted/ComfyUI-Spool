@@ -22,8 +22,14 @@ export function createQueueActions({
   toast,
   renderQueueList,
   getQuality = () => 'final',
+  onSubmissionChange = (_status, _body) => {},
 }) {
-  const queueSubmission = G.createQueueSubmission({ storage, key: retryKey, submit: submitQueue });
+  const queueSubmission = G.createQueueSubmission({
+    storage,
+    key: retryKey,
+    submit: submitQueue,
+    onChange: onSubmissionChange,
+  });
   async function submitQueue(body) {
     const { seedUpdates = [], ...payload } = body;
     await projectEdit.change(() => request('projects/' + projectKey + '/queue', payload));

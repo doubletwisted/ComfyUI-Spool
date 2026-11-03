@@ -908,6 +908,12 @@ async function startEditor(isFailed) {
   const takeName = t =>
     t.placeholder ? 'Not generated' : t.original ? 'Original clip' : 'Take ' + String(t.number).padStart(2, '0');
   const pendingJobs = c => visibleJobs().filter(j => j.clipId === c.id && G.PENDING.includes(j.status)),
+    // Clips whose generation request is on its way: from Generate until their job appears.
+    submitted = new Map(),
+    submitting = c => {
+      const sent = submitted.get(c.id);
+      return !!sent && Date.now() - sent.at < 20000 && visibleJobs().filter(j => j.clipId === c.id).length <= sent.jobs;
+    },
     failedJobs = c => visibleJobs().filter(j => j.clipId === c.id && j.status === 'failed');
   const clipBadgesOwner = createClipBadges({
     $,
@@ -1797,6 +1803,7 @@ async function startEditor(isFailed) {
   const viewer = createViewer({
     getState: () => state,
     pendingJobs,
+    submitting,
     getPixelScale: () => ppf,
     isTimelinePanning: () => !!timelinePan,
     resetProjectPoll: () => {
@@ -3487,6 +3494,14 @@ async function startEditor(isFailed) {
     toast,
     renderQueueList,
     getQuality: () => (draftMode ? 'draft' : 'final'),
+    onSubmissionChange: (status, body) => {
+      for (const { clipId } of body?.items || []) {
+        if (status === 'failed') submitted.delete(clipId);
+        else if (status === 'sending')
+          submitted.set(clipId, { at: Date.now(), jobs: visibleJobs().filter(j => j.clipId === clipId).length });
+      }
+      viewer.renderPlaceholderState();
+    },
   });
   // Draft mode belongs to this browser, like other view preferences.
   let draftMode = localStorage.getItem('spool:draft-mode') === '1';

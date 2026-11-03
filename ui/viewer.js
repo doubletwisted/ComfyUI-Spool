@@ -46,6 +46,7 @@ export function createViewer({
   audioEnvelope,
   fileUrl,
   pendingJobs,
+  submitting = _clip => false,
 }) {
   const setStatus = textStatus;
   const url = fileUrl;
@@ -118,7 +119,7 @@ export function createViewer({
     renderDirectPreview(placeholderState.hidden ? null : d.clip);
     if (!placeholderState.hidden) {
       const available = T.realTakes(d.clip).length > 0,
-        working = pendingJobs(d.clip).length;
+        working = pendingJobs(d.clip).length || submitting(d.clip);
       text('placeholderTitle', available ? 'Choose a take' : working ? 'Generating' : 'Not generated yet');
       text(
         'placeholderHint',

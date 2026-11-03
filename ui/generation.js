@@ -1,6 +1,11 @@
 import { exactDecimal, isIntegerValue } from './wire.js';
 
-export function createQueueSubmission({ storage, key, submit }) {
+/**
+ * One generation submission at a time, kept in storage until the server accepts it.
+ * `onChange(status, body)` hears 'sending', 'sent' and 'failed', so a view can show the
+ * clips as generating before their jobs arrive.
+ */
+export function createQueueSubmission({ storage, key, submit, onChange = (_status, _body) => {} }) {
   let pending = null,
     sending = false;
   try {
@@ -22,13 +27,17 @@ export function createQueueSubmission({ storage, key, submit }) {
         pending = body;
       }
       if (!pending) return;
+      const body = pending;
+      onChange('sending', body);
       try {
-        await submit(pending);
+        await submit(body);
       } catch (error) {
         if (error.status >= 400 && error.status < 500) clear();
+        onChange('failed', body);
         throw error;
       }
       clear();
+      onChange('sent', body);
     } finally {
       sending = false;
     }

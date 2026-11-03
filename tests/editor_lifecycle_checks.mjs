@@ -175,6 +175,34 @@ for (const status of [400, 403, 409, 422]) {
   await next.start(async () => ({ revision: 2, operationId: 'new operation', items: body.items }));
   assert.equal(retried.revision, 2);
 }
+{
+  // A view hears when a submission starts, is accepted and fails, so it can show the clips as generating.
+  const heard = [],
+    memory = new Map(),
+    storage = {
+      getItem: k => memory.get(k) ?? null,
+      setItem: (k, v) => memory.set(k, v),
+      removeItem: k => memory.delete(k),
+    };
+  let fail = false;
+  const submission = G.createQueueSubmission({
+    storage,
+    key: 'k',
+    submit: async () => {
+      if (fail) throw failure(422);
+    },
+    onChange: (status, body) => heard.push([status, body.items[0].clipId]),
+  });
+  await submission.start(async () => ({ items: [{ clipId: 'a' }] }));
+  fail = true;
+  await assert.rejects(submission.start(async () => ({ items: [{ clipId: 'b' }] })));
+  assert.deepEqual(heard, [
+    ['sending', 'a'],
+    ['sent', 'a'],
+    ['sending', 'b'],
+    ['failed', 'b'],
+  ]);
+}
 for (const status of [undefined, 500, 503]) {
   const f = queueFixture({
     request: async () => {
