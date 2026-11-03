@@ -88,7 +88,10 @@ module contracts are in [architecture.md](architecture.md).
 ## Directing
 
 - **Direction**: `clip.direction`, how a directing tool made a clip (`kind`:
-  transition or extend, and the user's words). It drives the timeline label
+  transition or extend, and the user's words). An extension also records `parent`,
+  the shot it continues; while that shot is right before it with no gap it is
+  **attached** (`ui/direction.js:attachedParent`): it draws joined to the shot and
+  moves with it. The request still reads the clip before it. It drives the timeline label
   and the inspector card; the clip's workflow and inputs are ordinary. Applying
   another workflow to the clip clears it. `head` is
   where the clip's own takes start (after the anchored frames); **Use take** reads it

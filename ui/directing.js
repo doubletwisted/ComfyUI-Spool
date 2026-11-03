@@ -212,6 +212,9 @@ export function createDirecting({
     if (media?.width && media?.height)
       for (const binding of b.aspect)
         c.inputValues[binding.key] = D.aspectValue(binding, c.inputValues[binding.key], media.width, media.height);
+    // And its sharpness, so the join does not soften.
+    if (media?.width && media?.height && b.megapixels)
+      c.inputValues[b.megapixels.key] = D.megapixelsValue(c.inputValues[b.megapixels.key], media.width, media.height);
     if (b.duration && seconds) c.inputValues[b.duration.key] = D.durationValue(c.inputValues[b.duration.key], seconds);
     c.shotInputs = links.filter(link => link.key);
     images.forEach((file, i) => {
@@ -308,7 +311,8 @@ export function createDirecting({
         [before && 'the last second of ' + name(before), after && 'the first second of ' + name(after)]
           .filter(Boolean)
           .join(' and ') +
-        ', with their sound, so movement carries through the new clip.'
+        (before && after ? ', with their sound,' : ', with its sound,') +
+        ' so movement carries through the new clip.'
       );
     return (
       'The model sees ' +
@@ -384,11 +388,20 @@ export function createDirecting({
     const b = D.toolBindings(c.bindings || []);
     return b.prompt ? String(c.inputValues?.[b.prompt.key] || '') : '';
   }
+  /** A shot that already has extensions carries on from the end of the last one. */
+  function chainOf(doc, shot) {
+    let root = shot,
+      source = shot;
+    while (D.attachedParent(doc, root)) root = D.attachedParent(doc, root);
+    for (let next; (next = doc.clips.find(c => D.attachedParent(doc, c) === source));) source = next;
+    return { root, source };
+  }
   function extendDialog(clipId) {
-    const c = getState().clips.find(c => c.id === clipId);
-    if (!c) return;
+    const shot = getState().clips.find(c => c.id === clipId);
+    if (!shot) return;
+    const c = chainOf(getState(), shot).source;
     if (take(c).placeholder) {
-      toast('Generate or choose a take for this shot first.');
+      toast('Generate or choose a take for ' + c.name + ' first.');
       return;
     }
     const list = choices('extend');
@@ -405,7 +418,7 @@ export function createDirecting({
         svg('extend') +
         '</span><figure class="direct-frame next"><span>' +
         svg('spark') +
-        '</span><figcaption>New shot<small>Added after ' +
+        '</span><figcaption>Extension<small>Attached after ' +
         esc(c.name) +
         '</small></figcaption></figure></div><p class="direct-lede" id="directSees"></p><label class="direct-field"><span>What happens next</span><textarea id="directDetail" rows="3" placeholder="e.g. she turns to the window and the camera pushes in slowly"></textarea></label><div class="direct-row">' +
         lengthField(state.seconds, list[0]) +
@@ -427,8 +440,11 @@ export function createDirecting({
   }
   async function extendClip(clipId, options, generate = false) {
     const doc = getState(),
-      source = doc.clips.find(c => c.id === clipId);
-    if (!source) throw Error('This shot was removed.');
+      shot = doc.clips.find(c => c.id === clipId);
+    if (!shot) throw Error('This shot was removed.');
+    const { source, root } = chainOf(doc, shot),
+      named = root.name + ' · continued',
+      taken = doc.clips.filter(c => c.name === named || c.name.startsWith(named + ' ')).length;
     const choice = choices('extend').find(c => c.id === options.workflow) || choices('extend')[0],
       seconds = D.fitSeconds(choice, options.seconds),
       row = rowFor(source.id),
@@ -442,8 +458,8 @@ export function createDirecting({
       },
       c => {
         const join = joining(D.toolBindings(c.bindings), seconds, { previous: true });
-        c.name = source.name + ' · continued';
-        c.direction = { kind: 'extend', detail: options.detail || '' };
+        c.name = named + (taken ? ' ' + (taken + 1) : '');
+        c.direction = { kind: 'extend', detail: options.detail || '', parent: source.id };
         fill(c, { ...join, prompt: D.extendPrompt(sourcePrompt(source), options.detail, join), shape: source });
       },
     );
@@ -609,33 +625,10 @@ export function createDirecting({
   }
 
   // ---- inspector card -------------------------------------------------------------------------
-  /** The inspector's row of tools for a shot that has a take. */
-  function directStrip(c) {
-    const t = take(c);
-    if (t.placeholder) return '';
-    const tools = [['extend', 'Extend', 'E']];
-    return (
-      '<div class="direct-strip" role="toolbar" aria-label="Directing tools">' +
-      tools
-        .map(
-          ([id, label, key]) =>
-            '<button type="button" data-direct-tool="' +
-            id +
-            '" title="' +
-            esc(label + (key ? ' (' + key + ')' : '')) +
-            '">' +
-            svg(D.KINDS[id].icon) +
-            '<span>' +
-            esc(label) +
-            '</span></button>',
-        )
-        .join('') +
-      '</div>'
-    );
-  }
   function directionCard(c) {
     const d = c.direction;
-    if (!d?.kind || !D.KINDS[d.kind] || !c.workflowVersion) return directStrip(c);
+    if (!d?.kind || !D.KINDS[d.kind] || !c.workflowVersion) return '';
+    if (d.kind === 'extend') return extensionCard(c);
     const doc = getState(),
       previous = D.neighbor(doc, c, 'previous'),
       next = D.neighbor(doc, c, 'next'),
@@ -657,6 +650,31 @@ export function createDirecting({
       (motion ? '<span>Anchored on a second of footage each side</span>' : '') +
       '</div>' +
       (frames ? '<div class="direction-frames">' + frames + '</div>' : '') +
+      '</section>'
+    );
+  }
+  /** An extension names the shot it carries on from; that shot is one click away. */
+  function extensionCard(c) {
+    const doc = getState(),
+      parent = D.attachedParent(doc, c),
+      away = D.detachedParent(doc, c);
+    return (
+      '<section class="direction-card extension-card"><div class="direction-head">' +
+      svg(D.KINDS.extend.icon) +
+      '<strong>Extension</strong></div>' +
+      (parent
+        ? '<div class="extension-from">' +
+          frameThumb(parent, 'last', 'Last frame') +
+          '<p class="direction-note">Carries on from the last second of <button type="button" class="extension-parent" data-parent-clip="' +
+          esc(parent.id) +
+          '">' +
+          esc(parent.name) +
+          '</button>. Moving that shot takes this extension with it.</p></div>'
+        : '<p class="direction-note warn">' +
+          (away
+            ? esc(away.name) + ' is no longer right before this extension. Put it back to continue from it.'
+            : 'The shot this extension continues from was removed.') +
+          '</p>') +
       '</section>'
     );
   }
@@ -826,15 +844,10 @@ export function createDirecting({
     }
   }
 
-  function bindDirectionCard(c) {
+  function bindDirectionCard() {
     $('inspectorContent')
-      .querySelectorAll('[data-direct-tool]')
-      .forEach(
-        b =>
-          (b.onclick = () => {
-            if (b.dataset.directTool === 'extend') extendDialog(c.id);
-          }),
-      );
+      .querySelectorAll('[data-parent-clip]')
+      .forEach(b => (b.onclick = () => selectClip(b.dataset.parentClip, true)));
     const card = $('inspectorContent').querySelector('.direction-card');
     if (card) bindThumbs(card);
   }
@@ -846,6 +859,8 @@ export function createDirecting({
     const a = side === 'previous' ? other : c,
       b = side === 'previous' ? c : other;
     if (b.gapBefore || a.direction?.kind === 'transition' || b.direction?.kind === 'transition') return null;
+    // A shot and its extension are one take; nothing goes between them.
+    if (D.attachedParent(getState(), b) === a) return null;
     return [a.id, b.id];
   }
   function clipActions(c) {
@@ -856,7 +871,7 @@ export function createDirecting({
       ...(before ? [{ label: 'Add transition before…', run: () => transitionDialog(...before) }] : []),
       ...(after ? [{ label: 'Add transition after…', run: () => transitionDialog(...after) }] : []),
       {
-        label: 'Extend shot…',
+        label: 'Extend…',
         reason: t.placeholder ? 'Needs a take first.' : null,
         run: () => extendDialog(c.id),
       },

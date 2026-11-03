@@ -103,7 +103,20 @@ export function toolBindings(bindings = []) {
     prompt: find(b => b.role === 'positive'),
     duration: find(b => b.role === 'duration'),
     aspect: bindings.filter(b => b.role === 'resolution' && b.options?.some(o => ratioOf(o))),
+    megapixels: find(b => b.role === 'resolution' && !b.options && /megapixel/i.test(b.label || b.key)),
   };
+}
+
+/**
+ * A size in megapixels that keeps up with the footage a clip joins, so an extension is
+ * not softer than its shot: the picture's own size to one decimal, never below the
+ * workflow's value and at most `cap`.
+ */
+export function megapixelsValue(current, width, height, cap = 0.9) {
+  const value = Number(current) || 0;
+  if (!width || !height) return current;
+  const wanted = Math.round((width * height) / 1e5) / 10;
+  return Math.max(value, Math.min(cap, wanted));
 }
 
 function ratioOf(option) {
@@ -213,14 +226,68 @@ export function neighbor(doc, clip, side) {
   return row[index] || null;
 }
 
-/** Clip pairs that touch on a track: where a transition can go. */
+/**
+ * The shot an extension carries on from, while it sits right before the extension on its
+ * track with no gap: the clip its request reads. Extensions made before `parent` was
+ * recorded take the clip before them.
+ */
+export function attachedParent(doc, clip) {
+  if (clip?.direction?.kind !== 'extend' || clip.gapBefore) return null;
+  const before = neighbor(doc, clip, 'previous');
+  return before && (!clip.direction.parent || clip.direction.parent === before.id) ? before : null;
+}
+
+/** An extension whose shot is no longer right before it: what it was made from. */
+export function detachedParent(doc, clip) {
+  const id = clip?.direction?.kind === 'extend' && clip.direction.parent;
+  return id && !attachedParent(doc, clip) ? doc.clips.find(c => c.id === id) || null : null;
+}
+
+/** The extensions attached after any of `ids`, and theirs in turn: what moves with a shot. */
+export function extensionsOf(doc, ids) {
+  const result = new Set(ids);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const c of doc.clips) {
+      const parent = !result.has(c.id) && attachedParent(doc, c);
+      if (parent && result.has(parent.id)) {
+        result.add(c.id);
+        grew = true;
+      }
+    }
+  }
+  return [...result];
+}
+
+/** Every clip joined to any of `ids` through attached extensions, in either direction. */
+export function familyOf(doc, ids) {
+  const result = new Set(ids);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const c of doc.clips) {
+      const parent = attachedParent(doc, c);
+      if (!parent || result.has(c.id) === result.has(parent.id)) continue;
+      result.add(c.id).add(parent.id);
+      grew = true;
+    }
+  }
+  return [...result];
+}
+
+/** Clip pairs that touch on a track: where a transition can go. A shot and its extension are one take. */
 export function cuts(doc) {
   const result = [],
     last = new Map();
   for (const c of doc.clips) {
     const track = c.videoTrack || 1,
       previous = last.get(track);
-    if (previous && !c.gapBefore && previous.direction?.kind !== 'transition' && c.direction?.kind !== 'transition')
+    if (
+      previous &&
+      !c.gapBefore &&
+      previous.direction?.kind !== 'transition' &&
+      c.direction?.kind !== 'transition' &&
+      attachedParent(doc, c) !== previous
+    )
       result.push({ left: previous.id, right: c.id, track });
     last.set(track, c);
   }

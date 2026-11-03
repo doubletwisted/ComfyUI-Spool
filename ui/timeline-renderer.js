@@ -1,5 +1,5 @@
 import * as T from './timeline.js';
-import { KINDS, cuts, directionLabel } from './direction.js';
+import { KINDS, attachedParent, cuts, detachedParent, directionLabel } from './direction.js';
 
 // Retains timeline DOM and its geometry-only repaint path during gestures.
 export function createTimelineRenderer({
@@ -70,7 +70,7 @@ export function createTimelineRenderer({
     }
     // Cut buttons are drawn with the full lane and hidden while geometry moves.
     $('clipLane')
-      .querySelectorAll('.cut-transition')
+      .querySelectorAll('.cut-transition, .extension-seam')
       .forEach(node => (node.hidden = true));
     for (const { clip: c, start } of rows) {
       const node = laneNodes.get(c.id);
@@ -255,6 +255,15 @@ export function createTimelineRenderer({
       order.every((id, index) => laneOrder[index] === id) &&
       applyClipGeometry(rows)
     )) {
+      // A shot and the extension attached after it draw as one piece, joined at a seam.
+      const parents = new Map(),
+        extended = new Set();
+      for (const { clip: c } of rows) {
+        const parent = attachedParent(getState(), c);
+        if (!parent) continue;
+        parents.set(c.id, parent);
+        extended.add(parent.id);
+      }
       const lane =
         Array.from(
           { length: count },
@@ -283,6 +292,8 @@ export function createTimelineRenderer({
               '<div class="timeline-clip ' +
               (trial ? ' audition' : t.placeholder ? ' no-take' : '') +
               (KINDS[c.direction?.kind] ? ' directed directed-' + c.direction.kind : '') +
+              (parents.has(c.id) ? ' attached' : '') +
+              (extended.has(c.id) ? ' extended' : '') +
               (!T.videoEnabled(getState(), c) ? ' disabled-clip' : '') +
               '" data-clip="' +
               c.id +
@@ -307,8 +318,16 @@ export function createTimelineRenderer({
               esc(c.name) +
               '</strong>' +
               (KINDS[c.direction?.kind]
-                ? '<span class="direction-badge" title="' +
-                  esc(KINDS[c.direction.kind].name) +
+                ? '<span class="direction-badge' +
+                  (detachedParent(getState(), c) ? ' detached' : '') +
+                  '" title="' +
+                  esc(
+                    parents.has(c.id)
+                      ? 'Extends ' + parents.get(c.id).name
+                      : detachedParent(getState(), c)
+                        ? detachedParent(getState(), c).name + ' is no longer right before this extension'
+                        : KINDS[c.direction.kind].name,
+                  ) +
                   '">' +
                   svg(KINDS[c.direction.kind].icon) +
                   '<span>' +
@@ -356,6 +375,26 @@ export function createTimelineRenderer({
               '">' +
               svg('transition') +
               '</button>'
+            );
+          })
+          .join('') +
+        [...parents]
+          .map(([id, parent]) => {
+            const row = rowFor(parent.id);
+            return (
+              '<span class="extension-seam" data-seam="' +
+              esc(id) +
+              '" style="left:' +
+              row.end * getPixelScale() +
+              'px;top:calc(var(--video-top-' +
+              T.videoTrack(parent) +
+              ') + var(--video-height-' +
+              T.videoTrack(parent) +
+              ') / 2)" title="' +
+              esc(getState().clips.find(c => c.id === id)?.name + ' extends ' + parent.name) +
+              '" aria-hidden="true">' +
+              svg(KINDS.extend.icon) +
+              '</span>'
             );
           })
           .join('') +

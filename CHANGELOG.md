@@ -11,7 +11,10 @@ All notable changes to Spool are recorded here. Versions follow
   renders the move between two shots as one continuous take, 4 seconds by default.
   Its prompt is a timeline around what you write for the middle, with an
   instruction to keep one take; optional suggestions add wording.
-- **Extend shot** (**E**) adds the next moment of a shot.
+- **Extend…** in the clip menu (or **E**) adds the next moment of a shot as its own
+  clip, attached to the shot: they draw joined on the timeline, move together, and
+  the extension renders at the shot's size (up to 0.9 MP). The inspector has no
+  Extend button.
 - A new local workflow, **MiniMax H3 · Continue Between Clips**, anchors the last
   second of the clip before and the first second of the clip after, with their
   sound, so movement carries through transitions and extensions instead of

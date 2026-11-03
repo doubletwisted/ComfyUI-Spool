@@ -133,4 +133,45 @@ assert.equal(D.motionLength(0.1, 22, 22).visible >= 12, true);
   }).applyPreparedWorkflow(clip, 'w', 'v');
   assert.equal(clip.direction, undefined);
 }
+// An extension is attached to its shot while the shot sits right before it with no gap.
+{
+  const doc = {
+    clips: [
+      { id: 'a' },
+      { id: 'e1', direction: { kind: 'extend', parent: 'a' } },
+      { id: 'e2', direction: { kind: 'extend', parent: 'e1' } },
+      { id: 'b' },
+      { id: 'old', direction: { kind: 'extend' } },
+    ],
+  };
+  assert.equal(D.attachedParent(doc, doc.clips[1])?.id, 'a');
+  assert.equal(
+    D.attachedParent(doc, doc.clips[4])?.id,
+    'b',
+    'an extension without a recorded parent takes the clip before it',
+  );
+  assert.equal(D.attachedParent(doc, doc.clips[3]), null);
+  assert.deepEqual(D.extensionsOf(doc, ['a']), ['a', 'e1', 'e2'], 'moving a shot takes its extensions');
+  assert.deepEqual(D.extensionsOf(doc, ['e1']), ['e1', 'e2'], 'moving an extension leaves its shot');
+  assert.deepEqual(D.familyOf(doc, ['e2']).sort(), ['a', 'e1', 'e2']);
+  assert.deepEqual(
+    D.cuts(doc).map(c => c.left + '|' + c.right),
+    ['e2|b'],
+    'nothing goes between a shot and its extension',
+  );
+  const moved = { clips: [doc.clips[1], doc.clips[0]] };
+  assert.equal(D.attachedParent(moved, doc.clips[0]), null);
+  assert.equal(D.detachedParent(moved, doc.clips[1])?.id, 'a', 'a separated extension still knows its shot');
+  const gap = { clips: [{ id: 'a' }, { id: 'e', gapBefore: 4, direction: { kind: 'extend', parent: 'a' } }] };
+  assert.equal(D.attachedParent(gap, gap.clips[1]), null);
+}
+// An extension is as sharp as its shot, within what a local render can afford.
+assert.equal(D.megapixelsValue(0.4, 1280, 720), 0.9);
+assert.equal(D.megapixelsValue(0.4, 864, 480), 0.4);
+assert.equal(D.megapixelsValue(0.4, 2624, 1472), 0.9);
+assert.equal(D.megapixelsValue(0.4, 0, 0), 0.4);
+assert.equal(
+  D.toolBindings([{ key: '11/megapixels', label: 'Resolution (megapixels)', role: 'resolution' }]).megapixels.key,
+  '11/megapixels',
+);
 console.log('direction checks passed');

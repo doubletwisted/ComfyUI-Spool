@@ -8089,6 +8089,84 @@ input[type='range'] {
   padding: 10px 6px 4px;
   font-size: 9px;
 }
+.extension-from {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.extension-from figcaption {
+  display: none;
+}
+.direction-note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--dim);
+}
+.direction-note.warn {
+  color: var(--warning);
+}
+.extension-parent {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: #ffffff40;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.extension-parent:hover,
+.extension-parent:focus-visible {
+  text-decoration-color: var(--accent);
+}
+
+/* A shot and the extension attached after it read as one piece on the timeline. */
+.timeline-clip.extended {
+  border-top-right-radius: 2px;
+  border-bottom-right-radius: 2px;
+}
+.timeline-clip.attached {
+  border-top-left-radius: 2px;
+  border-bottom-left-radius: 2px;
+}
+.timeline-clip.extended .filmstrip img:last-child,
+.timeline-clip.attached .filmstrip img:first-child {
+  border-radius: 2px;
+}
+.timeline-clip.family::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid #ffb52e8c;
+  border-radius: inherit;
+  z-index: 2;
+  pointer-events: none;
+}
+.timeline-clip.directed .direction-badge.detached {
+  color: var(--warning);
+}
+.extension-seam {
+  position: absolute;
+  z-index: 5;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 1px solid var(--line2);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #15171b;
+  color: var(--text);
+  pointer-events: none;
+  box-shadow: 0 1px 4px #0008;
+}
+.extension-seam .icon {
+  width: 10px;
+  height: 10px;
+}
 
 /* Cast panel in the left sidebar. */
 .cast-panel {
@@ -8429,32 +8507,4 @@ input[type='range'] {
 }
 .empty-stage.directed > .empty-symbol {
   display: none;
-}
-
-/* The inspector's directing tools for a shot with a take. */
-.direct-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
-  gap: 4px;
-  margin: 0 0 12px;
-}
-.direct-strip button {
-  display: grid;
-  justify-items: center;
-  gap: 3px;
-  padding: 7px 2px 6px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--raised);
-  color: var(--dim);
-  font-size: 10.5px;
-  cursor: pointer;
-}
-.direct-strip button:hover {
-  color: var(--text);
-  border-color: var(--line2);
-}
-.direct-strip button .icon {
-  width: 15px;
-  height: 15px;
 }

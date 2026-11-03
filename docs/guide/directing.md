@@ -10,7 +10,7 @@ card at the top of the inspector that shows what it joins.
 | Tool | Where | Shortcut | Workflows |
 | --- | --- | --- | --- |
 | Add transition | The button on a cut, or the clip menu | **T** at the nearest cut | MiniMax H3 Continue Between Clips (local), MiniMax H3 First-Last Frame (Cloud) |
-| Extend shot | The clip menu or the inspector | **E** | MiniMax H3 Continue Between Clips or MiniMax H3 Image to Video (local), MiniMax H3 Max Image to Video (Cloud) |
+| Extend shot | **Extend…** in the clip menu (right-click the shot) | **E** | MiniMax H3 Continue Between Clips or MiniMax H3 Image to Video (local), MiniMax H3 Max Image to Video (Cloud) |
 
 Every dialog has **Add**, which only changes the edit, and **Add and generate**,
 which also queues one take. Generating never chooses a take for you.
@@ -83,7 +83,16 @@ pan, morph); each adds its wording to the field, where you can edit it.
 **Extend shot** adds a clip after the selected shot that carries on from its end,
 as trimmed in the edit: from its last second with MiniMax H3 Continue Between
 Clips, or from its last frame with the other models. Describe what happens next.
-The shot's own prompt, if it has one, is added as context.
+The shot's own prompt, if it has one, is added as context. The extension renders
+at the shot's own size, up to 0.9 megapixels, so the join does not soften.
+
+The extension is its own clip with its own takes, attached to the shot it
+continues. On the timeline the two draw as one piece with a link on the seam, and
+selecting one outlines the other. Dragging the shot moves its extensions with it,
+and no transition can go between them. Extending a shot that already has an
+extension carries on from the end of the last one. If you move an extension away
+from its shot, its label and inspector card say so; it continues from whatever is
+right before it until you put it back.
 
 ## Recast and Regenerate
 

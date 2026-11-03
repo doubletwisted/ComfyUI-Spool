@@ -91,6 +91,26 @@
       extension.in === anchored &&
       /She waves/.test(JSON.stringify(extension.inputValues)),
   );
+  check('The extension records the shot it continues', extension.direction.parent === 'shot-c');
+  await wait('attached extension', () => d.querySelector('[data-clip="' + extension.id + '"].attached'));
+  check(
+    'The shot and its extension draw joined, with a seam and no transition button between them',
+    d.querySelector('[data-clip="shot-c"].extended') &&
+      d.querySelector('.extension-seam[data-seam="' + extension.id + '"]') &&
+      !d.querySelector('.cut-transition[data-cut-left="shot-c"]'),
+  );
+  await n.flush();
+  n.selectClip(extension.id);
+  await wait('extension card', () => $('inspectorContent').querySelector('.extension-card'));
+  check(
+    'The extension card names its shot and selecting the extension marks the shot',
+    $('inspectorContent').querySelector('[data-parent-clip="shot-c"]') &&
+      d.querySelector('[data-clip="shot-c"].family'),
+  );
+  n.selectClip('shot-c');
+  press('e');
+  await wait('chain toast', () => /continued first/.test($('toast')?.textContent || ''));
+  check('Extending a shot again carries on from its last extension', $('modalOverlay').hidden);
 
   // Cast members come from pictures and are mentioned with @Name.
   d.querySelector('[data-bin-tab="cast"]').click();
@@ -138,14 +158,10 @@
   );
   check('Only one set of prompt tools is shown', $('inspectorContent').querySelectorAll('.prompt-tools').length === 1);
 
-  // A shot offers one directing tool: Extend. Recast is a workflow in the library.
+  // Extend lives on the timeline (its menu and E); the inspector has no tool buttons. Recast is a workflow.
   n.selectClip('shot-a');
-  await wait('directing tools', () => $('inspectorContent').querySelector('[data-direct-tool]'));
-  check(
-    'A video shot offers Extend only',
-    JSON.stringify([...$('inspectorContent').querySelectorAll('[data-direct-tool]')].map(b => b.dataset.directTool)) ===
-      '["extend"]',
-  );
+  await wait('shot inspector', () => $('inspectorContent').textContent);
+  check('The inspector offers no directing buttons', !$('inspectorContent').querySelector('[data-direct-tool]'));
   const closedBefore = $('modalOverlay').hidden;
   press('r');
   await new Promise(resolve => setTimeout(resolve, 150));

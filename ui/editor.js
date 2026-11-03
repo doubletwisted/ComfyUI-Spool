@@ -30,6 +30,7 @@ import { createQueueActions } from './queue-submission.js';
 import { createInputActions } from './input-actions.js';
 import { createInputReplacements } from './input-replacement.js';
 import { createDirecting } from './directing.js';
+import { familyOf } from './direction.js';
 import { keyText } from './keys.js';
 // Native editor runtime. Demo source is not loaded or transformed.
 let initialization;
@@ -665,10 +666,13 @@ async function startEditor(isFailed) {
     return true;
   }
   function syncTimelineSelection() {
-    const ids = new Set(selectionIds());
+    const ids = new Set(selectionIds()),
+      // A shot and its attached extensions show as one family when any of them is selected.
+      family = new Set(familyOf(state, [...ids]));
     for (const node of $('timelineContent').querySelectorAll('[data-clip],[data-audio],[data-linked-audio]')) {
       const on = ids.has(node.dataset.clip || node.dataset.audio || node.dataset.linkedAudio);
       node.classList.toggle('selected', on);
+      if (node.dataset.clip) node.classList.toggle('family', !on && family.has(node.dataset.clip));
       if (node.hasAttribute('aria-pressed')) node.setAttribute('aria-pressed', on);
     }
   }
