@@ -212,6 +212,8 @@ function applyTrackEdit(doc, d, delta) {
 }
 export const audioTrack = c => (c.track === 'source' ? 'source' : 'music');
 export const sourceLane = c => c.sourceLane || 1;
+// V1's clip audio is A1; a higher video track's audio lane names its track.
+export const sourceLaneLabel = track => (track > 1 ? 'A1 / V' + track : 'A1');
 export const linkedAudio = c => !c.audioDetached && !!takeOf(c)?.media.audio;
 function audioOccupancy(
   doc,
@@ -427,12 +429,12 @@ export function timelinePlan(doc, range = { start: 0, end: total(doc) }) {
   };
   for (const { clip: c, start } of rows)
     if (linkedAudio(c))
-      lane(videoTrack(c), videoTrack(c) > 1 ? 'A1 / V' + videoTrack(c) : 'A1', 'source').push(
+      lane(videoTrack(c), sourceLaneLabel(videoTrack(c)), 'source').push(
         sound(c, start, takeOf(c).media.file, videoEnabled(doc, c)),
       );
   for (const c of doc.audioClips || [])
     (audioTrack(c) === 'source'
-      ? lane(sourceLane(c), sourceLane(c) > 1 ? 'A1 / V' + sourceLane(c) : 'A1', 'source')
+      ? lane(sourceLane(c), sourceLaneLabel(sourceLane(c)), 'source')
       : lane('music', 'A2', 'music')
     ).push(sound(c, c.start, c.media.file, enabled(c)));
   const audio = [...lanes]

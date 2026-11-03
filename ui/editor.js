@@ -3873,7 +3873,7 @@ async function startEditor(isFailed) {
     e.preventDefault();
     e.stopPropagation();
     const [kind, number] = key.split(':'),
-      label = kind === 'video' ? 'V' + number : kind === 'source' ? 'A1 / V' + number : 'A2';
+      label = kind === 'video' ? 'V' + number : kind === 'source' ? T.sourceLaneLabel(Number(number)) : 'A2';
     showActionMenu(
       label + ' track',
       [
