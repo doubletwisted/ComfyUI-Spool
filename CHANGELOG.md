@@ -41,6 +41,10 @@ All notable changes to Spool are recorded here. Versions follow
   by the reply, and one still saving made the delete report a conflict.
 - A Deadline task that the farm retried no longer adds its second render to the
   clip as an extra take; the accepted result stays the only take.
+- A project folder Spool cannot open, such as one a newer Spool upgraded, is
+  listed as unavailable instead of stopping the project list and every other
+  project's renders. A folder whose upgrade fails is retried less and less often,
+  not every few seconds with a new backup each time.
 
 ## 0.1.1 (2026-11-03)
 
