@@ -6,6 +6,7 @@ import gzip
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,7 @@ from spool import commands, farm_protocol, operations, receipts, requests, sidec
 from spool.wire import unwire, wire
 from spool.collection import Collector
 from spool.execution import LocalExecutor
+from spool.errors import NotFound
 from spool.folder_takes import FolderTakes
 from spool.media import Media
 from spool.projects import Workspace
@@ -1709,6 +1711,41 @@ class ProjectFolderTests(unittest.TestCase):
             collector.scan()
             collector.scan()
         self.assertEqual(self.store.get(self.project["id"])["document"]["clips"][0]["takes"], takes)
+
+
+class UnavailableFolderTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+
+    def test_a_folder_that_cannot_open_leaves_the_other_projects_working(self):
+        workspace = Workspace(self.root / "app")
+        good = workspace.create({"project": "Good", "clips": [], "media": []}, self.root / "projects" / "Good")
+        workspace.create({"project": "Newer", "clips": [], "media": []}, self.root / "projects" / "Newer")
+        manifest = self.root / "projects" / "Newer" / "project.json"
+        # A newer Spool on another computer upgraded the shared folder.
+        manifest.write_text(json.dumps({**json.loads(manifest.read_text()), "formatVersion": 99}))
+        restarted = Workspace(self.root / "app")
+        listed = {row["name"]: row for row in restarted.list()}
+        self.assertTrue(listed["Newer"]["unavailable"])
+        self.assertEqual(listed["Good"]["id"], good["id"])
+        self.assertEqual([store.root.name for store in restarted.project_stores()], ["Good"])
+        with self.assertRaises(NotFound):
+            restarted.lookup("attempts", "missing")
+
+    def test_a_failing_upgrade_is_not_retried_on_every_scan(self):
+        workspace = Workspace(self.root / "app")
+        folder = self.root / "projects" / "Old"
+        workspace.create({"project": "Old", "clips": [], "media": []}, folder)
+        with sqlite3.connect(folder / "project.spool") as db:
+            db.execute("PRAGMA user_version=6")
+        (folder / "project.json").unlink()
+        restarted = Workspace(self.root / "app")
+        with patch.object(Store, "_migration7", side_effect=sqlite3.OperationalError("step 7 failed")):
+            for _ in range(10):
+                self.assertEqual(restarted.project_stores(), [])
+        self.assertEqual(len(list((folder / ".spool" / "backups").iterdir())), 1)
 
 
 class CrashRecoveryTests(unittest.TestCase):

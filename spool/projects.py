@@ -10,6 +10,7 @@ import shutil
 import sqlite3
 import tempfile
 import threading
+import time
 from datetime import datetime, timezone
 from contextlib import contextmanager, closing
 from pathlib import Path
@@ -304,6 +305,7 @@ class Workspace(Store):
         super().__init__(root, filename="app.sqlite3")
         self.opened = {}
         self.opening = threading.RLock()  # handlers open project stores from worker threads
+        self.unavailable = {}  # folder -> (files, error, retry after, delay) for folders that failed to open
 
     def folders(self):
         return self.setting("project_folders") or []
@@ -337,13 +339,43 @@ class Workspace(Store):
             raise ValueError("Project folder is unavailable: " + str(folder))
         with self.opening:
             if project_id not in self.opened or self.opened[project_id].root != folder:
-                self.opened[project_id] = ProjectStore(folder, self)
+                self.opened[project_id] = self.open_store(folder)
             return self.opened[project_id]
 
+    def open_store(self, folder):
+        """Open a project folder, waiting longer between attempts while it keeps failing.
+
+        The receipt scan and dispatcher open every folder every few seconds, and each
+        attempt at a failing migration first writes a backup of the snapshot. A changed
+        snapshot or manifest is tried again at once.
+        """
+        files = tuple(
+            (path.stat().st_mtime_ns, path.stat().st_size) if path.exists() else None
+            for path in (folder / "project.spool", folder / "project.json")
+        )
+        held = self.unavailable.get(str(folder))
+        if held and held[0] == files and time.monotonic() < held[2]:
+            raise held[1].with_traceback(None)
+        try:
+            store = ProjectStore(folder, self)
+        except (ValueError, OSError, sqlite3.Error) as error:
+            delay = min(3600, held[3] * 2) if held and held[0] == files else 5
+            self.unavailable[str(folder)] = (files, error, time.monotonic() + delay, delay)
+            logging.warning("Spool could not open the project folder %s: %s", folder, error)
+            raise
+        self.unavailable.pop(str(folder), None)
+        return store
+
     def project_stores(self):
-        return [
-            self.for_project(row["id"]) for row in self.folders() if (Path(row["folder"]) / "project.spool").is_file()
-        ]
+        """Every project folder that opens; one that cannot is skipped, not fatal to the others."""
+        stores = []
+        for row in self.folders():
+            if (Path(row["folder"]) / "project.spool").is_file():
+                try:
+                    stores.append(self.for_project(row["id"]))
+                except (ValueError, OSError, sqlite3.Error):
+                    continue
+        return stores
 
     def create(self, document=None, folder=None):
         if folder is None:
@@ -368,7 +400,17 @@ class Workspace(Store):
                     {"id": held["id"], "name": Path(held["folder"]).name, "folder": held["folder"], "unavailable": True}
                 )
                 continue
-            rows += [{**row, "folder": held["folder"]} for row in self.for_project(held["id"]).list()]
+            try:
+                listed = self.for_project(held["id"]).list()
+            except (ValueError, OSError, sqlite3.Error):
+                # A newer format or damaged folder is listed as unavailable, not a failed list.
+                listed = None
+            if listed is None:
+                rows.append(
+                    {"id": held["id"], "name": Path(held["folder"]).name, "folder": held["folder"], "unavailable": True}
+                )
+                continue
+            rows += [{**row, "folder": held["folder"]} for row in listed]
         return rows
 
     def get(self, project_id):
