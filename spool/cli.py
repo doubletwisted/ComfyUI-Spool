@@ -61,7 +61,14 @@ def run():
         if not args.file:
             parser.error("command requires --file")
         path += "/commands"
-        body = json.loads(sys.stdin.read() if str(args.file) == "-" else args.file.read_text(encoding="utf-8"))
+        try:
+            body = json.loads(sys.stdin.read() if str(args.file) == "-" else args.file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as error:
+            print(
+                json.dumps({"error": "Could not read the command file: " + str(error), "code": "invalid_request"}),
+                file=sys.stderr,
+            )
+            return 1
     request = urllib.request.Request(
         args.url.rstrip("/") + path,
         data=json.dumps(wire(body)).encode() if body is not None else None,

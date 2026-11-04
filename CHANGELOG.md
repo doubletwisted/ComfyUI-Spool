@@ -63,6 +63,8 @@ All notable changes to Spool are recorded here. Versions follow
 - A project folder at the root of a drive or network share (`E:\`,
   `\\nas\projects\`) can use its media. Every path in it was refused as outside
   the project.
+- `python -m spool command` reports a missing or invalid `--file` as a JSON error
+  (`invalid_request`) instead of a Python traceback.
 
 ## 0.1.1 (2026-11-03)
 
