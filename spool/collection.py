@@ -73,7 +73,17 @@ class Collector:
             if attempts.target_of(attempt["request"]) == attempts.DEADLINE:
                 try:
                     farm.collect(attempt)
-                except (ValueError, KeyError, OSError, RuntimeError, subprocess.SubprocessError) as error:
+                # Submission files on the farm share may hold valid JSON of the wrong shape.
+                except (
+                    ValueError,
+                    KeyError,
+                    OSError,
+                    RuntimeError,
+                    subprocess.SubprocessError,
+                    TypeError,
+                    AttributeError,
+                    IndexError,
+                ) as error:
                     store.transition(
                         attempt["id"], attempts.COLLECTION_PENDING, error=str(error), expected=attempt["status"]
                     )

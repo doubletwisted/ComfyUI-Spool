@@ -108,6 +108,21 @@ class FarmProtocolTests(unittest.TestCase):
                 self.assertNotEqual(self.store.attempt(attempt["id"])["status"], "complete")
                 self.assertEqual(list(self.root.rglob("escaped*")), [])
 
+    def test_receipt_of_the_wrong_shape_does_not_block_a_later_valid_execution(self):
+        attempt = self.farm_attempts[0]
+        self.finish(attempt)
+        folder = self.root / "farm" / "spool-receipts" / attempt["id"]
+        for index, value in enumerate(([], {"artifacts": ["x"]}, {"schemaVersion": 2, "history": []})):
+            path = folder / ("000-shape-%d" % index) / "receipt.json"
+            path.parent.mkdir(parents=True)
+            protocol.atomic_json(path, value)
+        collector = Collector(self.store, self.media)
+        collector.scan()
+        collector.scan()
+        self.assertEqual(self.store.attempt(attempt["id"])["status"], "complete")
+        events = self.store.events(self.project["id"])["events"]
+        self.assertEqual(sum(e["kind"] == "receipt.rejected" for e in events), 3)
+
     def test_cancel_during_farm_observation_cannot_be_overwritten(self):
         attempt = self.farm_attempts[0]
         self.package(attempt)

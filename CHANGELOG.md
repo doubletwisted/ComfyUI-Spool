@@ -18,6 +18,8 @@ All notable changes to Spool are recorded here. Versions follow
 - A Deadline receipt whose artifact or execution ID is not the ID Spool's worker
   writes is rejected. A forged ID could make collection copy a file outside the
   project.
+- A Deadline receipt that is valid JSON of the wrong shape is recorded as invalid
+  instead of stopping collection of every later receipt and project.
 
 ## 0.1.1 (2026-11-03)
 
