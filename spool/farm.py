@@ -126,7 +126,8 @@ class FarmCollector:
                 ):
                     self.verified_receipts.pop(path, None)
                     farm_protocol.verify(package, receipt, root)
-            except (ValueError, KeyError, OSError) as error:
+            # Valid JSON of the wrong shape fails like invalid JSON: the farm share is not trusted.
+            except (ValueError, KeyError, OSError, TypeError, AttributeError, IndexError) as error:
                 self.verified_receipts.pop(path, None)
                 self.store.reject_receipt(attempt["id"], str(path), str(error))
                 continue
