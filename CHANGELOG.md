@@ -13,6 +13,8 @@ All notable changes to Spool are recorded here. Versions follow
   or video on the Spool computer.
 - `python -m spool` agent commands reach a Spool on this computer directly when
   `http_proxy` is set for other traffic, instead of failing through the proxy.
+- **Find existing Deadline job** works again. It failed on every call, so a
+  Deadline render whose submission was uncertain could not be resolved.
 
 ## 0.1.1 (2026-11-03)
 

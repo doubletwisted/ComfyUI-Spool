@@ -319,6 +319,31 @@ class FarmProtocolTests(unittest.TestCase):
         self.assertIsNone(job["farmProgress"]["percent"])
         self.assertEqual(job["status"], "farm_running")
 
+    def test_find_existing_deadline_job_adopts_it_or_reports_still_uncertain(self):
+        from spool import commands
+
+        attempt = self.farm_attempts[0]
+        package = self.package(attempt)
+        project = self.store.get(self.project["id"])
+        envelope = {
+            "revision": project["revision"],
+            "actor": "agent:test",
+            "scope": {"projectId": project["id"], "clipIds": ["shot"], "capabilities": ["recover"]},
+            "action": "recover_submission",
+            "arguments": {"attemptId": attempt["id"]},
+        }
+        values = {"SpoolSubmissionId": package["submissionId"], "SpoolAttemptId": attempt["id"]}
+        for jobs, status in (([], "submission_uncertain"), (["a" * 24], "adopted")):
+            with (
+                patch("spool.farm.submission_jobs", return_value=jobs),
+                patch("spool.farm.job_value", side_effect=lambda job, key: values[key]),
+            ):
+                result = commands.execute(
+                    self.store, self.media, project["id"], {**envelope, "operationId": "recover-" + status}
+                )
+            self.assertEqual((result["attemptId"], result["status"]), (attempt["id"], status))
+        self.assertEqual(self.store.submission_for(attempt["id"])["external_id"], "a" * 24)
+
 
 if __name__ == "__main__":
     unittest.main()
