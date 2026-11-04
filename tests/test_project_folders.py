@@ -523,7 +523,7 @@ class ProjectFolderTests(unittest.TestCase):
         self.assertEqual(len(publications), 2, "Fail the imported document, after schema initialization")
         self.assertEqual(list(parent.iterdir()), [])
         self.assertEqual(self.workspace.folders(), folders)
-        with patch.object(self.workspace, "set_setting", side_effect=OSError("Registry unavailable")):
+        with patch.object(self.workspace, "register_folder", side_effect=OSError("Registry unavailable")):
             with self.assertRaisesRegex(OSError, "Registry unavailable"):
                 self.workspace.import_project(exported)
         self.assertEqual(list(parent.iterdir()), [])
@@ -534,22 +534,20 @@ class ProjectFolderTests(unittest.TestCase):
     def test_import_registers_only_a_durable_complete_project(self):
         exported = self.store.export_project(self.project["id"])
         original = copy.deepcopy(exported)
-        set_setting = self.workspace.set_setting
+        register_folder = self.workspace.register_folder
         checked = []
 
-        def register(key, value):
-            if key == "project_folders":
-                new = value[-1]
-                reader = Workspace(self.root / "import-reader")
-                durable = reader.open_folder(new["folder"])
-                self.assertEqual(durable["id"], new["id"])
-                clip = durable["document"]["clips"][0]
-                self.assertIn(clip["workflowVersion"], durable["recipes"])
-                self.assertEqual(clip["takeId"], "original")
-                checked.append(durable)
-            return set_setting(key, value)
+        def register(project_id, folder, check=None):
+            reader = Workspace(self.root / "import-reader")
+            durable = reader.open_folder(folder)
+            self.assertEqual(durable["id"], project_id)
+            clip = durable["document"]["clips"][0]
+            self.assertIn(clip["workflowVersion"], durable["recipes"])
+            self.assertEqual(clip["takeId"], "original")
+            checked.append(durable)
+            return register_folder(project_id, folder, check)
 
-        with patch.object(self.workspace, "set_setting", register):
+        with patch.object(self.workspace, "register_folder", register):
             imported = self.workspace.import_project(exported)
         self.assertEqual(checked, [imported])
         self.assertNotEqual(imported["id"], self.project["id"])
