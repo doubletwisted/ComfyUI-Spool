@@ -36,6 +36,7 @@ All notable changes to Spool are recorded here. Versions follow
 - Importing footage again after an interrupted import works. A review copy, poster
   or waveform cut short by a timeout or a stopped Spool was kept and reused, so
   that file could never be imported again.
+- MP4 export works for a Windows account whose name contains an apostrophe.
 
 ## 0.1.1 (2026-11-03)
 

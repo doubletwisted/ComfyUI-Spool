@@ -906,6 +906,32 @@ class InterruptedEncodeTests(unittest.TestCase):
         self.assertEqual(media.describe(source, fps=24)["frames"], 24)
 
 
+class ExportPathTests(unittest.TestCase):
+    def test_export_works_when_the_temporary_folder_holds_a_quote(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        # A Windows account such as O'Brien puts its quote in every temporary path.
+        quoted = root / "O'Brien" / "Temp"
+        quoted.mkdir(parents=True)
+        media = Media(root / "project", root, root, root, project_id="project")
+        subprocess.run(
+            [FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x48:r=24:d=1"]
+            + [str(root / "project" / "a.mp4")],
+            check=True,
+        )
+        data = {
+            "fps": 24,
+            "width": 64,
+            "height": 48,
+            "audio": False,
+            "clips": [{"file": "a.mp4", "in": 0, "out": 10}, {"file": "a.mp4", "in": 10, "out": 20}],
+        }
+        with patch("tempfile.tempdir", str(quoted)):
+            result = media.export(data)
+        self.assertTrue((root / "project" / "exports" / result["filename"]).is_file())
+
+
 class InputStagingTests(unittest.TestCase):
     def test_staged_names_resolve_to_the_project_file_they_came_from(self):
         from spool.media import Media, STAGED_PREFIX, staged_relative

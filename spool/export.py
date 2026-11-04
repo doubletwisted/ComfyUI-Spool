@@ -82,7 +82,10 @@ def export_sequence(data, *, root, resolve, probe, image_extensions, sources=Non
             run_ffmpeg(command, "Could not render a clip.")
             rendered.append(target)
         concat = Path(temp) / "sequence.txt"
-        concat.write_text("\n".join(f"file '{p.as_posix()}'" for p in rendered), encoding="utf-8")
+        # The concat demuxer reads quoted paths; a quote inside one (a Windows user named O'Brien) is '\''.
+        concat.write_text(
+            "\n".join("file '" + p.as_posix().replace("'", "'\\''") + "'" for p in rendered), encoding="utf-8"
+        )
         video = Path(temp) / "video.mp4"
         run_ffmpeg(
             [
