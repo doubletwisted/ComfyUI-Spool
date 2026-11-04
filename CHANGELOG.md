@@ -26,6 +26,8 @@ All notable changes to Spool are recorded here. Versions follow
 - Applying a workflow or using a take no longer stores another copy of the
   project's workflows each time. Repeated without a save in between, it grew the
   project until it could not be opened.
+- `python -m spool prune --confirm` no longer removes previews the edit uses when
+  their file names contain spaces or accented letters.
 
 ## 0.1.1 (2026-11-03)
 
