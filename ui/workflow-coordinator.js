@@ -196,7 +196,10 @@ export function createWorkflowCoordinator({
       'Add shot',
       '<div class="shot-picker"><section><h3>Workflows</h3><div class="shot-workflows">' +
         Object.entries(workflows)
-          .map(([id, w]) => '<button class="workflow-row" data-shot-workflow="' + id + '">' + esc(w.name) + '</button>')
+          .map(
+            ([id, w]) =>
+              '<button class="workflow-row" data-shot-workflow="' + esc(id) + '">' + esc(w.name) + '</button>',
+          )
           .join('') +
         '</div><button class="outline" id="shotImportWorkflow">' +
         svg('plus') +
@@ -206,7 +209,7 @@ export function createWorkflowCoordinator({
           .map(
             m =>
               '<button class="shot-media-item" data-shot-media="' +
-              m.id +
+              esc(m.id) +
               '"><img src="' +
               esc(url(m.poster)) +
               '" alt=""><span>' +

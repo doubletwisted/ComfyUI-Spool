@@ -103,11 +103,11 @@ export function createAudioEditor({
             '<div class="audio-clip music-clip' +
             (!T.enabled(c) || getAudioSettings()(c).muted || !getTrackAudible()(track) ? ' muted' : '') +
             '" data-audio="' +
-            c.id +
+            esc(c.id) +
             '" style="top:calc(' +
-            (track === 'source' ? 'var(--source-top-' + T.sourceLane(c) + ')' : '0px') +
+            (track === 'source' ? 'var(--source-top-' + esc(T.sourceLane(c)) + ')' : '0px') +
             ' + 5px);height:calc(' +
-            (track === 'source' ? 'var(--source-height-' + T.sourceLane(c) + ')' : 'var(--music-height)') +
+            (track === 'source' ? 'var(--source-height-' + esc(T.sourceLane(c)) + ')' : 'var(--music-height)') +
             ' - 10px);left:' +
             c.start * getPpf() +
             'px;width:' +
@@ -145,11 +145,11 @@ export function createAudioEditor({
               (!m.audio ? 'no-audio' : '') +
               (muted ? ' muted' : '') +
               '" data-linked-audio="' +
-              c.id +
+              esc(c.id) +
               '" style="top:calc(var(--source-top-' +
-              T.videoTrack(c) +
+              esc(T.videoTrack(c)) +
               ') + 5px);height:calc(var(--source-height-' +
-              T.videoTrack(c) +
+              esc(T.videoTrack(c)) +
               ') - 10px);left:' +
               start * getPpf() +
               'px;width:' +
@@ -235,7 +235,7 @@ export function createAudioEditor({
       '</span></div><p class="audio-summary">' +
       seconds(c.out - c.in) +
       ' · ' +
-      (bed ? 'at ' + tc(c.start) : takeName(take(c))) +
+      (bed ? 'at ' + tc(c.start) : esc(takeName(take(c)))) +
       '</p>' +
       (m.audio
         ? '<div class="audio-controls"><div><label class="field"><span class="audio-level-head">Level <input id="audioGainNumber" type="number" min="-60" max="6" step="1" value="' +

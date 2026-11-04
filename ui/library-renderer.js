@@ -91,14 +91,14 @@ export function createLibraryRenderer({
       '" draggable="true" tabindex="0" role="button" aria-label="Preview ' +
       esc(label) +
       '" data-media="' +
-      m.id +
+      esc(m.id) +
       '"><img src="' +
       esc(url(m.poster)) +
       '" alt=""><span class="bin-tag">' +
-      (owner && !owner.take.original ? 'T' + String(owner.take.number).padStart(2, '0') + ' · ' : '') +
+      (owner && !owner.take.original ? 'T' + esc(String(owner.take.number).padStart(2, '0')) + ' · ' : '') +
       (m.kind === 'image' ? 'Image' : m.kind === 'audio' ? 'Audio' : seconds(m.frames)) +
       '</span><button class="add" data-add-media="' +
-      m.id +
+      esc(m.id) +
       '" title="Add to timeline" aria-label="Add ' +
       esc(m.name) +
       ' to timeline">' +
