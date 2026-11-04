@@ -52,7 +52,15 @@ class ProjectStore(Store):
                 if db.execute("PRAGMA user_version").fetchone()[0] > SCHEMA_VERSION:
                     raise ValueError("This Spool project needs a newer extension version")
         key = hashlib.sha256(str(folder).encode()).hexdigest()
-        cache = (workspace.root / "cache" if workspace else Path(tempfile.gettempdir()) / "spool-maintenance") / key
+        # Maintenance without a workspace trusts whatever working copy its cache holds, so
+        # a writable one gets a folder of its own: another user could fill a shared path.
+        self.private_cache = None
+        if workspace:
+            cache = workspace.root / "cache" / key
+        elif migrate or writable:
+            cache = self.private_cache = Path(tempfile.mkdtemp(prefix="spool-maintenance-"))
+        else:
+            cache = Path(tempfile.gettempdir()) / "spool-maintenance" / key  # never created when read-only
         self.runtime = cache / "working.sqlite3"
         self.stamp = cache / "checkpoint.json"
         self.read_runtime = cache / "read.sqlite3"
