@@ -86,7 +86,9 @@ imports reject unknown export versions before creating a destination.
 
 `store.py` owns ordered, numbered migration steps. Each commits its data and
 version together, version last; a failed step rolls back and can run again.
-Completed earlier steps remain committed. Released steps are frozen: changes
+Completed earlier steps remain committed in that database; a project folder
+publishes its upgraded working copy only after every step succeeds, so a failure
+leaves the published snapshot at its old version. Released steps are frozen: changes
 require a new number. Before upgrading a folder, Spool copies its last published
 snapshot to `.spool/backups/project-schema<old>-<UTC timestamp>.spool`. Schema 6
 packs existing evidence, then compacts through the existing local-cache path

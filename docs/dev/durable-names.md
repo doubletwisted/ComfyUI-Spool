@@ -24,8 +24,8 @@ against `spool.__version__`; protocol fixtures pin API and bridge versions.
 | Environment `SPOOL_STORAGE`, `SPOOL_CREDENTIALS`, `COMFY_API_KEY`, `COMFY_BASE_URL` | `spool/__main__.py`, root `__init__.py`, `spool/credentials.py`, `spool/cloud.py` |
 | Pending envelopes `spool-native-<project ID>:queue-request`, `spool-native-<project ID>:experiment-request` | `ui/editor.js`, `ui/generation.js` (session storage) |
 
-The parallel project-storage lane plans a `project.json` manifest inside project
-folders; treat that name as durable when the format lands. Do not rename pending
+Project folders hold a `project.json` manifest (`spool/projects.py`); treat its
+name and fields as durable. Do not rename pending
 envelope keys casually: losing an operation ID can cause duplicate submissions
 after an uncertain reply. The same compatibility rule covers error codes,
 command action/capability names and the exact-integer tag `__spool_int__`.
