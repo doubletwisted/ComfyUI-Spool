@@ -91,6 +91,23 @@ class FarmProtocolTests(unittest.TestCase):
         events = self.store.events(self.project["id"])["events"]
         self.assertEqual(sum(e["kind"] == "receipt.rejected" for e in events), 1)
 
+    def test_receipt_identities_cannot_name_files_outside_the_attempt(self):
+        for field, forged in (("artifactId", "../../../../escaped"), ("executionId", "../../../../escaped")):
+            with self.subTest(field=field):
+                attempt = self.farm_attempts[0 if field == "artifactId" else 1]
+                package, receipt = self.finish(attempt)
+                if field == "artifactId":
+                    receipt["artifacts"][0]["artifactId"] = receipt["primaryArtifactId"] = forged
+                else:
+                    receipt["executionId"] = forged
+                with self.assertRaises(ValueError):
+                    protocol.verify(package, receipt, package["resultRoot"])
+                folder = self.root / "farm" / "spool-receipts" / attempt["id"]
+                protocol.atomic_json(next(folder.glob("*/receipt.json")), receipt)
+                Collector(self.store, self.media).scan()
+                self.assertNotEqual(self.store.attempt(attempt["id"])["status"], "complete")
+                self.assertEqual(list(self.root.rglob("escaped*")), [])
+
     def test_cancel_during_farm_observation_cannot_be_overwritten(self):
         attempt = self.farm_attempts[0]
         self.package(attempt)

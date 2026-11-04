@@ -15,6 +15,9 @@ All notable changes to Spool are recorded here. Versions follow
   `http_proxy` is set for other traffic, instead of failing through the proxy.
 - **Find existing Deadline job** works again. It failed on every call, so a
   Deadline render whose submission was uncertain could not be resolved.
+- A Deadline receipt whose artifact or execution ID is not the ID Spool's worker
+  writes is rejected. A forged ID could make collection copy a file outside the
+  project.
 
 ## 0.1.1 (2026-11-03)
 
