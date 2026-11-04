@@ -49,6 +49,8 @@ All notable changes to Spool are recorded here. Versions follow
   in a private temporary folder and remove it afterwards. Another user of the
   computer could plant a database at the shared path they used, which a run then
   published into the project.
+- Projects created, opened or imported at the same moment all stay in the project
+  list. One could drop another from the list, leaving its folder unreachable.
 
 ## 0.1.1 (2026-11-03)
 

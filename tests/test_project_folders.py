@@ -13,6 +13,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -1750,6 +1751,20 @@ class UnavailableFolderTests(unittest.TestCase):
             for _ in range(10):
                 self.assertEqual(restarted.project_stores(), [])
         self.assertEqual(len(list((folder / ".spool" / "backups").iterdir())), 1)
+
+    def test_projects_imported_at_once_all_stay_listed(self):
+        workspace = Workspace(self.root / "app")
+        export = {"spoolVersion": 1, "document": {"project": "Imported", "clips": [], "media": []}}
+        start = threading.Barrier(8)
+
+        def imported(_):
+            start.wait()
+            return workspace.import_project(export)["id"]
+
+        with ThreadPoolExecutor(8) as pool:
+            created = set(pool.map(imported, range(8)))
+        self.assertEqual({row["id"] for row in workspace.folders()}, created)
+        self.assertEqual({row["id"] for row in Workspace(self.root / "app").list()}, created)
 
 
 class MaintenanceCacheTests(unittest.TestCase):
