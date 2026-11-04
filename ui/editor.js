@@ -1188,6 +1188,7 @@ async function startEditor(isFailed) {
     hideTrimPreview,
     clearHeld,
     getProjectEdit: () => projectEdit,
+    flushNative,
     getShowActionMenu: () => showActionMenu,
   });
   function takeSelection(c = selected()) {
