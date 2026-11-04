@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -29,6 +30,9 @@ from spool.media import Media
 from spool.projects import Workspace
 from spool.routes import register
 from spool.store import Conflict, Store
+
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 class ProjectFolderTests(unittest.TestCase):
@@ -1640,6 +1644,44 @@ class ProjectFolderTests(unittest.TestCase):
                             await response.read()
 
         asyncio.run(check())
+
+
+class CrashRecoveryTests(unittest.TestCase):
+    def test_a_crashed_save_cannot_roll_back_another_computers_publications(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        folder = root / "projects" / "Film"
+        here = Workspace(root / "here")
+        project_id = here.create({"project": "initial", "clips": [], "media": []}, folder)["id"]
+        # A writer on this computer dies inside a transaction, leaving a hot rollback journal.
+        crash = (
+            "import os, sys\n"
+            "from spool.projects import Workspace\n"
+            "store = Workspace(sys.argv[1]).for_project(sys.argv[2])\n"
+            "with store.editing(sys.argv[2], 0) as edit:\n"
+            "    edit.db.execute('PRAGMA cache_size=1')\n"
+            "    edit.save({'project': 'uncommitted', 'clips': [], 'media': []})\n"
+            "    edit.db.execute('CREATE TABLE junk(x)')\n"
+            "    edit.db.executemany('INSERT INTO junk VALUES(?)', ((os.urandom(2000),) for _ in range(50)))\n"
+            "    os._exit(9)\n"
+        )
+        subprocess.run([sys.executable, "-c", crash, str(here.root), project_id], cwd=ROOT, check=False)
+        journal = here.for_project(project_id).runtime.with_name("working.sqlite3-journal")
+        self.assertTrue(journal.exists())
+        # Another computer publishes newer work to the shared folder meanwhile.
+        there = Workspace(root / "there").open_folder(folder)
+        other = Workspace(root / "there").for_project(project_id)
+        revision = there["revision"]
+        for index in range(3):
+            revision = other.save(project_id, revision, {"project": "there %d" % index, "clips": [], "media": []})[
+                "revision"
+            ]
+        restarted = Workspace(root / "here").for_project(project_id)
+        self.assertEqual(restarted.get(project_id)["document"]["project"], "there 2")
+        saved = restarted.save(project_id, revision, {"project": "here", "clips": [], "media": []})
+        self.assertEqual(saved["revision"], revision + 1)
+        self.assertEqual(Workspace(root / "third").open_folder(folder)["document"]["project"], "here")
 
 
 if __name__ == "__main__":
