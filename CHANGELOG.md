@@ -69,6 +69,8 @@ All notable changes to Spool are recorded here. Versions follow
   instead of showing the old sound.
 - Standalone Spool starts, and its Comfy connection status loads, from a checkout
   close to the drive root such as `C:\Spool` or `/opt/spool`.
+- On macOS and Linux the saved Comfy Cloud key file is private from the moment it
+  is written; it was briefly readable by other users of the computer.
 
 ## 0.1.1 (2026-11-03)
 

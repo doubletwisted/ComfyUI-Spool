@@ -29,6 +29,18 @@ class CloudCredentialTests(unittest.TestCase):
         self.assertFalse(self.path.exists())
         self.assertEqual(credentials.cloud_key(), "comfyui-environment-fixture")
 
+    @unittest.skipIf(os.name == "nt", "POSIX file modes")
+    def test_the_key_file_is_private_from_creation(self):
+        previous = os.umask(0)
+        try:
+            # Even before any later chmod, nobody else may read what was written.
+            with patch.object(Path, "chmod"):
+                credentials.save_key("comfyui-private")
+        finally:
+            os.umask(previous)
+        self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.path.read_text(encoding="utf-8"), "comfyui-private")
+
     def test_credentials_folder_moves_the_key(self):
         self.key_path.stop()
         folder = Path(self.directory.name) / "isolated"
