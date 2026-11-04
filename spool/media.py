@@ -468,11 +468,19 @@ class Media:
                 encode([ffmpeg, "-v", "error", "-y", "-i", str(proxy), "-frames:v", "1"], poster, 30)
             result["poster"] = poster.relative_to(self.root).as_posix()
         if audio:
-            wave = previews / (
-                path.stem
-                + "-"
-                + hashlib.sha256((str(path.resolve()) + "-wave-1").encode()).hexdigest()[:24]
-                + "-wave.png"
+            wave = (
+                previews
+                / (
+                    path.stem
+                    + "-"
+                    # Like the proxy's key: new bytes at the same path draw a new waveform.
+                    + hashlib.sha256(
+                        json.dumps(
+                            [str(path.resolve()), path.stat().st_size, path.stat().st_mtime_ns, "wave-2"]
+                        ).encode()
+                    ).hexdigest()[:24]
+                    + "-wave.png"
+                )
             )
             if not wave.exists():
                 encode(
