@@ -175,6 +175,21 @@ class Edit:
         )
 
 
+def json_strings(value):
+    """Every string in a decoded JSON value, keys included."""
+    found, pending = [], [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            found.append(item)
+        elif isinstance(item, dict):
+            found.extend(k for k in item if isinstance(k, str))
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+    return found
+
+
 class Store:
     def __init__(self, root, migrate=True, filename="spool.sqlite3"):
         self.focus_store = self
@@ -654,7 +669,14 @@ class Store:
                 except sqlite3.OperationalError:
                     continue
                 for row in rows:
-                    for token in re.findall(r"[A-Za-z0-9_\-./\\]+", row[0]):
+                    tokens = re.findall(r"[A-Za-z0-9_\-./\\]+", row[0])
+                    try:
+                        # Whole string values too: file names may hold spaces, and JSON
+                        # escapes non-ASCII characters, which the tokens alone would miss.
+                        tokens += json_strings(json.loads(row[0]))
+                    except (TypeError, ValueError):
+                        pass
+                    for token in tokens:
                         names.add(token)
                         if "/" in token or "\\" in token:
                             names.add(token.replace("\\", "/").rsplit("/", 1)[-1])
