@@ -880,6 +880,32 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class InterruptedEncodeTests(unittest.TestCase):
+    def test_an_interrupted_proxy_encode_leaves_no_file_to_reuse(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        source = root / "clip.mp4"
+        subprocess.run(
+            [FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x36:r=24:d=1", str(source)],
+            check=True,
+        )
+        media = Media(root / "project", root, root, root, project_id="project")
+        real = subprocess.run
+
+        def stopped(command, **options):
+            # The encode is cut short after writing part of its output, as a timeout or a stopped host would.
+            if "libx264" in command:
+                Path(command[-1]).write_bytes(b"truncated")
+                raise subprocess.TimeoutExpired(command, options.get("timeout"))
+            return real(command, **options)
+
+        with patch("spool.media.subprocess.run", side_effect=stopped), self.assertRaises(subprocess.TimeoutExpired):
+            media.describe(source, fps=24)
+        self.assertEqual(list((root / "project" / ".spool" / "previews").glob("*.mp4")), [])
+        self.assertEqual(media.describe(source, fps=24)["frames"], 24)
+
+
 class InputStagingTests(unittest.TestCase):
     def test_staged_names_resolve_to_the_project_file_they_came_from(self):
         from spool.media import Media, STAGED_PREFIX, staged_relative

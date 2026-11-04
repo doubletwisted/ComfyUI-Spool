@@ -166,6 +166,20 @@ def check_frozen(path, asset, message="A frozen input changed before execution")
         raise ValueError(message)
 
 
+def encode(command, target, timeout):
+    """Run an ffmpeg command whose last argument is `target`, publishing the file only when it finishes.
+
+    Cache files are reused whenever they exist, so an encode cut short by a timeout,
+    a stopped host or a full disk must not leave a truncated file at that name.
+    """
+    pending = target.with_name(target.stem + "-" + uid() + target.suffix)
+    try:
+        subprocess.run([*command, str(pending)], check=True, capture_output=True, timeout=timeout)
+        pending.replace(target)
+    finally:
+        pending.unlink(missing_ok=True)
+
+
 class Media:
     def __init__(self, root, input_root, output_root, temp_root, project_id=None, playback_cache=None, playback=None):
         self.root = Path(root).resolve()
@@ -382,7 +396,7 @@ class Media:
             )
             proxy = previews / (path.stem + "-" + hashlib.sha256(signature.encode()).hexdigest()[:24] + ".mp4")
             if not proxy.exists():
-                subprocess.run(
+                encode(
                     [
                         ffmpeg,
                         "-v",
@@ -416,11 +430,9 @@ class Media:
                         "-shortest",
                         "-movflags",
                         "+faststart",
-                        str(proxy),
                     ],
-                    check=True,
-                    capture_output=True,
-                    timeout=300,
+                    proxy,
+                    300,
                 )
             result["file"] = proxy.relative_to(self.root).as_posix()
             proxy_probe = _review_probe(proxy, fps)
@@ -442,12 +454,7 @@ class Media:
             }
             poster = proxy.with_suffix(".jpg")
             if not poster.exists():
-                subprocess.run(
-                    [ffmpeg, "-v", "error", "-y", "-i", str(proxy), "-frames:v", "1", str(poster)],
-                    check=True,
-                    capture_output=True,
-                    timeout=30,
-                )
+                encode([ffmpeg, "-v", "error", "-y", "-i", str(proxy), "-frames:v", "1"], poster, 30)
             result["poster"] = poster.relative_to(self.root).as_posix()
         if audio:
             wave = previews / (
@@ -457,7 +464,7 @@ class Media:
                 + "-wave.png"
             )
             if not wave.exists():
-                subprocess.run(
+                encode(
                     [
                         ffmpeg,
                         "-v",
@@ -469,11 +476,9 @@ class Media:
                         "aformat=channel_layouts=mono,showwavespic=s=1280x80:colors=0x91dab1",
                         "-frames:v",
                         "1",
-                        str(wave),
                     ],
-                    check=True,
-                    capture_output=True,
-                    timeout=60,
+                    wave,
+                    60,
                 )
             result["wave"] = wave.relative_to(self.root).as_posix()
             if not video:
