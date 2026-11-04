@@ -147,7 +147,8 @@ def contained(root, relative):
     base = resolved_root(str(root))
     # Not URL-decoded: aiohttp decodes route paths once, and a stored name may hold a literal "%41".
     target = Path(os.path.normpath(os.path.join(str(base), relative)))
-    key, prefix = os.path.normcase(str(target)), os.path.normcase(str(base))
+    # A drive or share root ("E:\\", "\\\\nas\\projects\\") already ends in a separator.
+    key, prefix = os.path.normcase(str(target)).rstrip(os.sep), os.path.normcase(str(base)).rstrip(os.sep)
     if key == prefix or not key.startswith(prefix + os.sep):
         raise ValueError("Media path escapes its storage root")
     return target

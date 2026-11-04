@@ -12,10 +12,23 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from spool.media import contained
 from spool.projects import Workspace
+from spool.routes import inside
 from spool.store import SCHEMA_VERSION
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "project-schema5.spool"
+
+
+class RootFolderTests(unittest.TestCase):
+    def test_a_root_that_ends_in_a_separator_still_contains_its_files(self):
+        # A project at E:\\ or \\\\nas\\projects\\ resolves with a trailing separator, as / does here.
+        root = Path(os.path.abspath(os.sep))
+        inner = root / "spool-root-check" / "take.mp4"
+        self.assertEqual(contained(root, "spool-root-check/take.mp4"), inner)
+        self.assertTrue(inside(inner, root))
+        with self.assertRaises(ValueError):
+            contained(root, "")
 
 
 def network_path(local):
