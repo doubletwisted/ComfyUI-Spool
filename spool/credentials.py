@@ -34,8 +34,15 @@ def save_key(value):
     if value:
         path.parent.mkdir(parents=True, exist_ok=True)
         pending = path.with_suffix(".tmp")
-        pending.write_text(value, encoding="utf-8")
-        pending.chmod(0o600)
+        # Private from creation: writing first and narrowing afterwards left the key
+        # readable by other users of the computer until the chmod.
+        handle = os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            if hasattr(os, "fchmod"):
+                os.fchmod(handle, 0o600)  # a leftover file keeps its old mode otherwise
+            os.write(handle, value.encode("utf-8"))
+        finally:
+            os.close(handle)
         pending.replace(path)
     else:
         path.unlink(missing_ok=True)
