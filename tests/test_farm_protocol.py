@@ -1,3 +1,4 @@
+import json
 import copy
 import os
 import unittest
@@ -112,7 +113,9 @@ class FarmProtocolTests(unittest.TestCase):
         attempt = self.farm_attempts[0]
         self.finish(attempt)
         folder = self.root / "farm" / "spool-receipts" / attempt["id"]
-        for index, value in enumerate(([], {"artifacts": ["x"]}, {"schemaVersion": 2, "history": []})):
+        valid = json.loads(next(folder.glob("*/receipt.json")).read_text(encoding="utf-8"))
+        unowned = {k: v for k, v in valid.items() if k != "jobId"}
+        for index, value in enumerate(([], {"artifacts": ["x"]}, {"schemaVersion": 2, "history": []}, unowned)):
             path = folder / ("000-shape-%d" % index) / "receipt.json"
             path.parent.mkdir(parents=True)
             protocol.atomic_json(path, value)
@@ -121,7 +124,7 @@ class FarmProtocolTests(unittest.TestCase):
         collector.scan()
         self.assertEqual(self.store.attempt(attempt["id"])["status"], "complete")
         events = self.store.events(self.project["id"])["events"]
-        self.assertEqual(sum(e["kind"] == "receipt.rejected" for e in events), 3)
+        self.assertEqual(sum(e["kind"] == "receipt.rejected" for e in events), 4)
 
     def test_cancel_during_farm_observation_cannot_be_overwritten(self):
         attempt = self.farm_attempts[0]

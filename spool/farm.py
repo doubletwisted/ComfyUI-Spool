@@ -131,7 +131,7 @@ class FarmCollector:
                 self.verified_receipts.pop(path, None)
                 self.store.reject_receipt(attempt["id"], str(path), str(error))
                 continue
-            if not job or job != receipt["jobId"]:
+            if not job or job != receipt.get("jobId"):
                 self.store.reject_receipt(
                     attempt["id"], str(path), "Worker receipt lacks the owned Deadline job association"
                 )
