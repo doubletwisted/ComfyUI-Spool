@@ -1,5 +1,8 @@
 import asyncio
 import os
+import re
+import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -166,3 +169,17 @@ class LauncherTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(response.status, 403)
                 spawn.assert_not_called()
+
+
+class StandaloneScriptTests(unittest.TestCase):
+    def test_windows_script_finds_spool_with_an_isolated_python(self):
+        # ComfyUI portable's python_embeded has a ._pth file, which runs Python like -I:
+        # the current folder is not on sys.path, so "-m spool" alone finds nothing.
+        root = Path(__file__).resolve().parent.parent
+        script = (root / "run_spool.bat").read_text(encoding="utf-8")
+        code = re.search(r'^"%PY%" %FLAGS% -c "([^"]+)" --open %\*$', script, re.M).group(1)
+        result = subprocess.run(
+            [sys.executable, "-I", "-c", code, "--help"], cwd=root, capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("usage: python -m spool", result.stdout)
