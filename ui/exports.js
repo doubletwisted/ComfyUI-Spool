@@ -263,6 +263,8 @@ export function createExports({
       }
     };
   }
+  // The download link stays valid while it is shown; a later export replaces it.
+  let timelineLink = null;
   async function exportTimeline(button) {
     $('exportResult').textContent = 'Writing the timeline…';
     try {
@@ -274,9 +276,10 @@ export function createExports({
         body: { ...plan, fps: getFps(), ...getResolution()(), name: getState().project, projectId: projectKey },
         fallback: 'Export failed.',
       });
-      const link = URL.createObjectURL(
+      if (timelineLink) URL.revokeObjectURL(timelineLink);
+      const link = (timelineLink = URL.createObjectURL(
         new Blob([JSON.stringify(result.timeline, null, 2)], { type: 'application/json' }),
-      );
+      ));
       if ($('exportResult'))
         $('exportResult').innerHTML =
           '<p>Export complete. <a class="download-link" href="' +
