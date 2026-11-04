@@ -56,6 +56,8 @@ All notable changes to Spool are recorded here. Versions follow
   and pointed at a different file.
 - The studio shows footage whose file name contains `#`, `?` or `%`, such as an
   imported `Take #3.mp4`. Its address was cut at that character.
+- A Comfy Cloud workflow whose result is an image is refused before it renders.
+  Cloud results are collected as video, so the paid render could never arrive.
 
 ## 0.1.1 (2026-11-03)
 

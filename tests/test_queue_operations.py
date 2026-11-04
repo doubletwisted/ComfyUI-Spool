@@ -85,6 +85,12 @@ class QueueOperationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.store.handoff(self.project["id"], {**data, "workflow": {}})
 
+    def test_cloud_refuses_an_image_result_it_could_never_collect(self):
+        recipe = {**copy.deepcopy(self.recipe), "executionTarget": "cloud"}
+        self.project = self.store.capture(self.project["id"], self.project["revision"], "shot", recipe)
+        with patch("spool.cloud.available", return_value=True), self.assertRaisesRegex(ValueError, "video only"):
+            requests.prepare(self.store, self.media, self.store.get(self.project["id"]), self.items)
+
     def tearDown(self):
         self.temp.cleanup()
 

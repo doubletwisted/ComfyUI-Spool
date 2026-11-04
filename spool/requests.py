@@ -194,6 +194,9 @@ def audio_input_segments(document, clip, setting):
     ]
 
 
+IMAGE_SAVERS = {"SaveImage", "PreviewImage"}
+
+
 def local_compatibility(prompt, result):
     if any(node["class_type"] in LAUNCHERS for node in prompt.values()):
         raise ValueError(
@@ -261,6 +264,9 @@ def prepare(store, media, project, items, freeze=True):
             raise ValueError("Choose local ComfyUI, Comfy Cloud or Deadline execution")
         if target == attempts.CLOUD and not cloud.available():
             raise ValueError(cloud.UNAVAILABLE)
+        if target == attempts.CLOUD and capture["prompt"][capture["result"]["nodeId"]]["class_type"] in IMAGE_SAVERS:
+            # Cloud results are collected as video files; an image result would render and never arrive.
+            raise ValueError("Comfy Cloud renders video only. Choose a SaveVideo result for this workflow.")
         local_compatibility({k: v for k, v in capture["prompt"].items() if k not in launchers}, capture["result"])
         # A clip set to Deadline whose workflow has no submit node gets one in each
         # frozen request only; the saved workflow and its takes' workflows stay as made.
