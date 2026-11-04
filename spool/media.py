@@ -5,7 +5,6 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from urllib.parse import unquote
 
 from PIL import Image, ImageDraw, ImageOps
 
@@ -136,7 +135,8 @@ def contained(root, relative):
     containment depended on whether a directory had already been created.
     """
     base = resolved_root(str(root))
-    target = Path(os.path.normpath(os.path.join(str(base), unquote(relative))))
+    # Not URL-decoded: aiohttp decodes route paths once, and a stored name may hold a literal "%41".
+    target = Path(os.path.normpath(os.path.join(str(base), relative)))
     key, prefix = os.path.normcase(str(target)), os.path.normcase(str(base))
     if key == prefix or not key.startswith(prefix + os.sep):
         raise ValueError("Media path escapes its storage root")

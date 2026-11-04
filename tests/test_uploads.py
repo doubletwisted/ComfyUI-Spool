@@ -69,6 +69,27 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(files)
         self.assertFalse([p for p in files if p.name.endswith(".partial")])
 
+    async def test_upload_names_are_decoded_once(self):
+        # The studio encodes the name once; a name that decodes to a path a second time
+        # must stay a file name in the upload folder, not reach a clip's output folder.
+        response = await self.client.post(
+            "/spool/api/upload?projectId=" + self.project["id"],
+            data=png(),
+            headers={"X-Filename": "..%252F..%252Foutput%252Fclip%252Fa%2541.png"},
+        )
+        self.assertEqual(response.status, 200, await response.text())
+        file = (await response.json())["file"]
+        self.assertTrue(file.startswith("input/images/..%2F..%2Foutput%2Fclip%2Fa%41-"), file)
+        self.assertTrue((self.store_root / file).is_file())
+        self.assertFalse((self.store_root / "output" / "clip").exists())
+
+    def test_stored_names_holding_a_percent_sign_resolve_to_that_file(self):
+        media = Media(self.store_root, self.input, self.input, self.input, project_id=self.project["id"])
+        literal = self.store_root / "output" / "a%41.png"
+        literal.parent.mkdir(parents=True, exist_ok=True)
+        literal.write_bytes(png())
+        self.assertEqual(media.resolve("output/a%41.png"), literal)
+
 
 if __name__ == "__main__":
     unittest.main()
