@@ -67,6 +67,8 @@ All notable changes to Spool are recorded here. Versions follow
   (`invalid_request`) instead of a Python traceback.
 - A waveform is drawn again when its audio file is replaced at the same path,
   instead of showing the old sound.
+- Standalone Spool starts, and its Comfy connection status loads, from a checkout
+  close to the drive root such as `C:\Spool` or `/opt/spool`.
 
 ## 0.1.1 (2026-11-03)
 

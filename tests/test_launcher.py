@@ -171,6 +171,17 @@ class LauncherTests(unittest.IsolatedAsyncioTestCase):
                 spawn.assert_not_called()
 
 
+class ShallowCheckoutTests(unittest.TestCase):
+    def test_status_works_for_a_checkout_near_the_drive_root(self):
+        with tempfile.TemporaryDirectory() as folder:
+            launcher = ComfyLauncher(Store(Path(folder)))
+            launcher.probe = AsyncMock(return_value=("stopped", None))
+            # Outside ComfyUI_windows_portable/ComfyUI/custom_nodes there may be no fourth parent.
+            with patch("spool.launcher.__file__", os.path.join(os.path.abspath(os.sep), "spool", "launcher.py")):
+                status = asyncio.run(launcher.status())
+        self.assertEqual(status["state"], "stopped")
+
+
 class StandaloneScriptTests(unittest.TestCase):
     def test_windows_script_finds_spool_with_an_isolated_python(self):
         # ComfyUI portable's python_embeded has a ._pth file, which runs Python like -I:
