@@ -69,6 +69,16 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(files)
         self.assertFalse([p for p in files if p.name.endswith(".partial")])
 
+    async def test_unreadable_media_is_refused_and_not_kept(self):
+        response = await self.client.post(
+            "/spool/api/upload?projectId=" + self.project["id"],
+            data=b"not a video" * 100,
+            headers={"X-Filename": "clip.mp4"},
+        )
+        self.assertEqual(response.status, 400, await response.text())
+        self.assertNotIn(str(self.store_root), (await response.json())["error"])
+        self.assertEqual(self.written(), [])
+
     async def test_upload_names_are_decoded_once(self):
         # The studio encodes the name once; a name that decodes to a path a second time
         # must stay a file name in the upload folder, not reach a clip's output folder.
