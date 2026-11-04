@@ -45,6 +45,10 @@ All notable changes to Spool are recorded here. Versions follow
   listed as unavailable instead of stopping the project list and every other
   project's renders. A folder whose upgrade fails is retried less and less often,
   not every few seconds with a new backup each time.
+- `python -m spool prune --confirm` and `reclaim --confirm` keep their working copy
+  in a private temporary folder and remove it afterwards. Another user of the
+  computer could plant a database at the shared path they used, which a run then
+  published into the project.
 
 ## 0.1.1 (2026-11-03)
 

@@ -1,8 +1,11 @@
 """Project folder durability, portable inputs, discovery and exact receipt collection."""
 
 import asyncio
+import contextlib
 import copy
 import gzip
+import hashlib
+import io
 import json
 import os
 import shutil
@@ -13,6 +16,7 @@ import tempfile
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from threading import Event
 from pathlib import Path
 from types import SimpleNamespace
@@ -22,7 +26,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from PIL import Image, PngImagePlugin
 
-from spool import commands, farm_protocol, operations, receipts, requests, sidecars, take_files, ledger
+from spool import commands, farm_protocol, maintenance, operations, receipts, requests, sidecars, take_files, ledger
 from spool.wire import unwire, wire
 from spool.collection import Collector
 from spool.execution import LocalExecutor
@@ -1746,6 +1750,31 @@ class UnavailableFolderTests(unittest.TestCase):
             for _ in range(10):
                 self.assertEqual(restarted.project_stores(), [])
         self.assertEqual(len(list((folder / ".spool" / "backups").iterdir())), 1)
+
+
+class MaintenanceCacheTests(unittest.TestCase):
+    def test_confirmed_maintenance_ignores_a_working_copy_planted_in_shared_temp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        folder = (Path(temp.name) / "projects" / "Film").resolve()
+        Workspace(Path(temp.name) / "app").create({"project": "Film", "clips": [], "media": []}, folder)
+        # Another user of this computer can write the system temporary folder.
+        shared = Path(tempfile.gettempdir()) / "spool-maintenance" / hashlib.sha256(str(folder).encode()).hexdigest()
+        shared.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(shutil.rmtree, shared, True)
+        shutil.copyfile(folder / "project.spool", shared / "working.sqlite3")
+        with closing(sqlite3.connect(shared / "working.sqlite3")) as db, db:
+            db.execute("UPDATE projects SET document=json_set(document,'$.project','Forged')")
+            db.execute("CREATE TABLE revisions(document TEXT)")
+        stat = (folder / "project.spool").stat()
+        (shared / "checkpoint.json").write_text(json.dumps([stat.st_mtime_ns, stat.st_size]))
+        before = set(Path(tempfile.gettempdir()).glob("spool-maintenance-*"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(maintenance.run(["--storage", str(folder), "--confirm", "--json"]), 0)
+        with closing(sqlite3.connect(folder / "project.spool")) as db:
+            name = db.execute("SELECT json_extract(document,'$.project') FROM projects").fetchone()[0]
+        self.assertEqual(name, "Film")
+        self.assertEqual(set(Path(tempfile.gettempdir()).glob("spool-maintenance-*")), before)
 
 
 class CrashRecoveryTests(unittest.TestCase):
