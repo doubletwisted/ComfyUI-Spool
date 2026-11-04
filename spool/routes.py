@@ -891,7 +891,12 @@ def register(server, store, media, executor=None):
             raise ValueError("Import a video, image, or audio file")
         target = await asyncio.to_thread(media.input_destination, name, unique=True)
         await receive_file(request, target)
-        description = await asyncio.to_thread(media.describe, target, name, float(request.query.get("fps", 24)))
+        try:
+            description = await asyncio.to_thread(media.describe, target, name, float(request.query.get("fps", 24)))
+        except Exception:
+            # Nothing refers to a file that could not be described.
+            target.unlink(missing_ok=True)
+            raise
         if description.get("workflow"):
             description["workflowData"] = await prepare_inputs(
                 {"workflow": description["workflow"], "prompt": description.get("prompt")}, request

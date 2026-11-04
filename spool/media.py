@@ -26,18 +26,28 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".mkv", ".m4v"}
 EXTENSIONS = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS | AUDIO_EXTENSIONS
 
 
+class UnreadableMedia(ValueError, subprocess.SubprocessError):
+    """ffprobe could not read a file: the caller's request is at fault, not Spool."""
+
+
 def _probe(source):
     ffprobe = find_tool("ffprobe")
     if not ffprobe:
         raise ValueError("Install ffprobe for native media review")
-    result = subprocess.run(
-        [ffprobe, "-v", "error", "-show_streams", "-show_format", "-of", "json", str(source)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=True,
-        timeout=30,
-    )
+    try:
+        result = subprocess.run(
+            [ffprobe, "-v", "error", "-show_streams", "-show_format", "-of", "json", str(source)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+            timeout=30,
+        )
+    except subprocess.CalledProcessError as error:
+        # ffprobe's message names this computer's path, so it stays in the traceback.
+        raise UnreadableMedia("This file is not readable video, image or audio") from error
+    except subprocess.TimeoutExpired as error:
+        raise UnreadableMedia("Reading this media took too long") from error
     return json.loads(result.stdout)
 
 

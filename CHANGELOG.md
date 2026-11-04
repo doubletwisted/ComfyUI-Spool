@@ -58,6 +58,8 @@ All notable changes to Spool are recorded here. Versions follow
   imported `Take #3.mp4`. Its address was cut at that character.
 - A Comfy Cloud workflow whose result is an image is refused before it renders.
   Cloud results are collected as video, so the paid render could never arrive.
+- Importing a file that is not readable media says so and keeps nothing, instead
+  of a generic server error with the file left in the project.
 
 ## 0.1.1 (2026-11-03)
 
