@@ -251,7 +251,8 @@ render, and agents act on them only when asked.
   and VHS_LoadVideo. Other loaders with file inputs are refused. Models and
   custom-node dependencies must already be installed where the render runs.
 - **Results.** Spool collects SaveImage, PreviewImage, SaveVideo and
-  VHS_VideoCombine video outputs. VHS `meta_batch` is not supported.
+  VHS_VideoCombine video outputs. VHS `meta_batch` is not supported. Comfy Cloud
+  renders return video only, so a Cloud workflow needs a SaveVideo result.
 - **Old takes.** Opening the workflow of an imported or historical take does not
   map its saved values back into widgets; its exact recorded workflow stays
   available.
