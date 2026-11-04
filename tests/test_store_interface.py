@@ -62,5 +62,41 @@ class StoreInterfaceTests(unittest.TestCase):
                 self.assertIsNone(re.search(r"\._(write_document|event)\(", source), path.name)
 
 
+class RepeatedCaptureTests(unittest.TestCase):
+    def test_repeated_workflow_assignment_does_not_wrap_stored_values_again(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        store = Store(Path(temp.name))
+        graph = {"nodes": [{"id": 1, "type": "LoadImage"}], "links": []}
+        project = store.create(
+            {
+                "project": "Captures",
+                "clips": [{"id": "shot", "name": "Shot", "in": 0, "out": 24, "takes": []}],
+                "media": [],
+                "importedWorkflows": [{"id": "imported", "name": "Imported", "workflow": graph}],
+            }
+        )
+        capture = {
+            "workflow": {"nodes": []},
+            "prompt": {
+                "save": {"class_type": "SaveImage", "inputs": {"images": ["image", 0], "filename_prefix": "p"}},
+                "image": {"class_type": "EmptyImage", "inputs": {"width": 64}},
+            },
+            "bindings": [],
+            "result": {"nodeId": "save", "group": "images", "index": 0},
+        }
+
+        def blobs():
+            with store.reading() as db:
+                return db.execute("SELECT count(*) FROM blobs").fetchone()[0]
+
+        revision = store.capture(project["id"], project["revision"], "shot", capture)["revision"]
+        before = blobs()
+        for _ in range(5):
+            revision = store.capture(project["id"], revision, "shot", capture)["revision"]
+        self.assertEqual(blobs(), before)
+        self.assertEqual(store.get(project["id"])["document"]["importedWorkflows"][0]["workflow"], graph)
+
+
 if __name__ == "__main__":
     unittest.main()
