@@ -98,7 +98,7 @@ ROUTE_AUDIENCES = {
 
 def inside(path, root):
     """Lexical containment, matching `contained`; mapped drives are not resolved to UNC."""
-    base = os.path.normcase(os.path.abspath(root))
+    base = os.path.normcase(os.path.abspath(root)).rstrip(os.sep)  # a drive root keeps its separator
     return os.path.normcase(os.path.abspath(path)).startswith(base + os.sep)
 
 

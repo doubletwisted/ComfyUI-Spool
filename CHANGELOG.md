@@ -60,6 +60,9 @@ All notable changes to Spool are recorded here. Versions follow
   Cloud results are collected as video, so the paid render could never arrive.
 - Importing a file that is not readable media says so and keeps nothing, instead
   of a generic server error with the file left in the project.
+- A project folder at the root of a drive or network share (`E:\`,
+  `\\nas\projects\`) can use its media. Every path in it was refused as outside
+  the project.
 
 ## 0.1.1 (2026-11-03)
 
