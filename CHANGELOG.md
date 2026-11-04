@@ -11,6 +11,8 @@ All notable changes to Spool are recorded here. Versions follow
   project and Comfy folders now answer only this computer, as downloading that
   original already did. Another machine could otherwise read frames of any image
   or video on the Spool computer.
+- `python -m spool` agent commands reach a Spool on this computer directly when
+  `http_proxy` is set for other traffic, instead of failing through the proxy.
 
 ## 0.1.1 (2026-11-03)
 
