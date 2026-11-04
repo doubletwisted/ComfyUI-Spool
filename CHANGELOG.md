@@ -20,6 +20,9 @@ All notable changes to Spool are recorded here. Versions follow
   project.
 - A Deadline receipt that is valid JSON of the wrong shape is recorded as invalid
   instead of stopping collection of every later receipt and project.
+- Reopening a project after Spool stopped in the middle of a save restores the
+  last published snapshot. The interrupted save could be rolled into the fresh
+  copy and, on the next save, undo work published from another computer.
 
 ## 0.1.1 (2026-11-03)
 

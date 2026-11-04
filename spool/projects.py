@@ -112,7 +112,8 @@ class ProjectStore(Store):
             except json.JSONDecodeError:
                 saved = None
             if signature is None or not self.runtime.exists() or saved != signature:
-                for suffix in ("", "-wal", "-shm"):
+                # A crash leaves "-journal" beside the old copy; SQLite would roll it into the new one.
+                for suffix in ("", "-journal", "-wal", "-shm"):
                     self.runtime.with_name(self.runtime.name + suffix).unlink(missing_ok=True)
                 if signature is not None:
                     shutil.copyfile(self.snapshot, self.runtime)
