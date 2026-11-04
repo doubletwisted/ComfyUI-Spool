@@ -19,7 +19,7 @@ from .errors import NotFound
 from . import take_files
 from .media import Media
 from .ownership import file_lock, atomic_replace
-from .store import Store, Conflict, uid, SCHEMA_VERSION, validate_import, read_only_uri
+from .store import Store, Conflict, uid, SCHEMA_VERSION, encode, validate_import, read_only_uri
 from .durable import atomic_json, write as durable_write
 from . import __version__
 
@@ -327,16 +327,30 @@ class Workspace(Store):
         if len(projects) != 1:
             raise ValueError("A project folder must contain exactly one project")
         project_id = projects[0]["id"]
-        folders = self.folders()
-        old = next((row for row in folders if row["id"] == project_id), None)
-        if old and Path(old["folder"]) != folder and (Path(old["folder"]) / "project.spool").exists():
-            raise Conflict("This project is already open from another folder")
-        self.set_setting(
-            "project_folders",
-            [row for row in folders if row["id"] != project_id] + [{"id": project_id, "folder": str(folder)}],
-        )
+
+        def check(folders):
+            old = next((row for row in folders if row["id"] == project_id), None)
+            if old and Path(old["folder"]) != folder and (Path(old["folder"]) / "project.spool").exists():
+                raise Conflict("This project is already open from another folder")
+
+        self.register_folder(project_id, folder, check)
         self.opened[project_id] = store
         return store.get(project_id)
+
+    def register_folder(self, project_id, folder, check=None):
+        """Add one project folder to the list in a single transaction.
+
+        Creating, opening and importing run in worker threads (and maybe another
+        process); reading the list and writing it back separately lost entries.
+        """
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT document FROM settings WHERE key='project_folders'").fetchone()
+            folders = json.loads(row[0]) if row else []
+            if check:
+                check(folders)
+            folders = [row for row in folders if row["id"] != project_id] + [{"id": project_id, "folder": str(folder)}]
+            db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", ("project_folders", encode(folders)))
 
     def for_project(self, project_id):
         row = next((r for r in self.folders() if r["id"] == project_id), None)
@@ -440,7 +454,7 @@ class Workspace(Store):
         try:
             store = ProjectStore(folder, self)
             project = store.import_project(value)
-            self.set_setting("project_folders", [*self.folders(), {"id": project["id"], "folder": str(folder)}])
+            self.register_folder(project["id"], folder)
         except Exception:
             # Only this import's exclusively created destination belongs to us.
             if folder.resolve().parent == parent:
