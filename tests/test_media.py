@@ -9,6 +9,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import wave
 from pathlib import Path
@@ -904,6 +905,22 @@ class InterruptedEncodeTests(unittest.TestCase):
             media.describe(source, fps=24)
         self.assertEqual(list((root / "project" / ".spool" / "previews").glob("*.mp4")), [])
         self.assertEqual(media.describe(source, fps=24)["frames"], 24)
+
+
+class WaveformCacheTests(unittest.TestCase):
+    def test_new_audio_at_the_same_path_draws_a_new_waveform(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        media = Media(root / "project", root, root, root, project_id="project")
+        target = root / "project" / "output" / "clip" / "take.wav"
+        target.parent.mkdir(parents=True)
+        waves = []
+        for source in ("anullsrc=d=2", "sine=f=440:d=2:sample_rate=44100"):
+            subprocess.run([FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", source, str(target)], check=True)
+            os.utime(target, ns=(time.time_ns(), time.time_ns() + len(waves)))
+            waves.append((root / "project" / media.describe(target, fps=24)["wave"]).read_bytes())
+        self.assertNotEqual(waves[0], waves[1])
 
 
 class ExportPathTests(unittest.TestCase):

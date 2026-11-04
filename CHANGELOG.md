@@ -65,6 +65,8 @@ All notable changes to Spool are recorded here. Versions follow
   the project.
 - `python -m spool command` reports a missing or invalid `--file` as a JSON error
   (`invalid_request`) instead of a Python traceback.
+- A waveform is drawn again when its audio file is replaced at the same path,
+  instead of showing the old sound.
 
 ## 0.1.1 (2026-11-03)
 
