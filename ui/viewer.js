@@ -151,7 +151,7 @@ export function createViewer({
           ? '<b>' +
             esc(c.name) +
             '</b> · ' +
-            takeName(t) +
+            esc(takeName(t)) +
             ' · ' +
             (t.id === c.takeId
               ? '<span class="in-edit">in edit</span>'
@@ -159,7 +159,7 @@ export function createViewer({
           : '<b>Media</b> · ' + esc(review.source?.media.name || '')
         : trial
           ? '<span class="not-in-edit">Trying ' +
-            takeName(trial) +
+            esc(takeName(trial)) +
             ' in ' +
             esc(tried.name) +
             '</span> · not saved until you use it'
@@ -234,7 +234,7 @@ export function createViewer({
             '</span><span class="' +
             (trial ? 'preview-only' : 'in-edit') +
             '">' +
-            (d.take.placeholder ? 'No take in edit' : takeName(d.take)) +
+            (d.take.placeholder ? 'No take in edit' : esc(takeName(d.take))) +
             (trial ? ' · trial' : '') +
             '</span>',
     );

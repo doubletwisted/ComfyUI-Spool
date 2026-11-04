@@ -232,9 +232,9 @@ export function createTimelineRenderer({
               r = rowFor(c.id);
             return (
               '<div class="source-handles" style="top:var(--video-top-' +
-              T.videoTrack(c) +
+              esc(T.videoTrack(c)) +
               ');height:calc(var(--video-height-' +
-              T.videoTrack(c) +
+              esc(T.videoTrack(c)) +
               ') - 2px);left:' +
               (r.start - c.in) * getPixelScale() +
               'px;width:' +
@@ -296,13 +296,13 @@ export function createTimelineRenderer({
               (extended.has(c.id) ? ' extended' : '') +
               (!T.videoEnabled(getState(), c) ? ' disabled-clip' : '') +
               '" data-clip="' +
-              c.id +
+              esc(c.id) +
               '" data-workflow="' +
-              c.workflow +
+              esc(c.workflow) +
               '" style="top:calc(var(--video-top-' +
-              T.videoTrack(c) +
+              esc(T.videoTrack(c)) +
               ') + 6px);height:calc(var(--video-height-' +
-              T.videoTrack(c) +
+              esc(T.videoTrack(c)) +
               ') - 12px);left:' +
               start * getPixelScale() +
               'px;width:' +
@@ -336,11 +336,13 @@ export function createTimelineRenderer({
                 : '') +
               clipAttention(c) +
               '</div><div class="clip-meta"><span>' +
-              (trial
-                ? 'T' + String(trial.number).padStart(2, '0') + ' trial'
-                : t.placeholder
-                  ? 'No take'
-                  : 'T' + String(t.number).padStart(2, '0')) +
+              esc(
+                trial
+                  ? 'T' + String(trial.number).padStart(2, '0') + ' trial'
+                  : t.placeholder
+                    ? 'No take'
+                    : 'T' + String(t.number).padStart(2, '0'),
+              ) +
               '</span><span class="clip-takes-status' +
               (pending ? ' busy' : '') +
               '">' +
@@ -387,9 +389,9 @@ export function createTimelineRenderer({
               '" style="left:' +
               row.end * getPixelScale() +
               'px;top:calc(var(--video-top-' +
-              T.videoTrack(parent) +
+              esc(T.videoTrack(parent)) +
               ') + var(--video-height-' +
-              T.videoTrack(parent) +
+              esc(T.videoTrack(parent)) +
               ') / 2)" title="' +
               esc(getState().clips.find(c => c.id === id)?.name + ' extends ' + parent.name) +
               '" aria-hidden="true">' +

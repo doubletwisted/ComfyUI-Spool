@@ -14,7 +14,7 @@ export function createActionMenu({ $, esc, menuParent }) {
     if (menuOrigin?.hasAttribute('aria-expanded')) menuOrigin.setAttribute('aria-expanded', 'false');
     const origin = menuOrigin?.isConnected
       ? menuOrigin
-      : $('clipLane').querySelector('[data-clip="' + menuClipId + '"]');
+      : $('clipLane').querySelector('[data-clip="' + CSS.escape(menuClipId) + '"]');
     menuClipId = null;
     menuOrigin = null;
     if (returnFocus) origin?.focus({ preventScroll: true });

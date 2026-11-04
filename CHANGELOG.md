@@ -28,6 +28,9 @@ All notable changes to Spool are recorded here. Versions follow
   project until it could not be opened.
 - `python -m spool prune --confirm` no longer removes previews the edit uses when
   their file names contain spaces or accented letters.
+- Opening a project no longer runs script hidden in its clip, take or media IDs,
+  take numbers or track numbers. The studio now escapes them like names, so an
+  imported project or shared project folder cannot act as the studio.
 
 ## 0.1.1 (2026-11-03)
 
