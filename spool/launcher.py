@@ -149,10 +149,12 @@ class ComfyLauncher:
                 state = "starting"
         if state == "stopped" and launch.get("state") == "error":
             state, error = "error", launch["error"]
-        portable = Path(__file__).resolve().parents[4]
+        # ComfyUI_windows_portable/ComfyUI/custom_nodes/Spool/spool; a shallower checkout is not portable.
+        above = Path(__file__).resolve().parents
+        portable = above[4] if len(above) > 4 else None
         files = (
             [str(p) for p in sorted(portable.glob("run*.bat")) if "Deadline" not in p.name]
-            if (portable / "python_embeded/python.exe").is_file()
+            if portable and (portable / "python_embeded/python.exe").is_file()
             else []
         )
         return {

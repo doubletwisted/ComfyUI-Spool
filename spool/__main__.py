@@ -16,7 +16,8 @@ from .projects import Workspace
 from . import cli
 
 # Installed under ComfyUI/custom_nodes, the standalone editor shares the plugin's projects and Comfy's folders.
-COMFY = Path(__file__).resolve().parents[3]
+# A checkout outside custom_nodes may sit too close to the drive root to have one.
+COMFY = Path(__file__).resolve().parents[min(3, len(Path(__file__).resolve().parents) - 1)]
 
 
 def main():
