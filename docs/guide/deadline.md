@@ -51,8 +51,10 @@ On the worker, that script:
 Job scripts follow Deadline's
 [pre- and post-job/task script](https://docs.thinkboxsoftware.com/products/deadline/10.4/1_User%20Manual/manual/job-scripts.html)
 contract. Submission files live under
-`<project output>/spool-submissions/<submissionId>/` and receipts under
-`spool-receipts/`.
+`<result root>/spool-submissions/<submissionId>/` and receipts under
+`<result root>/spool-receipts/`. For a project folder the result root is the
+project's `.spool/deadline` folder; otherwise it is the submit node's output
+directory.
 
 ## Collecting results
 
