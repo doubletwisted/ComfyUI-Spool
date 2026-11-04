@@ -1229,7 +1229,8 @@ class Store:
             row = db.execute("SELECT document FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
                 raise NotFound("Project not found")
-            document = json.loads(row[0])
+            # Unpacked as editing() reads it: this document is saved, and saving packs it again.
+            document = self._load(row[0], db)
             generated = (
                 db.execute(
                     "SELECT clip_id,take_id,result FROM attempts WHERE project_id=? AND take_id=? AND status='complete'",
