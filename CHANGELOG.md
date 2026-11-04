@@ -31,6 +31,8 @@ All notable changes to Spool are recorded here. Versions follow
 - Opening a project no longer runs script hidden in its clip, take or media IDs,
   take numbers or track numbers. The studio now escapes them like names, so an
   imported project or shared project folder cannot act as the studio.
+- `run_spool.bat` finds Spool with the Windows portable build's Python, whose
+  `._pth` file leaves the Spool folder off Python's module path.
 
 ## 0.1.1 (2026-11-03)
 
