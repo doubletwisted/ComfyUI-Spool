@@ -54,6 +54,8 @@ All notable changes to Spool are recorded here. Versions follow
 - Files whose names contain a percent sign followed by two hex digits, such as
   `a%41.mp4`, play, export and collect. Their names were decoded a second time
   and pointed at a different file.
+- The studio shows footage whose file name contains `#`, `?` or `%`, such as an
+  imported `Take #3.mp4`. Its address was cut at that character.
 
 ## 0.1.1 (2026-11-03)
 
