@@ -421,6 +421,10 @@ def register(server, store, media, executor=None):
         store, media = await asyncio.to_thread(services, request)
         data = await request.json()
         clip = await asyncio.to_thread(store.clip, request.match_info["project"], data["clipId"])
+        chosen = data["takeIds"] if isinstance(data["takeIds"], list) else []
+        # The sheet is served to the caller, so it reads only footage the caller may download.
+        records = [t["media"] for t in clip["takes"] if t["id"] in chosen and not t.get("placeholder")]
+        await asyncio.to_thread(guard_originals, request, store, media, records)
         fps = await asyncio.to_thread(store.frame_rate, request.match_info["project"])
         return response(await asyncio.to_thread(media.comparison, clip, data["takeIds"], fps))
 
@@ -569,6 +573,19 @@ def register(server, store, media, executor=None):
         )
         return response(await prepare_inputs(capture, request, True) if capture else None)
 
+    def outside_footage(request, selected, project_media, path):
+        """Footage outside the project and Comfy folders is read only for this computer."""
+        roots = [selected.root, *project_media.host_roots.values()]
+        if not any(inside(path, root) for root in roots):
+            local_control(request, "Use footage outside this project from the computer running Spool")
+
+    def guard_originals(request, selected, project_media, records):
+        """Refuse a remote caller a result made from footage it could not download."""
+        for metadata in records:
+            original = metadata.get("originalFile", metadata.get("file", ""))
+            if isinstance(original, str) and Path(original).is_absolute():
+                outside_footage(request, selected, project_media, original)
+
     def take_source(request):
         selected, project_media = services(request)
         clip = selected.clip(request.match_info["project"], request.match_info["clip"])
@@ -578,9 +595,7 @@ def register(server, store, media, executor=None):
         if not take:
             raise NotFound("Take not found")
         path = project_media.original_source(take["media"])["path"]
-        roots = [selected.root, *project_media.host_roots.values()]
-        if not any(inside(path, root) for root in roots):
-            local_control(request, "Use footage outside this project from the computer running Spool")
+        outside_footage(request, selected, project_media, path)
         return path
 
     @routes.get("/spool/api/projects/{project}/take-file/{clip}/{take}")
@@ -944,6 +959,7 @@ def register(server, store, media, executor=None):
         take = next((t for t in clip["takes"] if t["id"] == data["takeId"]), None)
         if not take or take.get("placeholder"):
             raise ValueError("Select a video take in this project")
+        await asyncio.to_thread(guard_originals, request, store, media, [take["media"]])
         fps = await asyncio.to_thread(store.frame_rate, request.match_info["project"])
         document = await asyncio.to_thread(store.document, request.match_info["project"])
         size = document.get("resolution") or {"width": 960, "height": 540}

@@ -19,7 +19,8 @@ does not apply.
 - revealing a take or clip folder in the file manager
 - Comfy connection settings and the Cloud API key
 - starting ComfyUI
-- serving original footage, or any footage stored outside the project and Comfy folders
+- serving original footage, or any footage stored outside the project and Comfy folders,
+  and comparing takes or detecting cuts in that footage
 - preparing playback and exporting frames
 
 A request to them must come from a loopback address. It must also use a loopback

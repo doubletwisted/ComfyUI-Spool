@@ -3,6 +3,15 @@
 All notable changes to Spool are recorded here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixes
+
+- Comparing takes and detecting cuts in a take whose original lies outside the
+  project and Comfy folders now answer only this computer, as downloading that
+  original already did. Another machine could otherwise read frames of any image
+  or video on the Spool computer.
+
 ## 0.1.1 (2026-11-03)
 
 ### Directing tools
