@@ -54,6 +54,7 @@ export function createTakeActions({
   clearHeld,
   getProjectEdit,
   getShowActionMenu,
+  flushNative,
 }) {
   function takeSelection(c = selected()) {
     if (c?.id !== getSelectedTakeClip()) {
@@ -194,6 +195,8 @@ export function createTakeActions({
         editView();
         review.clear();
         getViewer().clearVideos();
+        // Save the draft first: the reply replaces the document, and an unsaved edit would be lost with it.
+        await flushNative();
         const { value } = await getProjectEdit().change(revision =>
           request('projects/' + projectKey + '/delete-takes/' + clipId, { revision, takeIds: ids }),
         );
