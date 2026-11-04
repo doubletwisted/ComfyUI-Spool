@@ -11,6 +11,18 @@ from pathlib import Path
 from .wire import wire, unwire
 
 ACTIONS = {"status", "shot", "events", "focus", "command", "compare"}
+LOOPBACK = {"localhost", "127.0.0.1", "::1"}
+
+
+def urlopen(request, timeout):
+    """Reach a Spool on this computer directly, even when a proxy is set for other traffic.
+
+    urllib sends loopback requests to `http_proxy` unless `no_proxy` names them, and a
+    proxy cannot reach this computer's Spool or would make the request look remote.
+    """
+    if (urllib.parse.urlsplit(request.full_url).hostname or "").lower() in LOOPBACK:
+        return urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=timeout)
+    return urllib.request.urlopen(request, timeout=timeout)
 
 
 def run():
@@ -56,7 +68,7 @@ def run():
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
+        with urlopen(request, timeout=120) as response:
             value = json.load(response)
             if not args.wire_json:
                 value = unwire(value)
