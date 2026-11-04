@@ -1737,6 +1737,18 @@ class UnavailableFolderTests(unittest.TestCase):
         with self.assertRaises(NotFound):
             restarted.lookup("attempts", "missing")
 
+    def test_a_folder_upgraded_while_open_is_skipped_by_later_scans(self):
+        workspace = Workspace(self.root / "app")
+        workspace.create({"project": "Good", "clips": [], "media": []}, self.root / "projects" / "Good")
+        workspace.create({"project": "Newer", "clips": [], "media": []}, self.root / "projects" / "Newer")
+        self.assertEqual(len(workspace.project_stores()), 2)
+        manifest = self.root / "projects" / "Newer" / "project.json"
+        manifest.write_text(json.dumps({**json.loads(manifest.read_text()), "formatVersion": 99}))
+        stores = workspace.project_stores()
+        self.assertEqual([store.root.name for store in stores], ["Good"])
+        for store in stores:
+            store.pending()
+
     def test_a_failing_upgrade_is_not_retried_on_every_scan(self):
         workspace = Workspace(self.root / "app")
         folder = self.root / "projects" / "Old"

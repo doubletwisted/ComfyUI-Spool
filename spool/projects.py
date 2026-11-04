@@ -394,7 +394,9 @@ class Workspace(Store):
         for row in self.folders():
             if (Path(row["folder"]) / "project.spool").is_file():
                 try:
-                    stores.append(self.for_project(row["id"]))
+                    store = self.for_project(row["id"])
+                    store.check_manifest()  # an already-open folder may have been upgraded since
+                    stores.append(store)
                 except (ValueError, OSError, sqlite3.Error):
                     continue
         return stores
