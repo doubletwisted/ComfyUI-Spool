@@ -3,9 +3,11 @@ import http.server
 import io
 import json
 import os
+import tempfile
 import threading
 import unittest
 import urllib.error
+from pathlib import Path
 from unittest.mock import patch
 
 from spool.cli import run
@@ -52,6 +54,22 @@ class CliTests(unittest.TestCase):
         ):
             code, out, err = self.invoke(failure)
             self.assertEqual((code, out, json.loads(err)["code"]), (1, "", expected))
+
+    def test_unreadable_command_file_is_a_json_error(self):
+        with tempfile.TemporaryDirectory() as folder:
+            broken = Path(folder) / "command.json"
+            broken.write_text("{not json", encoding="utf-8")
+            for path in (broken, Path(folder) / "missing.json"):
+                err = io.StringIO()
+                with (
+                    patch("sys.argv", ["spool", "command", "project", "--file", str(path)]),
+                    patch("spool.cli.urlopen") as send,
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(err),
+                ):
+                    self.assertEqual(run(), 1)
+                send.assert_not_called()
+                self.assertEqual(json.loads(err.getvalue())["code"], "invalid_request")
 
 
 class LoopbackTests(unittest.TestCase):

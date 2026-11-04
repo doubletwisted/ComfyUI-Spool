@@ -170,7 +170,8 @@ version mismatch asks you to reload the ComfyUI page. These rules apply both
 inside ComfyUI and standalone, independently of local, Cloud or Deadline targets.
 
 The CLI writes JSON errors to stderr and returns 1, including `network_error`,
-`http_error` for non-JSON HTTP failures, and `invalid_response` for invalid JSON.
+`http_error` for non-JSON HTTP failures, `invalid_response` for invalid JSON, and
+`invalid_request` for a command file it cannot read or parse.
 
 ### Public routes
 
