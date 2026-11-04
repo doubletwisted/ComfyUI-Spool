@@ -51,6 +51,9 @@ All notable changes to Spool are recorded here. Versions follow
   published into the project.
 - Projects created, opened or imported at the same moment all stay in the project
   list. One could drop another from the list, leaving its folder unreachable.
+- Files whose names contain a percent sign followed by two hex digits, such as
+  `a%41.mp4`, play, export and collect. Their names were decoded a second time
+  and pointed at a different file.
 
 ## 0.1.1 (2026-11-03)
 
