@@ -1169,6 +1169,13 @@ class Store:
                     pending.add(row["take_id"][:8])
                 result = self._load(row["result"], db, memo=memo) or {}
                 known.update(a.get("originalFile", a.get("file")) for a in result.get("artifacts", []))
+            # A retried farm task's copy is evidence of the same take, not a file dropped into the folder.
+            for row in db.execute(
+                "SELECT e.receipt FROM executions e JOIN attempts a ON a.id=e.attempt_id WHERE a.project_id=?",
+                (project_id,),
+            ):
+                receipt = self._load(row["receipt"], db, memo=memo) or {}
+                known.update(a.get("originalFile", a.get("file")) for a in receipt.get("artifacts", []))
             return known, numbers, pending
 
     def get(self, project_id):

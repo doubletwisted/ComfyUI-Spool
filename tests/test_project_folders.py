@@ -1645,6 +1645,71 @@ class ProjectFolderTests(unittest.TestCase):
 
         asyncio.run(check())
 
+    def test_a_retried_farm_task_does_not_become_a_second_take(self):
+        capture = copy.deepcopy(self.capture)
+        capture["prompt"]["submit"] = {
+            "class_type": "DeadlineSubmit",
+            "inputs": {"output_directory": "", "batch_count": 1, "chunk_size": 1},
+        }
+        saved = self.store.capture(
+            self.project["id"], self.project["revision"], "clip-a", self.media.prepare_workflow(capture, True)
+        )
+        project = requests.accept(
+            self.store, self.media, saved["id"], saved["revision"], [{"clipId": "clip-a", "count": 1}]
+        )
+        attempt = self.store.attempt(project["document"]["jobs"][0]["id"])
+        request = attempt["request"]
+        root = Path(request["prompt"]["submit"]["inputs"]["output_directory"])
+        package = {
+            "schemaVersion": 2,
+            **{k: request[k] for k in ("projectId", "clipId", "takeId", "attemptId", "fingerprint")},
+            "variationIndex": 0,
+            "result": request["capture"]["result"],
+            "assets": copy.deepcopy(request["assets"]),
+            "resultRoot": str(root),
+            "stagedPrompt": {k: copy.deepcopy(v) for k, v in request["prompt"].items() if k != "submit"},
+        }
+        package["submissionId"] = self.store.submission(attempt["id"], package)["id"]
+        for asset in package["assets"]:
+            asset["staged"] = asset["frozen"]
+        folder = root / "spool-submissions" / package["submissionId"]
+        farm_protocol.atomic_json(folder / "request.json", package)
+        farm_protocol.atomic_json(
+            folder / "ack.json",
+            {**{k: package[k] for k in ("schemaVersion", "submissionId", "attemptId", "fingerprint")}, "jobId": "job"},
+        )
+
+        def execute(colour):
+            execution = farm_protocol.prepare_execution(package, package["stagedPrompt"], self.roots[0], 0)
+            name = execution["executionId"] + ".png"
+            Image.new("RGB", (16, 16), colour).save(self.roots[1] / name)
+            history = {
+                "prompt": [0, "worker", execution["prompt"]],
+                "status": {"completed": True, "status_str": "success"},
+                "outputs": {"save": {"images": [{"filename": name, "type": "output"}]}},
+            }
+            farm_protocol.finalize(package, execution, "worker", history, self.media.host_roots, "render", "job")
+
+        collector = Collector(self.workspace, self.base_media)
+        execute("blue")
+        with patch("spool.farm.deadline_command", return_value=""):
+            collector.scan()
+        takes = self.store.get(self.project["id"])["document"]["clips"][0]["takes"]
+        # Deadline retries the task: a second, later execution of the same request.
+        execute("green")
+        with (
+            patch("spool.farm.deadline_command", return_value=""),
+            patch("spool.collection.Collector.HISTORY_INTERVAL", 0),
+        ):
+            collector.scan()
+            clip_folder = self.store.root / "output" / "Desert walk"
+            self.assertEqual(len(list(clip_folder.glob("take-*.png"))), 2)
+            for path in clip_folder.iterdir():
+                os.utime(path, (time.time() - 60, time.time() - 60))  # past the settle time
+            collector.scan()
+            collector.scan()
+        self.assertEqual(self.store.get(self.project["id"])["document"]["clips"][0]["takes"], takes)
+
 
 class CrashRecoveryTests(unittest.TestCase):
     def test_a_crashed_save_cannot_roll_back_another_computers_publications(self):

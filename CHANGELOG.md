@@ -39,6 +39,8 @@ All notable changes to Spool are recorded here. Versions follow
 - MP4 export works for a Windows account whose name contains an apostrophe.
 - **Delete from disk** saves your edits first. An edit not yet saved was replaced
   by the reply, and one still saving made the delete report a conflict.
+- A Deadline task that the farm retried no longer adds its second render to the
+  clip as an extra take; the accepted result stays the only take.
 
 ## 0.1.1 (2026-11-03)
 
