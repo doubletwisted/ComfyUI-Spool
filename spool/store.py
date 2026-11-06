@@ -431,6 +431,20 @@ class Store:
         }
 
     def _dump(self, db, value, *, receipt=False, capture=False):
+        # Storage references are created below, never accepted as authored JSON.
+        # Reject before packing so a failed save rolls back instead of publishing
+        # a document that every subsequent read interprets as a missing blob.
+        def check_authored(held):
+            if isinstance(held, dict):
+                if set(held) == {"__spool_blob__"}:
+                    raise ValueError("Authored values cannot contain a project evidence blob reference")
+                for child in held.values():
+                    check_authored(child)
+            elif isinstance(held, list):
+                for child in held:
+                    check_authored(child)
+
+        check_authored(value)
         if receipt:
             value = copy.deepcopy(value)
             if "primary" in value and "artifacts" in value:

@@ -1753,7 +1753,7 @@ class UnavailableFolderTests(unittest.TestCase):
         workspace = Workspace(self.root / "app")
         folder = self.root / "projects" / "Old"
         workspace.create({"project": "Old", "clips": [], "media": []}, folder)
-        with sqlite3.connect(folder / "project.spool") as db:
+        with closing(sqlite3.connect(folder / "project.spool")) as db, db:
             db.execute("PRAGMA user_version=6")
         (folder / "project.json").unlink()
         restarted = Workspace(self.root / "app")

@@ -34,6 +34,22 @@ class StoreInterfaceTests(unittest.TestCase):
                 edit.save()
         self.assertEqual(self.store.get(self.project["id"])["revision"], self.project["revision"])
 
+    def test_authored_blob_marker_rejection_keeps_the_project_readable(self):
+        for value in ({"__spool_blob__": "missing"}, [{"nested": {"__spool_blob__": "missing"}}]):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "evidence blob reference"):
+                    with self.store.editing(self.project["id"], self.project["revision"]) as edit:
+                        edit.document["brief"] = value
+                        edit.save()
+                self.assertEqual(self.store.get(self.project["id"]), self.project)
+
+    def test_workflow_blob_marker_is_rejected_before_capture(self):
+        with self.assertRaisesRegex(ValueError, "evidence blob reference"):
+            self.store.create(
+                {**self.project["document"], "importedWorkflows": [{"prompt": {"__spool_blob__": "missing"}}]}
+            )
+        self.assertEqual(self.store.get(self.project["id"]), self.project)
+
     def test_a_failing_block_rolls_back_its_save(self):
         with self.assertRaises(RuntimeError):
             with self.store.editing(self.project["id"], self.project["revision"]) as edit:
