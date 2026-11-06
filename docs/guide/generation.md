@@ -166,6 +166,11 @@ before sending it. Results are copied into the clip's folder and checked against
 that record before they become takes. New takes never replace the take in the
 edit.
 
+Spool checks all batch items and their input sources before creating frozen
+copies. Fix any reported input or clip error, then submit the batch again.
+New clip output folder names are distinct even on disks that ignore case;
+previously assigned folders are kept when you rename a clip.
+
 Queue requests use the same defaults in embedded and standalone Spool: an
 omitted count means one take. An explicit empty item list is rejected rather
 than replaced with another selection. Scoped experiments use the same item form.
