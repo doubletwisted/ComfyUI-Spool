@@ -7,6 +7,12 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- New clip output folders stay distinct when names differ only by case, and
+  Windows device names and truncated trailing spaces/dots are made portable.
+  Existing assigned output folders are preserved.
+- Queue preparation validates every item and source before freezing inputs,
+  so an invalid later item does not leave copies from earlier items.
+
 - Authored JSON that impersonates a project evidence blob is rejected before
   saving, so an imported value cannot leave the project unreadable.
 

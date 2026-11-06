@@ -428,7 +428,10 @@ def prepare(store, media, project, items, freeze=True):
                 original = media.prepare_input(original)
                 source = contained(media.host_roots["input"], original.removesuffix(" [input]"))
                 if source not in frozen_assets:
-                    replacement = media.freeze_asset(original) if freeze else original.removesuffix(" [input]")
+                    # Resolve and validate the whole batch before making immutable
+                    # snapshots. A later invalid clip or missing input must not
+                    # leave copies from the requests that preceded it.
+                    replacement = original.removesuffix(" [input]")
                     path = contained(media.host_roots["input"], replacement)
                     frozen_assets[source] = {
                         "frozen": replacement,
@@ -471,6 +474,16 @@ def prepare(store, media, project, items, freeze=True):
                     },
                 )
             )
+    if freeze:
+        for asset in frozen_assets.values():
+            replacement = media.freeze_asset(asset["frozen"])
+            path = contained(media.host_roots["input"], replacement)
+            asset.update({"frozen": replacement, "byteSize": path.stat().st_size, "sha256": sha256(path)})
+        for _, request in requests:
+            for asset in request["assets"]:
+                source = contained(media.host_roots["input"], asset["source"].removesuffix(" [input]"))
+                asset.update(frozen_assets[source])
+                request["prompt"][asset["nodeId"]]["inputs"][asset["input"]] = asset["frozen"]
     return requests
 
 

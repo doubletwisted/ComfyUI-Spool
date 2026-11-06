@@ -25,12 +25,14 @@ from . import __version__
 
 
 def folder_name(name):
-    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", str(name)).strip(" .")[:100]
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", str(name)).strip(" .")[:100].rstrip(" .")
     if not name or name.upper().split(".")[0] in {
         "CON",
         "PRN",
         "AUX",
         "NUL",
+        "CONIN$",
+        "CONOUT$",
         *["COM" + str(i) for i in range(1, 10)],
         *["LPT" + str(i) for i in range(1, 10)],
     }:
@@ -261,15 +263,22 @@ class ProjectStore(Store):
                 t for t in clip.get("takes", []) if t["id"] not in deleted and t["media"]["id"] not in media_ids
             ]
         document["media"] = [m for m in document.get("media", []) if m["id"] not in media_ids]
-        folders = {c.get("outputFolder") for c in document.get("clips", [])}
+
+        # Allocate portable names even on a case-sensitive host. Assigned paths
+        # stay unchanged, including shared folders in existing projects.
+        def folder_key(value):
+            return str((self.root / value).resolve()).casefold()
+
+        folders = {folder_key(c["outputFolder"]) for c in document.get("clips", []) if c.get("outputFolder")}
         existing_folders = {c.get("outputFolder") for c in previous.get("clips", [])}
         for clip in document.get("clips", []):
             if not clip.get("outputFolder"):
-                name = "output/" + folder_name(clip.get("name", "Clip"))
-                if name in folders:
-                    name += "-" + uid()[:8]
+                base = "output/" + folder_name(clip.get("name", "Clip"))
+                name = base
+                while folder_key(name) in folders:
+                    name = base + "-" + uid()[:8]
                 clip["outputFolder"] = name
-                folders.add(name)
+                folders.add(folder_key(name))
             if clip["outputFolder"] not in existing_folders:
                 path = (self.root / clip["outputFolder"]).resolve()
                 if path == self.root / "output" or not path.is_relative_to(self.root / "output"):
