@@ -1,5 +1,9 @@
 # Security and network access
 
+Imported or authored JSON cannot contain a dictionary whose only key is
+`__spool_blob__`. That shape is reserved for internal evidence references.
+Spool rejects it before saving and retains the previous project revision.
+
 Spool has no user accounts. Who can use it depends on who can reach the port of
 the ComfyUI it runs in, or of `python -m spool`.
 

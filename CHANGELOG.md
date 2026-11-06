@@ -7,6 +7,9 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- Authored JSON that impersonates a project evidence blob is rejected before
+  saving, so an imported value cannot leave the project unreadable.
+
 - Comparing takes and detecting cuts in a take whose original lies outside the
   project and Comfy folders now answer only this computer, as downloading that
   original already did. Another machine could otherwise read frames of any image
