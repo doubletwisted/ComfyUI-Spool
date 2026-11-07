@@ -88,6 +88,7 @@
     );
     const image = () =>
       app.rootGraph.nodes.find(node => node.type === 'LoadImage').widgets.find(widget => widget.name === 'image');
+    check('Refreshed loader choices include the current staged image', image().options.values.includes(chosenImage));
     check(
       'Opened graph uses the current clip input instead of a stale editor widget (' +
         image().value +
@@ -272,6 +273,13 @@
           comfy.comfyAPI?.app?.app?.extensionManager?.workflow?.activeWorkflow,
       );
       await n.editWorkflow();
+      const restoredImage = comfy.comfyAPI.app.app.rootGraph.nodes
+        .find(node => node.type === 'LoadImage')
+        .widgets.find(widget => widget.name === 'image');
+      check(
+        'Reloaded linked loader keeps its staged value in refreshed choices',
+        restoredImage.options.values.includes(restoredImage.value),
+      );
       check(
         'Reloaded Comfy keeps the existing editor bridge',
         popups.length === count &&

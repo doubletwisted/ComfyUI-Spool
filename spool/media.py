@@ -1,6 +1,7 @@
 import copy
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -68,6 +69,27 @@ def _video_stream(probe):
         ),
         None,
     )
+
+
+def _video_display_size(stream):
+    """Pixel dimensions after ffmpeg's default autorotation, not the coded frame.
+
+    A display matrix supersedes the older rotate tag. FFmpeg transposes quarter
+    turns (within one degree); its arbitrary-angle rotate keeps the coded canvas.
+    Reflections change the pixels but do not change this size rule.
+    """
+    matrix = next(
+        (item for item in stream.get("side_data_list", []) if item.get("side_data_type") == "Display Matrix"), None
+    )
+    rotation = matrix.get("rotation", 0) if matrix is not None else stream.get("tags", {}).get("rotate", 0)
+    try:
+        rotation = float(rotation) % 360
+    except (TypeError, ValueError):
+        rotation = 0
+    width, height = stream["width"], stream["height"]
+    if math.isfinite(rotation) and (abs(rotation - 90) < 1 or abs(rotation - 270) < 1):
+        return height, width
+    return width, height
 
 
 def _review_probe(path, fps, run=None):
@@ -358,11 +380,17 @@ class Media:
             with Image.open(path) as image:
                 if getattr(image, "n_frames", 1) > 1:
                     raise ValueError("Animated image review is not supported yet. Import a video instead.")
+                width, height = image.size
+                # Pillow applies these orientations, including mirrored quarter
+                # turns, when preparing generation inputs and previews. Leave the
+                # original file untouched so its pixels are not rotated twice.
+                if image.getexif().get(274) in (5, 6, 7, 8):
+                    width, height = height, width
                 result.update(
                     {
                         "kind": "image",
-                        "width": image.width,
-                        "height": image.height,
+                        "width": width,
+                        "height": height,
                         "frames": round(5 * fps),
                         "poster": relative,
                     }
@@ -391,10 +419,11 @@ class Media:
         if not ffmpeg:
             raise ValueError("Install ffmpeg for native media review")
         if video:
+            width, height = _video_display_size(video)
             result.update(
                 {
-                    "width": video["width"],
-                    "height": video["height"],
+                    "width": width,
+                    "height": height,
                     "fps": video.get("avg_frame_rate"),
                     "timeBase": video.get("time_base"),
                     "sourceFrameCount": video.get("nb_frames"),
@@ -505,8 +534,10 @@ class Media:
         return result
 
     def import_footage(self, source, fps=None, detect=True):
-        """Reference a local video in place and split its review proxy into one file per detected shot.
+        """Split a local video's review proxy into one file per detected shot.
 
+        Project imports retain their owned copy using a project-relative original
+        path. Unscoped imports keep the existing absolute in-place reference.
         Shots carry no audio; the source's own audio track is returned separately for the soundtrack lane."""
         source = Path(source)
         if not source.is_absolute() or not source.is_file() or source.suffix.lower() not in VIDEO_EXTENSIONS:
@@ -516,6 +547,7 @@ class Media:
             raise ValueError("The file has no video stream")
         fps = fps or _rate(video["avg_frame_rate"])
         whole = self.describe(source, source.name, fps)
+        original = whole["originalFile"] if self.project_id else str(source)
         ffmpeg = find_tool("ffmpeg")
         proxy = self.root / whole["file"]
         cuts = detect_cuts(scene_scores(ffmpeg, proxy, self.cache / "previews" / "cut-scores"), fps) if detect else []
@@ -588,7 +620,7 @@ class Media:
                     "kind": "video",
                     "name": f"Shot {index + 1:02d}",
                     "file": file.relative_to(self.root).as_posix(),
-                    "originalFile": str(source),
+                    "originalFile": original,
                     "poster": poster.relative_to(self.root).as_posix(),
                     "frames": count,
                     "duration": count / fps,
@@ -629,7 +661,7 @@ class Media:
                 timeout=300,
             )
             audio = self.describe(track, source.stem + " audio", fps)
-            audio["originalFile"] = str(source)
+            audio["originalFile"] = original
             audio.update(
                 fps=whole["fps"],
                 frames=whole["frames"],

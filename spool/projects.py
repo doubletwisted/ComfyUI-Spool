@@ -44,6 +44,8 @@ class ProjectStore(Store):
     def __init__(self, folder, workspace=None, *, migrate=True, writable=False):
         self.workspace = workspace
         self.migrate_on_open = migrate
+        self.publication_lock = threading.Lock()
+        self.publication_cache = None
         folder = Path(folder).resolve()
         self.manifest = folder / "project.json"
         self.check_manifest()
@@ -104,9 +106,73 @@ class ProjectStore(Store):
             }
             atomic_json(self.manifest, value)
 
-    def signature(self):
+    def signature(self, *, locked=False):
+        """Name one published snapshot, not merely a timestamp and a size.
+
+        FAT, HFS+ and some SMB servers give files a one- or two-second timestamp, and a
+        SQLite snapshot usually keeps its size. A save in the same tick therefore used to
+        look unchanged, so a reader kept an old revision and could later save over newer
+        work. Every publication puts a fresh UUID in the snapshot itself. The stat fields
+        still make an old snapshot without that marker detectable when it is replaced, and
+        they let a reader reuse the cached marker without opening the share on every poll.
+        Cache misses open SQLite under the project lock so its Windows handle cannot
+        prevent a concurrent replacement. Callers holding that lock pass locked=True.
+        """
         stat = self.snapshot.stat()
-        return [stat.st_mtime_ns, stat.st_size]
+        fields = [stat.st_mtime_ns, stat.st_size, stat.st_dev, stat.st_ino, stat.st_ctime_ns]
+        key = (stat.st_dev, stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
+        # Whole-millisecond or whole-second timestamps are the filesystems where two
+        # publications can share every visible stat field; there the marker is read each
+        # time instead of trusted from the cache.
+        cacheable = stat.st_ino != 0 and stat.st_mtime_ns % 1_000_000 and stat.st_ctime_ns % 1_000_000
+        with self.publication_lock:
+            if cacheable and self.publication_cache is not None and self.publication_cache[0] == key:
+                return [*fields, self.publication_cache[1]]
+        if not locked:
+            with file_lock(self.lock_file):
+                # Publication may have changed while waiting: stat and marker must
+                # identify the same file, and a file lock must never be reacquired.
+                return self.signature(locked=True)
+        value = self.read_publication()
+        # A snapshot is never edited in place: publications replace the file. File identity
+        # lets unchanged polls avoid opening SQLite while a replacement still misses the cache.
+        with self.publication_lock:
+            if cacheable:
+                self.publication_cache = (key, value)
+        return [*fields, value]
+
+    def read_publication(self):
+        """Read under the project lock; only an absent legacy table has no identity."""
+        with closing(sqlite3.connect(read_only_uri(self.snapshot), uri=True)) as db:
+            exists = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='spool_publication'"
+            ).fetchone()
+            if not exists:
+                return None
+            row = db.execute("SELECT publication FROM spool_publication WHERE id=1").fetchone()
+        if not row or not isinstance(row[0], str) or not row[0]:
+            raise sqlite3.DatabaseError("Spool snapshot publication identity is missing or invalid")
+        return row[0]
+
+    def write_publication(self, path):
+        """Stamp the copy that is about to replace project.spool, before it is visible.
+
+        The marker is an additive table, not a schema-version change: older Spool readers
+        ignore it, and the project document and manifest keep their existing shape.
+        """
+        token = uid()
+        db = sqlite3.connect(path, timeout=30)
+        try:
+            db.execute("PRAGMA journal_mode=DELETE")
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS spool_publication("
+                "id INTEGER PRIMARY KEY CHECK(id=1), publication TEXT NOT NULL)"
+            )
+            db.execute("INSERT OR REPLACE INTO spool_publication VALUES(1,?)", (token,))
+            db.commit()
+        finally:
+            db.close()
+        return token
 
     @contextmanager
     def connect(self):
@@ -117,7 +183,7 @@ class ProjectStore(Store):
         notifications = []
         with file_lock(self.local_lock), file_lock(self.lock_file):
             self.check_manifest()
-            signature = self.signature() if self.snapshot.exists() else None
+            signature = self.signature(locked=True) if self.snapshot.exists() else None
             try:
                 saved = json.loads(self.stamp.read_text()) if self.stamp.exists() else None
             except json.JSONDecodeError:
@@ -165,13 +231,14 @@ class ProjectStore(Store):
                             backup.execute("PRAGMA journal_mode=DELETE")
                         finally:
                             backup.close()
+                        self.write_publication(local)
                         with local.open("rb") as source, pending.open("wb") as target:
                             shutil.copyfileobj(source, target)
                             target.flush()
                             os.fsync(target.fileno())
                         atomic_replace(pending, self.snapshot)
                         self.write_manifest(db)
-                        self.stamp.write_text(json.dumps(self.signature()))
+                        self.stamp.write_text(json.dumps(self.signature(locked=True)))
                         if notify:
                             notifications = [
                                 {"projectId": identity, "revision": token[0], "cursor": token[1]}
@@ -226,7 +293,7 @@ class ProjectStore(Store):
             if saved != signature or not self.read_runtime.exists():
                 with file_lock(self.lock_file):
                     self.check_manifest()
-                    signature = self.signature()
+                    signature = self.signature(locked=True)
                     pending = self.read_runtime.with_suffix(".partial")
                     try:
                         shutil.copyfile(self.snapshot, pending)
@@ -380,10 +447,14 @@ class Workspace(Store):
         attempt at a failing migration first writes a backup of the snapshot. A changed
         snapshot or manifest is tried again at once.
         """
-        files = tuple(
-            (path.stat().st_mtime_ns, path.stat().st_size) if path.exists() else None
-            for path in (folder / "project.spool", folder / "project.json")
-        )
+
+        def state(path):
+            if not path.exists():
+                return None
+            stat = path.stat()
+            return (stat.st_mtime_ns, stat.st_size, stat.st_dev, stat.st_ino, stat.st_ctime_ns)
+
+        files = tuple(state(path) for path in (folder / "project.spool", folder / "project.json"))
         held = self.unavailable.get(str(folder))
         if held and held[0] == files and time.monotonic() < held[2]:
             raise held[1].with_traceback(None)

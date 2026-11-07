@@ -157,4 +157,87 @@ const send = (method, path, value, headers) => api(path, { method, body: JSON.st
   check('A file the other half uses is not deleted', refused === 400 && /c2/.test(error.error));
 }
 
+{
+  // The demo mirrors host take_files.plan using recorded paths; no files are removed.
+  const deletion = 'projects/' + ID + '/delete-takes/clip-1';
+  const edit = async mutate => {
+    const [, current] = await api('projects/' + ID);
+    const document = structuredClone(current.document);
+    mutate(document);
+    const [status, saved] = await send('PUT', 'projects/' + ID, { revision: current.revision, document });
+    check('Deletion fixture saves at the current revision', status === 200);
+    return saved;
+  };
+  const refused = async (label, current, ids, message) => {
+    const [status, error] = await send('POST', deletion, { revision: current.revision, takeIds: ids });
+    check(label, status === 400 && message.test(error.error));
+    const [, after] = await api('projects/' + ID);
+    check(
+      label + ' leaves the document, revision and token unchanged',
+      JSON.stringify(after) === JSON.stringify(current),
+    );
+  };
+  let current = await edit(document => {
+    document.media = [
+      { ...take('a').media, id: 'pool-a' },
+      { ...take('unrelated').media, id: 'pool-keep' },
+    ];
+    document.clips[1].bindings = [{ key: 'source', asset: true }];
+    document.clips[1].inputValues = { source: 'spool-projects/' + ID + '/output/a.mp4 [input]' };
+  });
+  await refused('A selected file used as a staged generation input is protected', current, ['a'], /generation input/);
+  current = await edit(document => {
+    document.clips[1].inputValues.source = 'spool-projects/' + ID + '/output/./a.mp4';
+  });
+  await refused('Generation input path aliases are protected', current, ['a'], /generation input/);
+  current = await edit(document => {
+    document.clips[1].inputValues.source = 'not-a-file';
+    document.audioClips = [{ id: 'audio', media: take('a').media }];
+  });
+  await refused('Timeline audio protects the selected source', current, ['a'], /timeline audio/);
+  current = await edit(document => {
+    document.audioClips = [];
+    document.media.push({ id: 'pool-shared', file: 'output/another.mp4', poster: 'output/a.json' });
+  });
+  await refused('A pool asset sharing the deleted sidecar is protected', current, ['a'], /media-pool asset/);
+  current = await edit(document => {
+    document.media = document.media.filter(media => media.id !== 'pool-shared');
+    document.clips[1].takes.push({ ...take('alias'), media: { ...take('alias').media, file: 'output/a.mov' } });
+  });
+  await refused('Another take sharing the selected sidecar is protected', current, ['a'], /another take/);
+  current = await edit(document => {
+    document.clips[1].takes = document.clips[1].takes.filter(take => take.id !== 'alias');
+    document.clips[1].bindings = [{ key: 'text', asset: false }];
+    document.clips[1].inputValues = { text: 'spool-projects/' + ID + '/output/a.mp4' };
+  });
+  const [status, value] = await send('POST', deletion, { revision: current.revision, takeIds: ['a', 'a'] });
+  check('Non-asset text matching a file does not block deletion', status === 200);
+  check('Deleted take IDs are deduplicated as on the host', JSON.stringify(value.deleted) === '["a"]');
+  check(
+    'Media-pool aliases of a deleted original are recorded with the take media',
+    value.project.document.deletedMediaIds.includes('media-a') &&
+      value.project.document.deletedMediaIds.includes('pool-a'),
+  );
+  check(
+    'Only media-pool records using deleted originals are removed',
+    value.project.document.media.length === 1 && value.project.document.media[0].id === 'pool-keep',
+  );
+  const [, unchanged] = await api('projects/' + ID, { headers: { 'X-Spool-Since': value.project.syncToken } });
+  check(
+    'Deletion publishes a new poll token with the host reply shape',
+    !unchanged.document && unchanged.jobs.length === 1,
+  );
+
+  current = await edit(document => {
+    document.clips[0].takes.push({ ...take('external'), media: { ...take('external').media, file: '../outside.mp4' } });
+  });
+  await refused(
+    'A take outside project-owned media folders cannot be deleted',
+    current,
+    ['external'],
+    /owned by this project/,
+  );
+  await refused('Invalid take-ID types use the host validation message', current, [3], /Select the takes/);
+}
+
 console.log(checks.length + ' demo API checks passed');

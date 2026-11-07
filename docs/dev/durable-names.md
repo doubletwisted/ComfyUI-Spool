@@ -17,6 +17,7 @@ against `spool.__version__`; protocol fixtures pin API and bridge versions.
 | Template modes `embedded`, `prepare`; messages `spool-template-request`, `spool-template-state`, `spool-prepare-template`, `spool-template-preparation` | `ui/bridge.js` |
 | Browser bridge identity `spool-comfy-bridge` | `ui/bridge.js` (session storage) |
 | `project.spool`, `.spool/project.lock`, `app.sqlite3` | `spool/projects.py`, `spool/store.py` |
+| Additive snapshot table `spool_publication` | `spool/projects.py` |
 | Project `input/images`, `input/audio`, `input/video`, `output` (per-clip output folders), `.spool/previews`, `.spool/receipts` | `spool/projects.py` |
 | `receipt.json` | `spool/receipts.py`, `spool/farm_protocol.py` |
 | Media-stem `.json` sidecars | `spool/sidecars.py` |
