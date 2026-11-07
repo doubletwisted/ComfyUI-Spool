@@ -7,6 +7,10 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- Cloud key status follows the effective saved or environment credential,
+  including empty or whitespace-only values.
+- Registry publishing pins its external action to a reviewed commit.
+
 - Failed input staging and export muxing remove their own partial files while
   preserving published inputs, successful exports and the original error.
 
