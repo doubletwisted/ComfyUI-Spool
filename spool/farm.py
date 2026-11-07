@@ -20,6 +20,21 @@ class FarmCollector:
         self.observed_at = {}
         self.observations = {}
         self.verified_receipts = {}
+        self.submitting_at = {}
+
+    def submission_overdue(self, attempt, row, directory):
+        identity = attempt["id"]
+        if row["external_id"] or attempt["status"] in attempts.TERMINAL | {attempts.SUBMISSION_UNCERTAIN}:
+            self.submitting_at.pop(identity, None)
+            return False
+        # The submitter writes this marker immediately before the external call,
+        # after host validation and asset staging. Attempt age includes queued time.
+        # First observation gives a conservative fresh grace period after restart,
+        # without depending on wall clocks or timestamps from the farm share.
+        if identity not in self.submitting_at and (directory / "submitting.json").is_file():
+            self.submitting_at[identity] = time.monotonic()
+        started = self.submitting_at.get(identity)
+        return started is not None and time.monotonic() - started > 30
 
     def receipt_checkpoint(self, package, receipt, root):
         files = []
@@ -38,16 +53,20 @@ class FarmCollector:
             changed = self.store.transition(attempt["id"], status, expected=observed, **kwargs)
             if changed:
                 observed = status
+                if status in attempts.TERMINAL | {attempts.SUBMISSION_UNCERTAIN}:
+                    self.submitting_at.pop(attempt["id"], None)
             return changed
 
         row = self.store.submission_for(attempt["id"])
         if not row:
+            self.submitting_at.pop(attempt["id"], None)
             return
         root = Path(attempt["request"]["prompt"][attempt["request"]["launcherNodeId"]]["inputs"]["output_directory"])
         directory = contained(root, "spool-submissions/" + row["id"])
         request_file, ack_file = directory / "request.json", directory / "ack.json"
+        overdue = self.submission_overdue(attempt, row, directory)
         if not request_file.is_file():
-            if attempt["status"] != attempts.COMPLETE and time.time() - attempt["created"] > 30:
+            if overdue:
                 transition(
                     attempts.SUBMISSION_UNCERTAIN,
                     error="No durable submission package or acknowledgment yet; no automatic resubmission",
@@ -79,6 +98,7 @@ class FarmCollector:
             if any(ack.get(k) != package[k] for k in ("schemaVersion", "submissionId", "attemptId", "fingerprint")):
                 raise ValueError("Submission acknowledgment belongs to another request")
             self.store.acknowledge(row["id"], ack["jobId"])
+            self.submitting_at.pop(attempt["id"], None)
             if attempt["status"] not in (
                 attempts.COMPLETE,
                 attempts.CANCELLED,
@@ -90,7 +110,7 @@ class FarmCollector:
                 transition(attempts.FARM_QUEUED)
         elif row["external_id"]:
             ack = {"jobId": row["external_id"]}
-        elif attempt["status"] != attempts.COMPLETE and time.time() - attempt["created"] > 30:
+        elif overdue:
             transition(
                 attempts.SUBMISSION_UNCERTAIN,
                 error="Submission response or acknowledgment unavailable; no automatic resubmission",

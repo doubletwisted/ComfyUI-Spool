@@ -9,6 +9,7 @@ from .requests import local_compatibility
 from . import requests
 from .store import uid, Conflict
 from .collection import Collector
+from .cloud import storage_call
 from .execution_targets import adapter_for
 
 
@@ -105,7 +106,7 @@ class LocalExecutor:
         store = self.store.for_project(project_id)
         media = self.media.for_project(store, project_id)
         async with self.lock:
-            project = await asyncio.to_thread(
+            project = await storage_call(
                 requests.accept,
                 store,
                 media,
@@ -119,8 +120,8 @@ class LocalExecutor:
                 return project
             for job in project["document"]["jobs"]:
                 if job["status"] in {attempts.INTENT, attempts.WAITING}:
-                    await self.dispatch(await asyncio.to_thread(store.attempt, job["id"]))
-            return await asyncio.to_thread(store.get, project_id)
+                    await self.dispatch(await storage_call(store.attempt, job["id"]))
+            return await storage_call(store.get, project_id)
 
     async def dispatch(self, attempt):
         """Hand one frozen attempt to this Comfy's queue or to Deadline.
@@ -137,16 +138,16 @@ class LocalExecutor:
         store = self.store.for_project(attempt["project_id"])
         media = self.media.for_project(store, attempt["project_id"])
         request = attempt["request"]
-        if self.managed and (await asyncio.to_thread(self.store.host))["sessionId"] != self.session_id:
+        if self.managed and (await storage_call(self.store.host))["sessionId"] != self.session_id:
             raise RuntimeError("Spool executor ownership changed")
-        if not await asyncio.to_thread(store.claim, attempt["id"], self.session_id):
+        if not await storage_call(store.claim, attempt["id"], self.session_id):
             return
 
         observed = attempts.DISPATCHING  # claim atomically moved the intent.
 
         async def transition(status, **kwargs):
             nonlocal observed
-            changed = await asyncio.to_thread(store.transition, attempt["id"], status, expected=observed, **kwargs)
+            changed = await storage_call(store.transition, attempt["id"], status, expected=observed, **kwargs)
             if changed:
                 observed = status
             return changed
@@ -156,7 +157,7 @@ class LocalExecutor:
             prepared = adapter.prepare(attempt, {})
             package = prepared.get("package")
             if package is not None:
-                submission = await asyncio.to_thread(store.submission, attempt["id"], package)
+                submission = await storage_call(store.submission, attempt["id"], package)
                 package["submissionId"] = submission["id"]
             payload = prepared["payload"]
             payload = self.server.trigger_on_prompt(payload)
@@ -172,7 +173,7 @@ class LocalExecutor:
                 else payload.get("partial_execution_targets")
             )
             valid = await self.validate(attempt["prompt_id"], prompt, targets)
-            await asyncio.to_thread(
+            await storage_call(
                 store.dispatched,
                 attempt["id"],
                 payload,
@@ -195,7 +196,7 @@ class LocalExecutor:
                 if not checked[0] or check["output"] not in checked[2]:
                     await transition(attempts.FAILED, error=check["error"] + json.dumps(checked[1]))
                     return
-            await asyncio.to_thread(verify_frozen_inputs, media, request, prompt)
+            await storage_call(verify_frozen_inputs, media, request, prompt)
             if not await transition(
                 attempts.DISPATCHING, result={"validation": {"acceptedOutputs": valid[2], "nodeErrors": valid[3]}}
             ):
@@ -206,7 +207,7 @@ class LocalExecutor:
                 attempt, {**prepared, "server": self.server, "payload": payload, "valid": valid}
             )
             if "jobId" in submitted:
-                await asyncio.to_thread(store.acknowledge, package["submissionId"], submitted["jobId"])
+                await storage_call(store.acknowledge, package["submissionId"], submitted["jobId"])
             await transition(submitted["status"])
         except Exception as error:
             await transition(attempts.UNCERTAIN, error=str(error))
@@ -228,6 +229,10 @@ class LocalExecutor:
 
     def observe(self, store, media, attempt, running_ids, pending_ids):
         """Record what Comfy reports for one local attempt; True when it still needs dispatch."""
+        with self.collector.project_lock(store):
+            return self._observe(store, media, attempt, running_ids, pending_ids)
+
+    def _observe(self, store, media, attempt, running_ids, pending_ids):
         attempt_id = attempt["id"]
         observed = attempt["status"]
 
@@ -297,17 +302,17 @@ class LocalExecutor:
         async with self.lock:
             running, pending = self.server.prompt_queue.get_current_queue()
             running_ids, pending_ids = {x[1] for x in running}, {x[1] for x in pending}
-            for store, media, attempt in await asyncio.to_thread(self.pending_attempts):
+            for store, media, attempt in await storage_call(self.pending_attempts):
                 if attempts.target_of(attempt["request"]) == attempts.DEADLINE:
                     if attempt["status"] in {attempts.INTENT, attempts.WAITING}:
                         await self.dispatch(attempt)
                     continue
                 if attempt["status"] == attempts.CANCEL_REQUESTED and not (
                     (store.owner(attempt["id"]) or "").startswith(self.identity)
-                    and await asyncio.to_thread(self.stop, store, attempt, running_ids, pending_ids)
+                    and await storage_call(self.stop, store, attempt, running_ids, pending_ids)
                 ):
                     continue
-                if await asyncio.to_thread(self.observe, store, media, attempt, running_ids, pending_ids):
+                if await storage_call(self.observe, store, media, attempt, running_ids, pending_ids):
                     await self.dispatch(attempt)
 
     async def poll(self, app):
@@ -331,25 +336,29 @@ class LocalExecutor:
             task = asyncio.create_task(self.run())
             yield
         finally:
-            if task is not None:
-                task.cancel()
+            try:
+                if task is not None:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+            finally:
                 try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-            if self.managed:
-                self.store.retire_host(self.session_id)
-            self.managed = False
-            self.ownership.close()
+                    if self.managed:
+                        self.store.retire_host(self.session_id)
+                finally:
+                    self.managed = False
+                    self.ownership.close()
 
     async def run(self):
         while True:
             try:
                 if self.managed:
-                    await asyncio.to_thread(self.store.publish_host, self.configuration, self.session_id)
+                    await storage_call(self.store.publish_host, self.configuration, self.session_id)
                 await self.reconcile()
-                await asyncio.to_thread(self.collector.scan)
-                await asyncio.to_thread(self.notify_progress)
+                await storage_call(self.collector.scan)
+                await storage_call(self.notify_progress)
             except Exception:
                 logging.exception("Spool reconciliation failed; saved attempts remain pending")
             await asyncio.sleep(2)

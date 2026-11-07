@@ -63,9 +63,6 @@ def file_lock(path):
     # One coarse lock covers refresh, transaction and atomic publication. No live
     # SQLite/WAL file is opened on the share, including by the offline editor.
     with path.open("a+b") as handle:
-        if handle.tell() == 0:
-            handle.write(b"0")
-            handle.flush()
         deadline = time.monotonic() + 30
         while True:
             handle.seek(0)
@@ -82,6 +79,11 @@ def file_lock(path):
                     raise Conflict("Project is busy in another editor. Try again.") from error
                 time.sleep(0.05)
         try:
+            # Byte locks may cover an empty file. Initialize only after taking
+            # the lock: a read-only maintenance copy may already own byte zero.
+            if handle.seek(0, os.SEEK_END) == 0:
+                handle.write(b"0")
+                handle.flush()
             yield
         finally:
             if os.name == "nt":

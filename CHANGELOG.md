@@ -7,6 +7,13 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- Manual reconciliation and background collection serialize work for each
+  project, preventing duplicate artifact copies. Shutdown waits for collection
+  workers to finish before releasing ownership.
+- Deadline submission grace no longer includes time waiting in the queue or
+  preparing inputs, so old queued takes can still be submitted.
+- Maintenance dry runs scan a private snapshot, so a long report does not block
+  another editor's save on Windows.
 - Invalid or nonfinite probed frame rates produce a clear validation error.
 - Cloud observation batches settle before reporting failures; cancellation
   preserves other errors and always releases executor ownership on shutdown.

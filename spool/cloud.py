@@ -87,11 +87,22 @@ async def storage_call(function, *args, **kwargs):
     # Cancellation must not leave a SQLite/file operation running after the
     # server releases its executor lock or closes the project workspace.
     task = asyncio.create_task(asyncio.to_thread(function, *args, **kwargs))
-    try:
-        return await asyncio.shield(task)
-    except asyncio.CancelledError:
-        await task
-        raise
+    cancelled = None
+    while True:
+        try:
+            result = await asyncio.shield(task)
+        except asyncio.CancelledError as error:
+            if task.cancelled():
+                raise
+            cancelled = cancelled or error
+        except BaseException as error:
+            if cancelled is not None:
+                raise cancelled from error
+            raise
+        else:
+            if cancelled is not None:
+                raise cancelled
+            return result
 
 
 class CloudExecutor:

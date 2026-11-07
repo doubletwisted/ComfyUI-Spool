@@ -170,6 +170,19 @@ and cross-directory moves become new takes. Changed bytes at an indexed path
 create a new take; the old record points to a missing source instead of silently
 playing the replacement. Renames/replacements discard old file-owned evidence.
 
+Manual reconciliation, local result observation and Cloud receipt ingestion use
+the same collector's per-project thread lock as periodic scans. File collection
+for one project cannot reuse another worker's partial files; other projects have
+independent locks. Cancellation drains these storage workers before their
+executor lock or lifecycle ownership is released, including repeated cancellation.
+
+Deadline's 30-second missing-acknowledgment grace starts when collection first
+observes the durable `submitting.json` marker written immediately before the
+external call. Queued time, validation and staging do not consume it. Restarting
+the collector grants fresh grace. An observed marker remains evidence if share
+files disappear; a never-observed missing marker stays pending conservatively.
+Recovery does not automatically submit another job.
+
 Once daily, collection expires events and operation/result payloads older than
 30 days, retaining each project's latest event cursor and cancellation effects whose
 delivery is unconfirmed or whose attempt is still active. Operation ID/project/digest tombstones live forever: expired retries
@@ -177,8 +190,13 @@ return an operation conflict and never execute again. Attempt ownership rows
 expire with old terminal attempts. Attempts, dispatches and execution receipts
 remain evidence for recovery and deduplication; they are not diagnostic logs.
 No Python/JavaScript authored document fields or wire versions change.
-Maintenance reports open immutable read-only snapshots: no migrations, directory
-creation, cache refresh or take-file recovery.
+Maintenance reports scan immutable read-only snapshots in private temporary
+directories, removed after the report. They do not migrate, create project
+directories, refresh the workspace cache or recover take files. Copying holds an
+existing project lock until the source handle closes; SQLite then opens only the
+private copy, letting writers publish during long scans on Windows. Read-only
+inspection never creates a lock. A legacy folder without one can still briefly
+obstruct Windows replacement while the source is being copied.
 
 `durable.py` owns unique temporary files, flush/fsync, atomic replacement with
 SMB retry, and failure cleanup for JSON receipts, take sidecars, farm JSON and
