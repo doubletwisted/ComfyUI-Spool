@@ -10,7 +10,8 @@ import time
 from pathlib import Path
 
 from . import attempts, farm_protocol, joins, sidecars, system
-from .media import contained
+from .durable import atomic_replace
+from .media import contained, unique_partial
 from .execution_targets import adapter_for
 
 
@@ -193,11 +194,17 @@ class FarmCollector:
                     receipt["executionId"],
                 )
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                pending = destination.with_name(destination.name + ".partial")
-                shutil.copyfile(source, pending)
-                if farm_protocol.checksum(pending) != artifact["sha256"]:
-                    raise ValueError("Farm ingestion copy changed checksum")
-                pending.replace(destination)
+                pending = unique_partial(destination)
+                try:
+                    shutil.copyfile(source, pending)
+                    if farm_protocol.checksum(pending) != artifact["sha256"]:
+                        raise ValueError("Farm ingestion copy changed checksum")
+                    atomic_replace(pending, destination)
+                finally:
+                    try:
+                        pending.unlink(missing_ok=True)
+                    except OSError:
+                        pass  # Preserve the copy, checksum or replacement failure if cleanup is denied.
                 metadata = self.media.describe(destination, fps=attempt["request"].get("sequenceFps", 24))
                 artifacts.append({**metadata, **artifact})
             result = {

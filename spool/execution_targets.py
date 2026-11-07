@@ -17,9 +17,15 @@ import time
 from typing import Protocol
 
 from . import attempts, deadline_job
+from .errors import Unavailable
 from .media import check_frozen, contained
 from .credentials import cloud_key
 from .store import Conflict
+
+DEADLINE_LOOKUP_UNAVAILABLE = (
+    "Deadline did not answer the recovery lookup; no work was changed and nothing was resubmitted. "
+    "Retry submission recovery when Deadline is reachable again"
+)
 
 
 class ExecutionAdapter(Protocol):
@@ -28,6 +34,14 @@ class ExecutionAdapter(Protocol):
     async def observe(self, attempt: dict, context: dict) -> dict: ...
     async def cancel(self, attempt: dict, context: dict) -> dict: ...
     def recover(self, attempt: dict, context: dict) -> dict: ...
+
+
+def _deadline_lookup(call, *arguments):
+    """External lookup failures are service unavailability, not Spool bugs."""
+    try:
+        return call(*arguments)
+    except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+        raise Unavailable(DEADLINE_LOOKUP_UNAVAILABLE) from error
 
 
 def cancellation(attempt, target, submission=None):
@@ -244,12 +258,12 @@ class DeadlineAdapter(LocalAdapter):
         submission = context.get("submission")
         if not submission:
             raise ValueError("This attempt has no Deadline submission")
-        found = farm.submission_jobs(submission["id"])
+        found = _deadline_lookup(farm.submission_jobs, submission["id"])
         if len(found) > 1:
             raise Conflict("Multiple jobs match; operator resolution required")
         if found and (
-            farm.job_value(found[0], "SpoolSubmissionId") != submission["id"]
-            or farm.job_value(found[0], "SpoolAttemptId") != attempt["id"]
+            _deadline_lookup(farm.job_value, found[0], "SpoolSubmissionId") != submission["id"]
+            or _deadline_lookup(farm.job_value, found[0], "SpoolAttemptId") != attempt["id"]
         ):
             raise ValueError("Deadline job identity failed ownership verification")
         return {"jobId": found[0] if found else None}

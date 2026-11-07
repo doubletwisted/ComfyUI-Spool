@@ -102,6 +102,31 @@ def inside(path, root):
     return os.path.normcase(os.path.abspath(path)).startswith(base + os.sep)
 
 
+def required_fields(data, *fields):
+    """Read required top-level JSON fields as a client error, before any work.
+
+    A missing field is a malformed request, not an internal failure. The route
+    still validates each value, so accepted types do not change here.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("Request body must be a JSON object")
+    for field in fields:
+        if field not in data:
+            raise ValueError("Request body is missing the required %s field" % field)
+    return [data[field] for field in fields]
+
+
+def revision_header(request):
+    """The saved revision a workflow import is written against."""
+    value = request.headers.get("X-Spool-Revision")
+    if value is None:
+        raise ValueError("The X-Spool-Revision header is required")
+    try:
+        return int(value)
+    except ValueError:
+        raise ValueError("The X-Spool-Revision header must be an integer") from None
+
+
 def register(server, store, media, executor=None):
     """Executor is None when Spool runs without ComfyUI; editing, import and export still work."""
     routes = server.routes
@@ -367,10 +392,9 @@ def register(server, store, media, executor=None):
     async def generation_preview(request):
         store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
+        revision, clip_id = required_fields(data, "revision", "clipId")
         return response(
-            await asyncio.to_thread(
-                requests.preview, store, media, request.match_info["project"], data["revision"], data["clipId"]
-            )
+            await asyncio.to_thread(requests.preview, store, media, request.match_info["project"], revision, clip_id)
         )
 
     @routes.get("/spool/api/projects/{project}/status")
@@ -511,31 +535,31 @@ def register(server, store, media, executor=None):
         store, media = await asyncio.to_thread(services, request)
         text = await request.text()
         data = await asyncio.to_thread(lambda: unwire(json.loads(text)))
+        revision, document = required_fields(data, "revision", "document")
+        if not isinstance(document, dict) or not isinstance(document.get("clips"), list):
+            raise ValueError("Project document must be an object with a clips list")
         recipes = {}
         for version, capture in data.get("workflowRecipes", {}).items():
             recipes[version] = await prepare_capture(capture, request)
-            for clip in data["document"]["clips"]:
+            for clip in document["clips"]:
                 if clip.get("workflowVersion") == version and clip.get("inputValues"):
                     operations.restage(capture, recipes[version], clip["inputValues"])
         return await project_response(
             request,
-            await asyncio.to_thread(
-                store.save, request.match_info["project"], data["revision"], data["document"], recipes
-            ),
+            await asyncio.to_thread(store.save, request.match_info["project"], revision, document, recipes),
         )
 
     @routes.post("/spool/api/projects/{project}/import-workflow")
     @endpoint
     async def import_workflow(request):
         store, media = await asyncio.to_thread(services, request)
+        revision = revision_header(request)
         imported = parse_import(await request.text(), unquote(request.headers.get("X-Filename", "Imported workflow")))
         imported["data"] = await prepare_inputs(imported["data"], request)
         project_id = request.match_info["project"]
         project = await asyncio.to_thread(store.get, project_id)
         project["document"].setdefault("importedWorkflows", []).append(imported)
-        saved = await asyncio.to_thread(
-            store.save, project_id, int(request.headers["X-Spool-Revision"]), project["document"]
-        )
+        saved = await asyncio.to_thread(store.save, project_id, revision, project["document"])
         return response({"project": saved, "workflow": imported})
 
     @routes.post("/spool/api/projects/{project}/capture/{clip}")
@@ -543,7 +567,9 @@ def register(server, store, media, executor=None):
     async def capture(request):
         store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
-        original = data["capture"]
+        revision, original = required_fields(data, "revision", "capture")
+        if not isinstance(original, dict):
+            raise ValueError("The captured workflow must be a JSON object")
         data["capture"] = await prepare_capture(original, request)
         if data.get("overrides"):
             operations.restage(original, data["capture"], data["overrides"])
@@ -551,7 +577,7 @@ def register(server, store, media, executor=None):
             operations.apply_capture,
             store,
             request.match_info["project"],
-            data["revision"],
+            revision,
             request.match_info["clip"],
             data["capture"],
             data.get("overrides"),
@@ -640,14 +666,15 @@ def register(server, store, media, executor=None):
     async def use_take(request):
         store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
+        revision, take_id = required_fields(data, "revision", "takeId")
         capture = await prepare_inputs(data["capture"], request, True) if data.get("capture") else None
         saved = await asyncio.to_thread(
             operations.use_take,
             store,
             request.match_info["project"],
-            data["revision"],
+            revision,
             request.match_info["clip"],
-            data["takeId"],
+            take_id,
             capture,
         )
         return await project_response(request, saved)
@@ -663,14 +690,15 @@ def register(server, store, media, executor=None):
     async def delete_take_files(request):
         selected, _ = await asyncio.to_thread(services, request)
         data = await request.json()
+        revision, take_ids = required_fields(data, "revision", "takeIds")
         return response(
             await asyncio.to_thread(
                 take_files.delete,
                 selected,
                 request.match_info["project"],
-                data["revision"],
+                revision,
                 request.match_info["clip"],
-                data["takeIds"],
+                take_ids,
             )
         )
 
@@ -712,12 +740,13 @@ def register(server, store, media, executor=None):
     async def queue(request):
         store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
+        (revision,) = required_fields(data, "revision")
         project_id = request.match_info["project"]
         items = requests.queue_items(data)
         if executor is not None:
             value = await executor.queue(
                 project_id,
-                data["revision"],
+                revision,
                 items,
                 data.get("operationId"),
                 data.get("actor", "human"),
@@ -728,7 +757,7 @@ def register(server, store, media, executor=None):
                 store,
                 media,
                 project_id,
-                data["revision"],
+                revision,
                 items,
                 data.get("operationId"),
                 data.get("actor", "human"),

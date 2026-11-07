@@ -7,6 +7,12 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- Local, Deadline and Cloud collection own their temporary files, so concurrent
+  collectors cannot overwrite or remove each other's unfinished copies.
+- Finding an existing Deadline job reports an unavailable service with a retry
+  action when its recovery lookup fails.
+- Missing required revision/request fields return validation errors before the
+  operation starts, including the save and take actions simulated by the demo.
 - Manual reconciliation and background collection serialize work for each
   project, preventing duplicate artifact copies. Shutdown waits for collection
   workers to finish before releasing ownership.

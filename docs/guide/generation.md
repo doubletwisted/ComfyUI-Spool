@@ -205,6 +205,7 @@ path and execution record.
 - **Retry submission** appears only when Spool could not confirm a submission.
   **Find existing Deadline job** looks for a farm job that was accepted before
   the connection was lost. Neither starts a second render.
+  If the lookup is temporarily unavailable, retry it when Deadline is reachable.
   Deadline's confirmation grace excludes time waiting in the queue or preparing
   inputs. A slow preparation does not by itself make submission uncertain.
 - **Retry collection** appears when a finished render could not be collected.
