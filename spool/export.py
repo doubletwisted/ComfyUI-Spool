@@ -10,7 +10,7 @@ from .timing import rate, frames_filter, tempo_filter
 
 
 def run_ffmpeg(command, message):
-    result = subprocess.run(command, capture_output=True, text=True, timeout=180)
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
     if result.returncode:
         raise ValueError(result.stderr[-1200:] or message)
 
