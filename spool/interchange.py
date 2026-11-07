@@ -12,6 +12,7 @@ import json
 import re
 import uuid
 from pathlib import Path
+from .durable import atomic_replace
 from .timing import rate
 
 
@@ -170,7 +171,19 @@ def export_timeline(plan, *, root, fps, width, height, name, sources, resolve, p
     output_dir.mkdir(exist_ok=True)
     stem = re.sub(r"[^\w.-]+", "-", name or "spool").strip("-.") or "spool"
     output = output_dir / f"{stem}-{uuid.uuid4().hex[:10]}.otio"
-    pending = output.with_name(output.name + ".partial")
-    pending.write_text(json.dumps(timeline, indent=2, ensure_ascii=False), encoding="utf-8")
-    pending.replace(output)
+    pending = output.with_name(output.name + "." + uuid.uuid4().hex + ".partial")
+    pending_owned = False
+    try:
+        with pending.open("x", encoding="utf-8") as handle:
+            pending_owned = True
+            json.dump(timeline, handle, indent=2, ensure_ascii=False)
+        atomic_replace(pending, output)
+        pending_owned = False
+    finally:
+        if pending_owned:
+            try:
+                pending.unlink(missing_ok=True)
+            except OSError:
+                # A denied cleanup must not replace the write/publication error.
+                pass
     return {"filename": output.name, "path": str(output), "timeline": timeline}

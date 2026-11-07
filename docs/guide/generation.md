@@ -166,6 +166,11 @@ before sending it. Results are copied into the clip's folder and checked against
 that record before they become takes. New takes never replace the take in the
 edit.
 
+Spool checks all batch items and their input sources before creating frozen
+copies. Fix any reported input or clip error, then submit the batch again.
+New clip output folder names are distinct even on disks that ignore case;
+previously assigned folders are kept when you rename a clip.
+
 Queue requests use the same defaults in embedded and standalone Spool: an
 omitted count means one take. An explicit empty item list is rejected rather
 than replaced with another selection. Scoped experiments use the same item form.
@@ -200,6 +205,9 @@ path and execution record.
 - **Retry submission** appears only when Spool could not confirm a submission.
   **Find existing Deadline job** looks for a farm job that was accepted before
   the connection was lost. Neither starts a second render.
+  If the lookup is temporarily unavailable, retry it when Deadline is reachable.
+  Deadline's confirmation grace excludes time waiting in the queue or preparing
+  inputs. A slow preparation does not by itself make submission uncertain.
 - **Retry collection** appears when a finished render could not be collected.
 - **Clear from queue** and **Clear finished** tidy the list. Takes, files and
   records stay. Dismissing a failed take on the take rail clears it here too.
@@ -251,7 +259,8 @@ render, and agents act on them only when asked.
   and VHS_LoadVideo. Other loaders with file inputs are refused. Models and
   custom-node dependencies must already be installed where the render runs.
 - **Results.** Spool collects SaveImage, PreviewImage, SaveVideo and
-  VHS_VideoCombine video outputs. VHS `meta_batch` is not supported.
+  VHS_VideoCombine video outputs. VHS `meta_batch` is not supported. Comfy Cloud
+  renders return video only, so a Cloud workflow needs a SaveVideo result.
 - **Old takes.** Opening the workflow of an imported or historical take does not
   map its saved values back into widgets; its exact recorded workflow stays
   available.

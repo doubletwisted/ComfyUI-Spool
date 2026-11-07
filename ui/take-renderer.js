@@ -225,7 +225,7 @@ export function createTakeRenderer({
               : '';
             const body =
               '<div class="take-heading"><strong>' +
-              title +
+              esc(title) +
               '</strong>' +
               (chosen || preview
                 ? '<span class="take-badge ' +
@@ -239,7 +239,7 @@ export function createTakeRenderer({
                 ? '<span class="take-badge draft" title="Quick low-resolution draft; Make final refines it">Draft</span>'
                 : '') +
               '</div><button class="take-thumb" data-view="' +
-              t.id +
+              esc(t.id) +
               '" aria-label="Preview ' +
               esc(title) +
               '"><img src="' +
@@ -261,10 +261,10 @@ export function createTakeRenderer({
                 : '') +
               (t.summary?.quality === 'draft' && G.canDraft(c)
                 ? '<button class="make-final" data-final="' +
-                  t.id +
+                  esc(t.id) +
                   '" title="Refine this draft to full size; it keeps its motion and framing">Make final</button>'
                 : '') +
-              (!setupChosen ? '<button class="use-take" data-use="' + t.id + '">Use take</button>' : '') +
+              (!setupChosen ? '<button class="use-take" data-use="' + esc(t.id) + '">Use take</button>' : '') +
               '</div>';
             return (
               '<article class="take-card' +

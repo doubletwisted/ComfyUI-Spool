@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+import re
 import shutil
 import uuid
 from pathlib import Path
@@ -18,6 +19,8 @@ else:  # Copied beside the job script, without the Spool package.
     atomic_json = _durable.atomic_json
 
 SCHEMA = 2
+# Execution and artifact IDs are uuid4().hex; they name the files Spool writes on ingestion.
+IDENTITY = re.compile(r"[0-9a-f]{32}")
 SAVERS = {
     "SaveImage": {"images"},
     "PreviewImage": {"images"},
@@ -152,13 +155,17 @@ def finalize(package, execution, prompt_id, history, roots, worker, job_id):
     return receipt
 
 
+def identity(value):
+    return isinstance(value, str) and IDENTITY.fullmatch(value) is not None
+
+
 def verify(package, receipt, result_root):
     if receipt.get("schemaVersion") != SCHEMA:
         raise ValueError("Unsupported farm receipt version")
     for key in ("projectId", "clipId", "takeId", "attemptId", "fingerprint", "submissionId", "variationIndex"):
         if receipt.get(key) != package[key]:
             raise ValueError("Farm receipt belongs to another request: " + key)
-    if receipt.get("outcome") != "success" or not receipt.get("promptId") or not receipt.get("executionId"):
+    if receipt.get("outcome") != "success" or not receipt.get("promptId") or not identity(receipt.get("executionId")):
         raise ValueError("Farm receipt lacks execution identity or success")
     history = receipt.get("history", {})
     if history.get("status", {}).get("status_str") != "success" or not history.get("status", {}).get("completed"):
@@ -174,6 +181,8 @@ def verify(package, receipt, result_root):
     ):
         raise ValueError("Farm observed prompt differs from the permitted execution copy")
     artifacts = receipt["artifacts"]
+    if not all(identity(a["artifactId"]) for a in artifacts):
+        raise ValueError("Farm receipt has an invalid artifact identity")
     if len({a["artifactId"] for a in artifacts}) != len(artifacts):
         raise ValueError("Duplicate artifact identity")
     reported = {

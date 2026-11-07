@@ -34,6 +34,22 @@ class StoreInterfaceTests(unittest.TestCase):
                 edit.save()
         self.assertEqual(self.store.get(self.project["id"])["revision"], self.project["revision"])
 
+    def test_authored_blob_marker_rejection_keeps_the_project_readable(self):
+        for value in ({"__spool_blob__": "missing"}, [{"nested": {"__spool_blob__": "missing"}}]):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "evidence blob reference"):
+                    with self.store.editing(self.project["id"], self.project["revision"]) as edit:
+                        edit.document["brief"] = value
+                        edit.save()
+                self.assertEqual(self.store.get(self.project["id"]), self.project)
+
+    def test_workflow_blob_marker_is_rejected_before_capture(self):
+        with self.assertRaisesRegex(ValueError, "evidence blob reference"):
+            self.store.create(
+                {**self.project["document"], "importedWorkflows": [{"prompt": {"__spool_blob__": "missing"}}]}
+            )
+        self.assertEqual(self.store.get(self.project["id"]), self.project)
+
     def test_a_failing_block_rolls_back_its_save(self):
         with self.assertRaises(RuntimeError):
             with self.store.editing(self.project["id"], self.project["revision"]) as edit:
@@ -60,6 +76,42 @@ class StoreInterfaceTests(unittest.TestCase):
                 self.assertNotRegex(source, r"\.execute\(", path.name)
             if path.name not in ("store.py", "projects.py"):  # projects.py is the project-folder Store
                 self.assertIsNone(re.search(r"\._(write_document|event)\(", source), path.name)
+
+
+class RepeatedCaptureTests(unittest.TestCase):
+    def test_repeated_workflow_assignment_does_not_wrap_stored_values_again(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        store = Store(Path(temp.name))
+        graph = {"nodes": [{"id": 1, "type": "LoadImage"}], "links": []}
+        project = store.create(
+            {
+                "project": "Captures",
+                "clips": [{"id": "shot", "name": "Shot", "in": 0, "out": 24, "takes": []}],
+                "media": [],
+                "importedWorkflows": [{"id": "imported", "name": "Imported", "workflow": graph}],
+            }
+        )
+        capture = {
+            "workflow": {"nodes": []},
+            "prompt": {
+                "save": {"class_type": "SaveImage", "inputs": {"images": ["image", 0], "filename_prefix": "p"}},
+                "image": {"class_type": "EmptyImage", "inputs": {"width": 64}},
+            },
+            "bindings": [],
+            "result": {"nodeId": "save", "group": "images", "index": 0},
+        }
+
+        def blobs():
+            with store.reading() as db:
+                return db.execute("SELECT count(*) FROM blobs").fetchone()[0]
+
+        revision = store.capture(project["id"], project["revision"], "shot", capture)["revision"]
+        before = blobs()
+        for _ in range(5):
+            revision = store.capture(project["id"], revision, "shot", capture)["revision"]
+        self.assertEqual(blobs(), before)
+        self.assertEqual(store.get(project["id"])["document"]["importedWorkflows"][0]["workflow"], graph)
 
 
 if __name__ == "__main__":

@@ -346,6 +346,23 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(self.store.prune(confirm=True, budget=1, grace=600)["evicted"], [])
         self.assertTrue(fresh.is_file())
 
+    def test_prune_keeps_referenced_previews_named_with_spaces_or_accents(self):
+        previews = self.store.root / "previews"
+        previews.mkdir(exist_ok=True)
+        kept = [previews / "Desert walk-abc.mp4", previews / "café-abc.mp4"]
+        orphan = previews / "Desert walk-orphan.mp4"
+        for path in (*kept, orphan):
+            path.write_bytes(b"preview" * 100)
+        document = store_module.empty_project()
+        document["media"] = [
+            {"id": "media-%d" % i, "kind": "video", "name": p.name, "file": "previews/" + p.name, "frames": 24}
+            for i, p in enumerate(kept)
+        ]
+        self.store.create(document)
+        evicted = self.store.prune(confirm=True, budget=1, grace=0)
+        self.assertEqual(evicted["evicted"], ["previews/Desert walk-orphan.mp4"])
+        self.assertTrue(all(path.is_file() for path in kept))
+
     def test_prune_evicts_disposable_cut_scores_but_preserves_source(self):
         scores = self.store.root / "previews" / "cut-scores" / "scan.json"
         scores.parent.mkdir(parents=True)

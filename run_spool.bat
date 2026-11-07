@@ -14,5 +14,7 @@ set "PY=%~dp0..\..\.venv\Scripts\python.exe"
 if exist "%PY%" goto run
 set "PY=python"
 :run
-"%PY%" %FLAGS% -m spool --open %*
+rem The portable build's python_embeded has a ._pth file, so Python leaves this folder
+rem off sys.path and "-m spool" alone cannot find Spool; add it before running.
+"%PY%" %FLAGS% -c "import runpy, sys; sys.path.insert(0, '.'); runpy.run_module('spool', run_name='__main__', alter_sys=True)" --open %*
 if errorlevel 1 pause

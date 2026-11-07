@@ -1,3 +1,4 @@
+import json
 import copy
 import os
 import unittest
@@ -90,6 +91,40 @@ class FarmProtocolTests(unittest.TestCase):
         self.assertEqual(self.store.attempt(attempt["id"])["status"], "complete")
         events = self.store.events(self.project["id"])["events"]
         self.assertEqual(sum(e["kind"] == "receipt.rejected" for e in events), 1)
+
+    def test_receipt_identities_cannot_name_files_outside_the_attempt(self):
+        for field, forged in (("artifactId", "../../../../escaped"), ("executionId", "../../../../escaped")):
+            with self.subTest(field=field):
+                attempt = self.farm_attempts[0 if field == "artifactId" else 1]
+                package, receipt = self.finish(attempt)
+                if field == "artifactId":
+                    receipt["artifacts"][0]["artifactId"] = receipt["primaryArtifactId"] = forged
+                else:
+                    receipt["executionId"] = forged
+                with self.assertRaises(ValueError):
+                    protocol.verify(package, receipt, package["resultRoot"])
+                folder = self.root / "farm" / "spool-receipts" / attempt["id"]
+                protocol.atomic_json(next(folder.glob("*/receipt.json")), receipt)
+                Collector(self.store, self.media).scan()
+                self.assertNotEqual(self.store.attempt(attempt["id"])["status"], "complete")
+                self.assertEqual(list(self.root.rglob("escaped*")), [])
+
+    def test_receipt_of_the_wrong_shape_does_not_block_a_later_valid_execution(self):
+        attempt = self.farm_attempts[0]
+        self.finish(attempt)
+        folder = self.root / "farm" / "spool-receipts" / attempt["id"]
+        valid = json.loads(next(folder.glob("*/receipt.json")).read_text(encoding="utf-8"))
+        unowned = {k: v for k, v in valid.items() if k != "jobId"}
+        for index, value in enumerate(([], {"artifacts": ["x"]}, {"schemaVersion": 2, "history": []}, unowned)):
+            path = folder / ("000-shape-%d" % index) / "receipt.json"
+            path.parent.mkdir(parents=True)
+            protocol.atomic_json(path, value)
+        collector = Collector(self.store, self.media)
+        collector.scan()
+        collector.scan()
+        self.assertEqual(self.store.attempt(attempt["id"])["status"], "complete")
+        events = self.store.events(self.project["id"])["events"]
+        self.assertEqual(sum(e["kind"] == "receipt.rejected" for e in events), 4)
 
     def test_cancel_during_farm_observation_cannot_be_overwritten(self):
         attempt = self.farm_attempts[0]
@@ -318,6 +353,31 @@ class FarmProtocolTests(unittest.TestCase):
         job = next(j for j in project["document"]["jobs"] if j["id"] == attempt["id"])
         self.assertIsNone(job["farmProgress"]["percent"])
         self.assertEqual(job["status"], "farm_running")
+
+    def test_find_existing_deadline_job_adopts_it_or_reports_still_uncertain(self):
+        from spool import commands
+
+        attempt = self.farm_attempts[0]
+        package = self.package(attempt)
+        project = self.store.get(self.project["id"])
+        envelope = {
+            "revision": project["revision"],
+            "actor": "agent:test",
+            "scope": {"projectId": project["id"], "clipIds": ["shot"], "capabilities": ["recover"]},
+            "action": "recover_submission",
+            "arguments": {"attemptId": attempt["id"]},
+        }
+        values = {"SpoolSubmissionId": package["submissionId"], "SpoolAttemptId": attempt["id"]}
+        for jobs, status in (([], "submission_uncertain"), (["a" * 24], "adopted")):
+            with (
+                patch("spool.farm.submission_jobs", return_value=jobs),
+                patch("spool.farm.job_value", side_effect=lambda job, key: values[key]),
+            ):
+                result = commands.execute(
+                    self.store, self.media, project["id"], {**envelope, "operationId": "recover-" + status}
+                )
+            self.assertEqual((result["attemptId"], result["status"]), (attempt["id"], status))
+        self.assertEqual(self.store.submission_for(attempt["id"])["external_id"], "a" * 24)
 
 
 if __name__ == "__main__":

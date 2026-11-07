@@ -23,6 +23,8 @@ from .credentials import cloud_key
 from .ownership import ExecutorLock, ExecutorBusy
 from .store import uid
 from .execution_targets import adapter_for
+from .media import unique_partial
+from .durable import atomic_replace
 
 
 FREE_TIER = "Running on Comfy Cloud needs a plan that allows API keys. To pay with Comfy credits instead, choose Execute on: Local ComfyUI · Partner Nodes."
@@ -87,11 +89,22 @@ async def storage_call(function, *args, **kwargs):
     # Cancellation must not leave a SQLite/file operation running after the
     # server releases its executor lock or closes the project workspace.
     task = asyncio.create_task(asyncio.to_thread(function, *args, **kwargs))
-    try:
-        return await asyncio.shield(task)
-    except asyncio.CancelledError:
-        await task
-        raise
+    cancelled = None
+    while True:
+        try:
+            result = await asyncio.shield(task)
+        except asyncio.CancelledError as error:
+            if task.cancelled():
+                raise
+            cancelled = cancelled or error
+        except BaseException as error:
+            if cancelled is not None:
+                raise cancelled from error
+            raise
+        else:
+            if cancelled is not None:
+                raise cancelled
+            return result
 
 
 class CloudExecutor:
@@ -197,19 +210,22 @@ class CloudExecutor:
         identity = uid()
         destination = await storage_call(media.result_path, attempt, identity, extension, True)
         await storage_call(destination.parent.mkdir, parents=True, exist_ok=True)
-        pending = destination.with_suffix(extension + ".partial")
+        pending = unique_partial(destination)
         try:
             await output.to_file(pending)
             await storage_call(
                 self.finish_download, attempt, media, job, address, output, identity, destination, pending
             )
         finally:
-            await storage_call(pending.unlink, missing_ok=True)
+            try:
+                await storage_call(pending.unlink, missing_ok=True)
+            except OSError:
+                pass  # Preserve the download or replacement failure if cleanup is denied.
 
     def finish_download(self, attempt, media, job, address, output, identity, destination, pending):
         if pending.stat().st_size != output.size_bytes:
             raise ValueError("Comfy Cloud video download is incomplete")
-        pending.replace(destination)
+        atomic_replace(pending, destination)
         selection = attempt["request"]["capture"]["result"]
         with destination.open("rb") as handle:
             checksum = hashlib.file_digest(handle, "sha256").hexdigest()
@@ -239,7 +255,24 @@ class CloudExecutor:
                 for a in store.scan_attempts(target="cloud", pending_only=True)
             ]
         )
-        await asyncio.gather(*(self.observe(a) for a in pending))
+        # Let every observation settle before reporting a failure. An early return
+        # would orphan the rest of this batch while the lifecycle starts the next
+        # one, observing the same attempts concurrently.
+        results = await asyncio.gather(*(self.observe(a) for a in pending), return_exceptions=True)
+        failures = [result for result in results if isinstance(result, BaseException)]
+        if not failures:
+            return
+        control = next((error for error in failures if not isinstance(error, Exception)), None)
+        if control is not None:
+            errors = [error for error in failures if isinstance(error, Exception)]
+            if errors:
+                cause = ExceptionGroup("Spool Cloud observations failed before cancellation", errors)
+                logging.error("Spool Cloud observations failed before cancellation", exc_info=cause)
+                raise control from cause
+            raise control
+        if len(failures) == 1:
+            raise failures[0]
+        raise ExceptionGroup("Spool Cloud observation batch failed", failures)
 
     async def lifecycle(self, app):
         try:
@@ -265,4 +298,5 @@ class CloudExecutor:
                 await task
             except asyncio.CancelledError:
                 pass
-            self.ownership.close()
+            finally:
+                self.ownership.close()

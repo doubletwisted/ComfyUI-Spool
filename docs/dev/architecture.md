@@ -73,6 +73,17 @@ Storage and project-folder work runs off ComfyUI's event loop through
 the published snapshot, import proxies and other referenced media. Playback cache
 keys include source path/size/mtime, project size/FPS and the cache format version.
 The preview route enqueues work and returns preparing until its local file is ready.
+Launcher probes, status and startup use cancellation-draining workers for their
+SQLite and filesystem work, including process creation. Startup reservation and
+spawn stay in one worker. Status/error writers replace only the launch state
+they observed, so a delayed worker cannot overwrite a newer reservation.
+
+Cancellation preflight reads the acknowledgement through the immutable read
+generation. Planning and recording delivery still use their writer transactions.
+FFmpeg text diagnostics use UTF-8 with replacement for invalid bytes, independent
+of the host locale; subprocess failure types and timeouts remain unchanged.
+Comparison sheets extract frames in a private temporary directory and retain
+only the returned sheet. Explicit frame exports remain durable user outputs.
 
 ## Project format
 
@@ -86,7 +97,9 @@ imports reject unknown export versions before creating a destination.
 
 `store.py` owns ordered, numbered migration steps. Each commits its data and
 version together, version last; a failed step rolls back and can run again.
-Completed earlier steps remain committed. Released steps are frozen: changes
+Completed earlier steps remain committed in that database; a project folder
+publishes its upgraded working copy only after every step succeeds, so a failure
+leaves the published snapshot at its old version. Released steps are frozen: changes
 require a new number. Before upgrading a folder, Spool copies its last published
 snapshot to `.spool/backups/project-schema<old>-<UTC timestamp>.spool`. Schema 6
 packs existing evidence, then compacts through the existing local-cache path
@@ -142,6 +155,23 @@ lock. Only a changed published signature refreshes it under the share lock;
 writers serialize working-copy refresh/replacement with a different local lock.
 A writer can publish while an existing reader finishes its older generation.
 
+Each newly published snapshot contains an additive `spool_publication` table
+with a fresh publication UUID. The marker is written into the copied database
+before it is fsynced and atomically replaces `project.spool`; it travels with the
+snapshot even if manifest publication is interrupted. Change detection combines
+the marker with timestamp, size and file identity. Unchanged high-resolution
+file identities cache the marker; coarse timestamps re-read it. Legacy snapshots
+without the table remain readable and gain it on their next new-version save.
+Marker reads hold the project lock until their SQLite handle closes, so they
+cannot obstruct a concurrent snapshot replacement on Windows. An unreadable
+identity fails the operation instead of authorizing reuse of an older runtime.
+The manifest, document, API and SQLite schema-version number are unchanged.
+Older writers preserve the marker but do not refresh it; mixed-version detection
+then relies on the replacement file's identity.
+Failed project imports clean their exclusively created destination and new local
+working cache. Cleanup preserves pre-existing caches and refuses redirected or
+uninspectable paths; a denied cleanup retains the original import failure.
+
 Receipt scans visit pending attempts every two seconds and settled history every
 five minutes (also on collector startup). Folder scans cache projection/inventory
 at a revision/event cursor and recheck both inside the save transaction. Collected
@@ -154,6 +184,24 @@ and cross-directory moves become new takes. Changed bytes at an indexed path
 create a new take; the old record points to a missing source instead of silently
 playing the replacement. Renames/replacements discard old file-owned evidence.
 
+Manual reconciliation, local result observation and Cloud receipt ingestion use
+the same collector's per-project thread lock as periodic scans. File collection
+for one project cannot reuse another worker's partial files; other projects have
+independent locks. Cancellation drains these storage workers before their
+executor lock or lifecycle ownership is released, including repeated cancellation.
+Local, Deadline and Cloud artifact copies use unique sibling temporary files,
+including when independent workspaces collect into the same project. Publication
+uses the common replacement retry; cleanup removes only the operation's own
+temporary file and retains an original failure if cleanup is denied. This file
+ownership does not serialize separate collectors' receipt or ledger decisions.
+
+Deadline's 30-second missing-acknowledgment grace starts when collection first
+observes the durable `submitting.json` marker written immediately before the
+external call. Queued time, validation and staging do not consume it. Restarting
+the collector grants fresh grace. An observed marker remains evidence if share
+files disappear; a never-observed missing marker stays pending conservatively.
+Recovery does not automatically submit another job.
+
 Once daily, collection expires events and operation/result payloads older than
 30 days, retaining each project's latest event cursor and cancellation effects whose
 delivery is unconfirmed or whose attempt is still active. Operation ID/project/digest tombstones live forever: expired retries
@@ -161,12 +209,19 @@ return an operation conflict and never execute again. Attempt ownership rows
 expire with old terminal attempts. Attempts, dispatches and execution receipts
 remain evidence for recovery and deduplication; they are not diagnostic logs.
 No Python/JavaScript authored document fields or wire versions change.
-Maintenance reports open immutable read-only snapshots: no migrations, directory
-creation, cache refresh or take-file recovery.
+Maintenance reports scan immutable read-only snapshots in private temporary
+directories, removed after the report. They do not migrate, create project
+directories, refresh the workspace cache or recover take files. Copying holds an
+existing project lock until the source handle closes; SQLite then opens only the
+private copy, letting writers publish during long scans on Windows. Read-only
+inspection never creates a lock. A legacy folder without one can still briefly
+obstruct Windows replacement while the source is being copied.
 
 `durable.py` owns unique temporary files, flush/fsync, atomic replacement with
 SMB retry, and failure cleanup for JSON receipts, take sidecars, farm JSON and
 manifests. `ownership.atomic_replace` reexports the same replacement primitive.
+OTIO exports use the same replacement retry and exclusively created pending
+files, cleaning only their own unfinished file after a failure.
 Deadline submissions copy the stdlib-only helper beside their worker protocol.
 Local `receipt.json` writes use schema 2 and `primaryArtifactId`; collection still
 verifies schema 1 from older executions. Farm protocol 2 already uses that

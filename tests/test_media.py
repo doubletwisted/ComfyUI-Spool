@@ -9,6 +9,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import wave
 from pathlib import Path
@@ -878,6 +879,74 @@ class MediaTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InterruptedEncodeTests(unittest.TestCase):
+    def test_an_interrupted_proxy_encode_leaves_no_file_to_reuse(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        source = root / "clip.mp4"
+        subprocess.run(
+            [FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x36:r=24:d=1", str(source)],
+            check=True,
+        )
+        media = Media(root / "project", root, root, root, project_id="project")
+        real = subprocess.run
+
+        def stopped(command, **options):
+            # The encode is cut short after writing part of its output, as a timeout or a stopped host would.
+            if "libx264" in command:
+                Path(command[-1]).write_bytes(b"truncated")
+                raise subprocess.TimeoutExpired(command, options.get("timeout"))
+            return real(command, **options)
+
+        with patch("spool.media.subprocess.run", side_effect=stopped), self.assertRaises(subprocess.TimeoutExpired):
+            media.describe(source, fps=24)
+        self.assertEqual(list((root / "project" / ".spool" / "previews").glob("*.mp4")), [])
+        self.assertEqual(media.describe(source, fps=24)["frames"], 24)
+
+
+class WaveformCacheTests(unittest.TestCase):
+    def test_new_audio_at_the_same_path_draws_a_new_waveform(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        media = Media(root / "project", root, root, root, project_id="project")
+        target = root / "project" / "output" / "clip" / "take.wav"
+        target.parent.mkdir(parents=True)
+        waves = []
+        for source in ("anullsrc=d=2", "sine=f=440:d=2:sample_rate=44100"):
+            subprocess.run([FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", source, str(target)], check=True)
+            os.utime(target, ns=(time.time_ns(), time.time_ns() + len(waves)))
+            waves.append((root / "project" / media.describe(target, fps=24)["wave"]).read_bytes())
+        self.assertNotEqual(waves[0], waves[1])
+
+
+class ExportPathTests(unittest.TestCase):
+    def test_export_works_when_the_temporary_folder_holds_a_quote(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        # A Windows account such as O'Brien puts its quote in every temporary path.
+        quoted = root / "O'Brien" / "Temp"
+        quoted.mkdir(parents=True)
+        media = Media(root / "project", root, root, root, project_id="project")
+        subprocess.run(
+            [FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x48:r=24:d=1"]
+            + [str(root / "project" / "a.mp4")],
+            check=True,
+        )
+        data = {
+            "fps": 24,
+            "width": 64,
+            "height": 48,
+            "audio": False,
+            "clips": [{"file": "a.mp4", "in": 0, "out": 10}, {"file": "a.mp4", "in": 10, "out": 20}],
+        }
+        with patch("tempfile.tempdir", str(quoted)):
+            result = media.export(data)
+        self.assertTrue((root / "project" / "exports" / result["filename"]).is_file())
 
 
 class InputStagingTests(unittest.TestCase):

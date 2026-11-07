@@ -11,6 +11,18 @@ from pathlib import Path
 from .wire import wire, unwire
 
 ACTIONS = {"status", "shot", "events", "focus", "command", "compare"}
+LOOPBACK = {"localhost", "127.0.0.1", "::1"}
+
+
+def urlopen(request, timeout):
+    """Reach a Spool on this computer directly, even when a proxy is set for other traffic.
+
+    urllib sends loopback requests to `http_proxy` unless `no_proxy` names them, and a
+    proxy cannot reach this computer's Spool or would make the request look remote.
+    """
+    if (urllib.parse.urlsplit(request.full_url).hostname or "").lower() in LOOPBACK:
+        return urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=timeout)
+    return urllib.request.urlopen(request, timeout=timeout)
 
 
 def run():
@@ -49,14 +61,21 @@ def run():
         if not args.file:
             parser.error("command requires --file")
         path += "/commands"
-        body = json.loads(sys.stdin.read() if str(args.file) == "-" else args.file.read_text(encoding="utf-8"))
+        try:
+            body = json.loads(sys.stdin.read() if str(args.file) == "-" else args.file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as error:
+            print(
+                json.dumps({"error": "Could not read the command file: " + str(error), "code": "invalid_request"}),
+                file=sys.stderr,
+            )
+            return 1
     request = urllib.request.Request(
         args.url.rstrip("/") + path,
         data=json.dumps(wire(body)).encode() if body is not None else None,
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
+        with urlopen(request, timeout=120) as response:
             value = json.load(response)
             if not args.wire_json:
                 value = unwire(value)

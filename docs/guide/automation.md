@@ -163,6 +163,10 @@ Read `code`, not message text: `not_found` (404), `invalid_request` (400),
 changed: a sidecar write can fail after a commit. Inspect state and reuse the
 identical operation envelope when retrying uncertain operations.
 
+Deadline recovery lookup failures use `unavailable` (503). Retry the same
+`recover_submission` envelope when Deadline is reachable again; successful
+lookup still verifies the existing job's submission and attempt identity.
+
 The studio sends `X-Spool-Api-Version` on every HTTP request. A mismatching
 version blocks writes and asks for a reload while keeping the tab's draft.
 Versionless requests from the CLI, agents and curl remain supported. A bridge
@@ -170,7 +174,8 @@ version mismatch asks you to reload the ComfyUI page. These rules apply both
 inside ComfyUI and standalone, independently of local, Cloud or Deadline targets.
 
 The CLI writes JSON errors to stderr and returns 1, including `network_error`,
-`http_error` for non-JSON HTTP failures, and `invalid_response` for invalid JSON.
+`http_error` for non-JSON HTTP failures, `invalid_response` for invalid JSON, and
+`invalid_request` for a command file it cannot read or parse.
 
 ### Public routes
 

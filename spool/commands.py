@@ -398,18 +398,20 @@ def execute(store, media, project_id, data):
         if attempt["project_id"] != project_id or attempt["clip_id"] not in scope.get("clipIds", []):
             raise ValueError("Attempt is outside the cancellation scope")
         submission = store.submission_for(attempt["id"])
-        with store.connect() as db:
+        with store.reading() as db:
             done = store.cancellation_done(db, attempt["id"])
         adapter = adapter_for(attempt["request"], submission)
         cancellation = asyncio.run(
             adapter.cancel(attempt, {"stage": "check", "submission": submission, "done": done})
         ).get("delivery")
     if action == "recover_submission":
-        attempt = store.attempt(arguments["attemptId"])
-        if attempt["project_id"] != project_id or attempt["clip_id"] not in scope.get("clipIds", []):
+        # Named apart from apply()'s cancel locals: a name assigned anywhere in
+        # apply() is local to all of it, so reading `attempt` there would fail.
+        recovering = store.attempt(arguments["attemptId"])
+        if recovering["project_id"] != project_id or recovering["clip_id"] not in scope.get("clipIds", []):
             raise ValueError("Submission is outside recovery scope")
-        submission = store.submission_for(attempt["id"])
-        adopted = adapter_for(attempt["request"], submission).recover(attempt, {"submission": submission})["jobId"]
+        recovered = store.submission_for(recovering["id"])
+        adopted = adapter_for(recovering["request"], recovered).recover(recovering, {"submission": recovered})["jobId"]
 
     def apply(db, document):
         clips = [*document["clips"], *document.get("audioClips", [])] if action in note_actions else document["clips"]
@@ -524,9 +526,9 @@ def execute(store, media, project_id, data):
             return plan["result"], False
         elif action == "recover_submission":
             if adopted:
-                store.adopt_submission_job(db, submission["id"], adopted)
+                store.adopt_submission_job(db, recovered["id"], adopted)
             return {
-                "attemptId": attempt["id"],
+                "attemptId": recovering["id"],
                 "jobId": adopted,
                 "status": "adopted" if adopted else "submission_uncertain",
                 "note": "No automatic resubmission",

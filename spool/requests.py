@@ -194,6 +194,9 @@ def audio_input_segments(document, clip, setting):
     ]
 
 
+IMAGE_SAVERS = {"SaveImage", "PreviewImage"}
+
+
 def local_compatibility(prompt, result):
     if any(node["class_type"] in LAUNCHERS for node in prompt.values()):
         raise ValueError(
@@ -261,6 +264,9 @@ def prepare(store, media, project, items, freeze=True):
             raise ValueError("Choose local ComfyUI, Comfy Cloud or Deadline execution")
         if target == attempts.CLOUD and not cloud.available():
             raise ValueError(cloud.UNAVAILABLE)
+        if target == attempts.CLOUD and capture["prompt"][capture["result"]["nodeId"]]["class_type"] in IMAGE_SAVERS:
+            # Cloud results are collected as video files; an image result would render and never arrive.
+            raise ValueError("Comfy Cloud renders video only. Choose a SaveVideo result for this workflow.")
         local_compatibility({k: v for k, v in capture["prompt"].items() if k not in launchers}, capture["result"])
         # A clip set to Deadline whose workflow has no submit node gets one in each
         # frozen request only; the saved workflow and its takes' workflows stay as made.
@@ -422,7 +428,10 @@ def prepare(store, media, project, items, freeze=True):
                 original = media.prepare_input(original)
                 source = contained(media.host_roots["input"], original.removesuffix(" [input]"))
                 if source not in frozen_assets:
-                    replacement = media.freeze_asset(original) if freeze else original.removesuffix(" [input]")
+                    # Resolve and validate the whole batch before making immutable
+                    # snapshots. A later invalid clip or missing input must not
+                    # leave copies from the requests that preceded it.
+                    replacement = original.removesuffix(" [input]")
                     path = contained(media.host_roots["input"], replacement)
                     frozen_assets[source] = {
                         "frozen": replacement,
@@ -465,6 +474,16 @@ def prepare(store, media, project, items, freeze=True):
                     },
                 )
             )
+    if freeze:
+        for asset in frozen_assets.values():
+            replacement = media.freeze_asset(asset["frozen"])
+            path = contained(media.host_roots["input"], replacement)
+            asset.update({"frozen": replacement, "byteSize": path.stat().st_size, "sha256": sha256(path)})
+        for _, request in requests:
+            for asset in request["assets"]:
+                source = contained(media.host_roots["input"], asset["source"].removesuffix(" [input]"))
+                asset.update(frozen_assets[source])
+                request["prompt"][asset["nodeId"]]["inputs"][asset["input"]] = asset["frozen"]
     return requests
 
 

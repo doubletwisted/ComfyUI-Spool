@@ -64,6 +64,8 @@ def scene_scores(ffmpeg, video, cache_dir=None):
         ],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=True,
         timeout=600,
     )

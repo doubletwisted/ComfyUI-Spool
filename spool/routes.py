@@ -12,6 +12,7 @@ from aiohttp.helpers import content_disposition_header
 
 from .errors import NotFound, SpoolError, Forbidden, RevisionConflict, StudioOutdated
 from .protocol import API_VERSION
+from .store import validate_capture
 from .editor import editor_html
 from .media import EXTENSIONS, contained, staged_relative
 from .playback import PlaybackQueue
@@ -98,8 +99,94 @@ ROUTE_AUDIENCES = {
 
 def inside(path, root):
     """Lexical containment, matching `contained`; mapped drives are not resolved to UNC."""
-    base = os.path.normcase(os.path.abspath(root))
+    base = os.path.normcase(os.path.abspath(root)).rstrip(os.sep)  # a drive root keeps its separator
     return os.path.normcase(os.path.abspath(path)).startswith(base + os.sep)
+
+
+def required_fields(data, *fields):
+    """Read required top-level JSON fields as a client error, before any work.
+
+    A missing field is a malformed request, not an internal failure. The route
+    still validates each value, so accepted types do not change here.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("Request body must be a JSON object")
+    for field in fields:
+        if field not in data:
+            raise ValueError("Request body is missing the required %s field" % field)
+    return [data[field] for field in fields]
+
+
+def revision_header(request):
+    """The saved revision a workflow import is written against."""
+    value = request.headers.get("X-Spool-Revision")
+    if value is None:
+        raise ValueError("The X-Spool-Revision header is required")
+    try:
+        return int(value)
+    except ValueError:
+        raise ValueError("The X-Spool-Revision header must be an integer") from None
+
+
+def object_rows(value, field, *keys):
+    """Check containers consumed by save/preparation, without defining a project schema."""
+    if not isinstance(value, list) or any(not isinstance(row, dict) for row in value):
+        raise ValueError(f"{field} must be a list of JSON objects")
+    if any(not isinstance(row.get(key), str) for row in value for key in keys):
+        raise ValueError(f"{field} entries need string fields: {', '.join(keys)}")
+    return value
+
+
+def capture_shape(capture):
+    """Reject malformed capture containers before file preparation; Store owns their meaning."""
+    if not isinstance(capture, dict):
+        raise ValueError("The captured workflow must be a JSON object")
+    object_rows(capture.get("bindings", []), "Capture bindings", "key", "nodeId", "input")
+    for field in ("provenance", "result", "inputRecovery"):
+        if field in capture and not isinstance(capture[field], dict):
+            raise ValueError(f"Capture {field} must be a JSON object")
+    if not isinstance(capture.get("inputRecovery", {}).get("recovered", []), list):
+        raise ValueError("Capture inputRecovery.recovered must be a list")
+    if "result" in capture and not isinstance(capture["result"].get("nodeId"), str):
+        raise ValueError("Capture result needs a string nodeId")
+    builtin = capture.get("provenance", {}).get("builtinTemplate")
+    if builtin is not None and not isinstance(builtin, str):
+        raise ValueError("Capture builtinTemplate must be a string")
+    graphs = [capture["workflow"]] if capture.get("workflow") is not None else []
+    while graphs:
+        graph = graphs.pop()
+        if not isinstance(graph, dict):
+            raise ValueError("Capture workflow must be a JSON object")
+        nodes = object_rows(graph.get("nodes", []), "Workflow nodes", "type")
+        if any("id" not in node for node in nodes):
+            raise ValueError("Workflow nodes need an id")
+        definitions = graph.get("definitions", {})
+        if not isinstance(definitions, dict):
+            raise ValueError("Workflow definitions must be a JSON object")
+        graphs.extend(object_rows(definitions.get("subgraphs", []), "Workflow subgraphs", "id"))
+    validate_capture(capture)
+
+
+def save_shapes(document, recipes):
+    """Preflight every save container before any recipe can stage input files."""
+    if not isinstance(document, dict) or not isinstance(document.get("clips"), list):
+        raise ValueError("Project document must be an object with a clips list")
+    clips = object_rows(document["clips"], "Document clips", "id")
+    object_rows(document.get("media", []), "Document media", "id")
+    for field in ("audioClips", "importedWorkflows"):
+        object_rows(document.get(field, []), "Document " + field)
+    for clip in clips:
+        takes = object_rows(clip.get("takes", []), "Clip takes", "id")
+        for take in takes:
+            if not isinstance(take.get("media"), dict) or not isinstance(take["media"].get("id"), str):
+                raise ValueError("Take media must be a JSON object with an id")
+        object_rows(clip.get("bindings", []), "Clip bindings", "key")
+        if not isinstance(clip.get("inputValues", {}), dict):
+            raise ValueError("Clip inputValues must be a JSON object")
+    if not isinstance(recipes, dict):
+        raise ValueError("workflowRecipes must be a JSON object")
+    for capture in recipes.values():
+        capture_shape(capture)
 
 
 def register(server, store, media, executor=None):
@@ -367,10 +454,9 @@ def register(server, store, media, executor=None):
     async def generation_preview(request):
         store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
+        revision, clip_id = required_fields(data, "revision", "clipId")
         return response(
-            await asyncio.to_thread(
-                requests.preview, store, media, request.match_info["project"], data["revision"], data["clipId"]
-            )
+            await asyncio.to_thread(requests.preview, store, media, request.match_info["project"], revision, clip_id)
         )
 
     @routes.get("/spool/api/projects/{project}/status")
@@ -421,6 +507,10 @@ def register(server, store, media, executor=None):
         store, media = await asyncio.to_thread(services, request)
         data = await request.json()
         clip = await asyncio.to_thread(store.clip, request.match_info["project"], data["clipId"])
+        chosen = data["takeIds"] if isinstance(data["takeIds"], list) else []
+        # The sheet is served to the caller, so it reads only footage the caller may download.
+        records = [t["media"] for t in clip["takes"] if t["id"] in chosen and not t.get("placeholder")]
+        await asyncio.to_thread(guard_originals, request, store, media, records)
         fps = await asyncio.to_thread(store.frame_rate, request.match_info["project"])
         return response(await asyncio.to_thread(media.comparison, clip, data["takeIds"], fps))
 
@@ -504,42 +594,45 @@ def register(server, store, media, executor=None):
     @routes.put("/spool/api/projects/{project}")
     @endpoint
     async def save(request):
-        store, media = await asyncio.to_thread(services, request)
         text = await request.text()
         data = await asyncio.to_thread(lambda: unwire(json.loads(text)))
+        revision, document = required_fields(data, "revision", "document")
+        workflow_recipes = data.get("workflowRecipes", {})
+        save_shapes(document, workflow_recipes)
+        store, media = await asyncio.to_thread(services, request)
         recipes = {}
-        for version, capture in data.get("workflowRecipes", {}).items():
+        for version, capture in workflow_recipes.items():
             recipes[version] = await prepare_capture(capture, request)
-            for clip in data["document"]["clips"]:
+            for clip in document["clips"]:
                 if clip.get("workflowVersion") == version and clip.get("inputValues"):
                     operations.restage(capture, recipes[version], clip["inputValues"])
         return await project_response(
             request,
-            await asyncio.to_thread(
-                store.save, request.match_info["project"], data["revision"], data["document"], recipes
-            ),
+            await asyncio.to_thread(store.save, request.match_info["project"], revision, document, recipes),
         )
 
     @routes.post("/spool/api/projects/{project}/import-workflow")
     @endpoint
     async def import_workflow(request):
         store, media = await asyncio.to_thread(services, request)
+        revision = revision_header(request)
         imported = parse_import(await request.text(), unquote(request.headers.get("X-Filename", "Imported workflow")))
         imported["data"] = await prepare_inputs(imported["data"], request)
         project_id = request.match_info["project"]
         project = await asyncio.to_thread(store.get, project_id)
         project["document"].setdefault("importedWorkflows", []).append(imported)
-        saved = await asyncio.to_thread(
-            store.save, project_id, int(request.headers["X-Spool-Revision"]), project["document"]
-        )
+        saved = await asyncio.to_thread(store.save, project_id, revision, project["document"])
         return response({"project": saved, "workflow": imported})
 
     @routes.post("/spool/api/projects/{project}/capture/{clip}")
     @endpoint
     async def capture(request):
-        store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
-        original = data["capture"]
+        revision, original = required_fields(data, "revision", "capture")
+        capture_shape(original)
+        if data.get("overrides") is not None and not isinstance(data["overrides"], dict):
+            raise ValueError("Capture overrides must be a JSON object")
+        store, media = await asyncio.to_thread(services, request)
         data["capture"] = await prepare_capture(original, request)
         if data.get("overrides"):
             operations.restage(original, data["capture"], data["overrides"])
@@ -547,7 +640,7 @@ def register(server, store, media, executor=None):
             operations.apply_capture,
             store,
             request.match_info["project"],
-            data["revision"],
+            revision,
             request.match_info["clip"],
             data["capture"],
             data.get("overrides"),
@@ -569,6 +662,19 @@ def register(server, store, media, executor=None):
         )
         return response(await prepare_inputs(capture, request, True) if capture else None)
 
+    def outside_footage(request, selected, project_media, path):
+        """Footage outside the project and Comfy folders is read only for this computer."""
+        roots = [selected.root, *project_media.host_roots.values()]
+        if not any(inside(path, root) for root in roots):
+            local_control(request, "Use footage outside this project from the computer running Spool")
+
+    def guard_originals(request, selected, project_media, records):
+        """Refuse a remote caller a result made from footage it could not download."""
+        for metadata in records:
+            original = metadata.get("originalFile", metadata.get("file", ""))
+            if isinstance(original, str) and Path(original).is_absolute():
+                outside_footage(request, selected, project_media, original)
+
     def take_source(request):
         selected, project_media = services(request)
         clip = selected.clip(request.match_info["project"], request.match_info["clip"])
@@ -578,9 +684,7 @@ def register(server, store, media, executor=None):
         if not take:
             raise NotFound("Take not found")
         path = project_media.original_source(take["media"])["path"]
-        roots = [selected.root, *project_media.host_roots.values()]
-        if not any(inside(path, root) for root in roots):
-            local_control(request, "Use footage outside this project from the computer running Spool")
+        outside_footage(request, selected, project_media, path)
         return path
 
     @routes.get("/spool/api/projects/{project}/take-file/{clip}/{take}")
@@ -625,14 +729,15 @@ def register(server, store, media, executor=None):
     async def use_take(request):
         store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
+        revision, take_id = required_fields(data, "revision", "takeId")
         capture = await prepare_inputs(data["capture"], request, True) if data.get("capture") else None
         saved = await asyncio.to_thread(
             operations.use_take,
             store,
             request.match_info["project"],
-            data["revision"],
+            revision,
             request.match_info["clip"],
-            data["takeId"],
+            take_id,
             capture,
         )
         return await project_response(request, saved)
@@ -648,14 +753,15 @@ def register(server, store, media, executor=None):
     async def delete_take_files(request):
         selected, _ = await asyncio.to_thread(services, request)
         data = await request.json()
+        revision, take_ids = required_fields(data, "revision", "takeIds")
         return response(
             await asyncio.to_thread(
                 take_files.delete,
                 selected,
                 request.match_info["project"],
-                data["revision"],
+                revision,
                 request.match_info["clip"],
-                data["takeIds"],
+                take_ids,
             )
         )
 
@@ -697,12 +803,13 @@ def register(server, store, media, executor=None):
     async def queue(request):
         store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
+        (revision,) = required_fields(data, "revision")
         project_id = request.match_info["project"]
         items = requests.queue_items(data)
         if executor is not None:
             value = await executor.queue(
                 project_id,
-                data["revision"],
+                revision,
                 items,
                 data.get("operationId"),
                 data.get("actor", "human"),
@@ -713,7 +820,7 @@ def register(server, store, media, executor=None):
                 store,
                 media,
                 project_id,
-                data["revision"],
+                revision,
                 items,
                 data.get("operationId"),
                 data.get("actor", "human"),
@@ -847,7 +954,7 @@ def register(server, store, media, executor=None):
         store, media = await asyncio.to_thread(services, request)
         if executor is not None:
             await executor.reconcile()
-        await asyncio.to_thread(collector.scan)
+        await cloud_module.storage_call(collector.scan)
         return web.json_response({"ok": True})
 
     @routes.get("/spool/api/attempts/{attempt}")
@@ -876,7 +983,12 @@ def register(server, store, media, executor=None):
             raise ValueError("Import a video, image, or audio file")
         target = await asyncio.to_thread(media.input_destination, name, unique=True)
         await receive_file(request, target)
-        description = await asyncio.to_thread(media.describe, target, name, float(request.query.get("fps", 24)))
+        try:
+            description = await asyncio.to_thread(media.describe, target, name, float(request.query.get("fps", 24)))
+        except Exception:
+            # Nothing refers to a file that could not be described.
+            target.unlink(missing_ok=True)
+            raise
         if description.get("workflow"):
             description["workflowData"] = await prepare_inputs(
                 {"workflow": description["workflow"], "prompt": description.get("prompt")}, request
@@ -944,6 +1056,7 @@ def register(server, store, media, executor=None):
         take = next((t for t in clip["takes"] if t["id"] == data["takeId"]), None)
         if not take or take.get("placeholder"):
             raise ValueError("Select a video take in this project")
+        await asyncio.to_thread(guard_originals, request, store, media, [take["media"]])
         fps = await asyncio.to_thread(store.frame_rate, request.match_info["project"])
         document = await asyncio.to_thread(store.document, request.match_info["project"])
         size = document.get("resolution") or {"width": 960, "height": 540}

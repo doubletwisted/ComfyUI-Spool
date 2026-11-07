@@ -3,6 +3,154 @@
 All notable changes to Spool are recorded here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Tests
+
+- Native browser checks cover permanent take deletion with pending and failed
+  saves, plus completed OTIO downloads and export failures. They verify project
+  revisions, retained file bytes, downloaded timelines and blob URL replacement.
+
+### Fixes
+
+- OTIO export retries transient Windows sharing denials and removes only its own
+  unfinished file if writing or publication fails.
+- Comparison sheets use temporary frames that are cleaned after success or
+  failure. Saved sheets and explicitly exported frames remain available.
+- FFmpeg errors retain Unicode filenames on Windows instead of failing while
+  decoding diagnostics during audio preparation, export or cut detection.
+- Cancellation preflight reads avoid writer locks and checkpoint rewrites;
+  cancellation plans and delivery acknowledgements keep their transactions.
+- Footage with many cuts imports without Windows command or FFmpeg expression
+  limits, while keeping exact shot frames and short keyframe intervals for seeking.
+  The existing FFmpeg/ffprobe 5.1 minimum is documented.
+- Save and capture validate clip, take and workflow containers before staging
+  input files, returning request errors for invalid types. Demo save and take
+  validation replies include matching error codes.
+- Unresolved-save messages also apply to pending actions such as take deletion.
+- Transition buttons escape project track values, preventing a crafted track
+  from executing script when the timeline opens.
+- Failed imports remove only their own new working cache, preserving existing or
+  redirected caches and the original import error when cleanup is denied. Cache
+  path setup failures also remove the import's empty destination.
+- Storage reports include project backups from their managed cache directory.
+- Slow launcher settings, startup-file scans and process creation run in workers,
+  keeping the host responsive. Delayed state updates preserve newer startup
+  reservations, and cancellation waits for an in-flight launch to finish.
+- Local, Deadline and Cloud collection own their temporary files, so concurrent
+  collectors cannot overwrite or remove each other's unfinished copies.
+- Finding an existing Deadline job reports an unavailable service with a retry
+  action when its recovery lookup fails.
+- Missing required revision/request fields return validation errors before the
+  operation starts, including the save and take actions simulated by the demo.
+- Manual reconciliation and background collection serialize work for each
+  project, preventing duplicate artifact copies. Shutdown waits for collection
+  workers to finish before releasing ownership.
+- Deadline submission grace no longer includes time waiting in the queue or
+  preparing inputs, so old queued takes can still be submitted.
+- Maintenance dry runs scan a private snapshot, so a long report does not block
+  another editor's save on Windows.
+- Invalid or nonfinite probed frame rates produce a clear validation error.
+- Cloud observation batches settle before reporting failures; cancellation
+  preserves other errors and always releases executor ownership on shutdown.
+
+- The local demo server rejects inverted or out-of-bounds byte ranges with a
+  complete 416 response instead of a negative content length.
+
+- Cloud key status follows the effective saved or environment credential,
+  including empty or whitespace-only values.
+- Registry publishing pins its external action to a reviewed commit.
+
+- Failed input staging and export muxing remove their own partial files while
+  preserving published inputs, successful exports and the original error.
+
+- Linked Comfy image-loader choices refresh when a workflow opens or reloads,
+  keeping valid staged images selectable without changing the saved input.
+- Newly described image/video dimensions follow EXIF and display-matrix
+  orientation. Existing media records and originals are unchanged.
+- Path-imported video copies keep project-relative original references, so
+  moving a project also preserves its shot and audio source references.
+- Joined extension audio follows the measured frame shift and sequence frame
+  rate, keeping its duration aligned with the joined video.
+- Snapshot publications carry an identity inside the SQLite snapshot, so
+  same-size saves with coarse timestamps do not hide newer revisions.
+- Demo take deletion follows host media-pool and generation-input protection
+  rules and removes aliases of a deleted original.
+
+- New clip output folders stay distinct when names differ only by case, and
+  Windows device names and truncated trailing spaces/dots are made portable.
+  Existing assigned output folders are preserved.
+- Queue preparation validates every item and source before freezing inputs,
+  so an invalid later item does not leave copies from earlier items.
+
+- Authored JSON that impersonates a project evidence blob is rejected before
+  saving, so an imported value cannot leave the project unreadable.
+
+- Comparing takes and detecting cuts in a take whose original lies outside the
+  project and Comfy folders now answer only this computer, as downloading that
+  original already did. Another machine could otherwise read frames of any image
+  or video on the Spool computer.
+- `python -m spool` agent commands reach a Spool on this computer directly when
+  `http_proxy` is set for other traffic, instead of failing through the proxy.
+- **Find existing Deadline job** works again. It failed on every call, so a
+  Deadline render whose submission was uncertain could not be resolved.
+- A Deadline receipt whose artifact or execution ID is not the ID Spool's worker
+  writes is rejected. A forged ID could make collection copy a file outside the
+  project.
+- A Deadline receipt that is valid JSON of the wrong shape is recorded as invalid
+  instead of stopping collection of every later receipt and project.
+- Reopening a project after Spool stopped in the middle of a save restores the
+  last published snapshot. The interrupted save could be rolled into the fresh
+  copy and, on the next save, undo work published from another computer.
+- Applying a workflow or using a take no longer stores another copy of the
+  project's workflows each time. Repeated without a save in between, it grew the
+  project until it could not be opened.
+- `python -m spool prune --confirm` no longer removes previews the edit uses when
+  their file names contain spaces or accented letters.
+- Opening a project no longer runs script hidden in its clip, take or media IDs,
+  take numbers or track numbers. The studio now escapes them like names, so an
+  imported project or shared project folder cannot act as the studio.
+- `run_spool.bat` finds Spool with the Windows portable build's Python, whose
+  `._pth` file leaves the Spool folder off Python's module path.
+- Importing footage again after an interrupted import works. A review copy, poster
+  or waveform cut short by a timeout or a stopped Spool was kept and reused, so
+  that file could never be imported again.
+- MP4 export works for a Windows account whose name contains an apostrophe.
+- **Delete from disk** saves your edits first. An edit not yet saved was replaced
+  by the reply, and one still saving made the delete report a conflict.
+- A Deadline task that the farm retried no longer adds its second render to the
+  clip as an extra take; the accepted result stays the only take.
+- A project folder Spool cannot open, such as one a newer Spool upgraded, is
+  listed as unavailable instead of stopping the project list and every other
+  project's renders. A folder whose upgrade fails is retried less and less often,
+  not every few seconds with a new backup each time.
+- `python -m spool prune --confirm` and `reclaim --confirm` keep their working copy
+  in a private temporary folder and remove it afterwards. Another user of the
+  computer could plant a database at the shared path they used, which a run then
+  published into the project.
+- Projects created, opened or imported at the same moment all stay in the project
+  list. One could drop another from the list, leaving its folder unreachable.
+- Files whose names contain a percent sign followed by two hex digits, such as
+  `a%41.mp4`, play, export and collect. Their names were decoded a second time
+  and pointed at a different file.
+- The studio shows footage whose file name contains `#`, `?` or `%`, such as an
+  imported `Take #3.mp4`. Its address was cut at that character.
+- A Comfy Cloud workflow whose result is an image is refused before it renders.
+  Cloud results are collected as video, so the paid render could never arrive.
+- Importing a file that is not readable media says so and keeps nothing, instead
+  of a generic server error with the file left in the project.
+- A project folder at the root of a drive or network share (`E:\`,
+  `\\nas\projects\`) can use its media. Every path in it was refused as outside
+  the project.
+- `python -m spool command` reports a missing or invalid `--file` as a JSON error
+  (`invalid_request`) instead of a Python traceback.
+- A waveform is drawn again when its audio file is replaced at the same path,
+  instead of showing the old sound.
+- Standalone Spool starts, and its Comfy connection status loads, from a checkout
+  close to the drive root such as `C:\Spool` or `/opt/spool`.
+- On macOS and Linux the saved Comfy Cloud key file is private from the moment it
+  is written; it was briefly readable by other users of the computer.
+
 ## 0.1.1 (2026-11-03)
 
 ### Directing tools

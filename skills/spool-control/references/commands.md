@@ -100,7 +100,8 @@ Read `code` rather than parsing message text: `invalid_request`, `not_found`,
 An error does not prove nothing changed: sidecar writes can fail after a commit.
 Inspect status before retrying, preserving the exact pending operation envelope.
 The CLI reports non-JSON HTTP failures as `http_error`, connection failures as
-`network_error`, and invalid JSON as `invalid_response` on stderr (exit 1).
+`network_error`, invalid JSON as `invalid_response`, and a command file it cannot
+read or parse as `invalid_request` on stderr (exit 1).
 Pass `--wire-json` to preserve tagged exact integers in machine stdout; the default
 prints readable integers. Versionless CLI/agent requests remain supported.
 

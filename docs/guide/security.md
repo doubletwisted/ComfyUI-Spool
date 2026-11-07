@@ -1,5 +1,9 @@
 # Security and network access
 
+Imported or authored JSON cannot contain a dictionary whose only key is
+`__spool_blob__`. That shape is reserved for internal evidence references.
+Spool rejects it before saving and retains the previous project revision.
+
 Spool has no user accounts. Who can use it depends on who can reach the port of
 the ComfyUI it runs in, or of `python -m spool`.
 
@@ -19,7 +23,8 @@ does not apply.
 - revealing a take or clip folder in the file manager
 - Comfy connection settings and the Cloud API key
 - starting ComfyUI
-- serving original footage, or any footage stored outside the project and Comfy folders
+- serving original footage, or any footage stored outside the project and Comfy folders,
+  and comparing takes or detecting cuts in that footage
 - preparing playback and exporting frames
 
 A request to them must come from a loopback address. It must also use a loopback

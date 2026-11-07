@@ -336,7 +336,8 @@ class TakeFileRoutes(unittest.IsolatedAsyncioTestCase):
         saved = self.store.save(self.project["id"], self.project["revision"], document)
         empty_folder = self.store.root / saved["document"]["clips"][1]["outputFolder"]
         empty_folder.rmdir()
-        with patch("spool.system.show") as launch:
+        # The route asks for a file manager first; a headless runner has none.
+        with patch("spool.system.file_manager", return_value="file manager"), patch("spool.system.show") as launch:
             for clip_id, folder in (("shot", self.store.root / original_folder), ("empty", empty_folder)):
                 result = await self.client.post(
                     "/spool/api/projects/" + self.project["id"] + "/clip-folder/" + clip_id + "/reveal", json={}
@@ -359,7 +360,8 @@ class TakeFileRoutes(unittest.IsolatedAsyncioTestCase):
 
     async def test_open_clip_folder_rejects_unknown_clip_cross_origin_and_invalid_folder(self):
         path = "/spool/api/projects/" + self.project["id"] + "/clip-folder/shot/reveal"
-        with patch("spool.system.show") as launch:
+        # With a file manager present, each 400 below comes from the folder checks.
+        with patch("spool.system.file_manager", return_value="file manager"), patch("spool.system.show") as launch:
             self.assertEqual((await self.client.post(path.replace("/shot/", "/unknown/"), json={})).status, 400)
             self.assertEqual(
                 (await self.client.post(path, headers={"Origin": "https://elsewhere.invalid"}, json={})).status, 403

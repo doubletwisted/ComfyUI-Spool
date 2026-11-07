@@ -131,6 +131,38 @@ class RouteGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200, await response.text())
         self.assertEqual(await response.read(), b"project footage")
 
+    async def test_frames_of_footage_outside_the_project_stay_on_this_computer(self):
+        # A comparison sheet or cut list is made from the original, so it is read
+        # under the same rule as downloading that original.
+        with patch.object(Media, "comparison", return_value={"url": "", "takes": []}) as compare:
+            for take_ids in (["outside"], ["inside", "outside"]):
+                response = await self.client.post(
+                    self.base + "/comparison", json={"clipId": "shot", "takeIds": take_ids}, headers=REBOUND
+                )
+                self.assertEqual(response.status, 403, await response.text())
+            compare.assert_not_called()
+            response = await self.client.post(
+                self.base + "/comparison", json={"clipId": "shot", "takeIds": ["inside"]}, headers=REBOUND
+            )
+            self.assertEqual(response.status, 200, await response.text())
+            response = await self.client.post(
+                self.base + "/comparison", json={"clipId": "shot", "takeIds": ["outside"]}
+            )
+            self.assertEqual(response.status, 200, await response.text())
+        with patch.object(Media, "find_cuts", return_value=[]) as cuts:
+            response = await self.client.post(
+                self.base + "/detect-cuts", json={"clipId": "shot", "takeId": "outside"}, headers=REBOUND
+            )
+            self.assertEqual(response.status, 403, await response.text())
+            cuts.assert_not_called()
+            for headers in (REBOUND, {}):
+                response = await self.client.post(
+                    self.base + "/detect-cuts",
+                    json={"clipId": "shot", "takeId": "inside" if headers else "outside"},
+                    headers=headers,
+                )
+                self.assertEqual(response.status, 200, await response.text())
+
     async def test_reads_and_listed_comfy_address_remain_available(self):
         response = await self.client.get("/spool/api/projects", headers=ELSEWHERE)
         self.assertEqual(response.status, 200)

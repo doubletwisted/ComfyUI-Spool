@@ -175,6 +175,21 @@ class Edit:
         )
 
 
+def json_strings(value):
+    """Every string in a decoded JSON value, keys included."""
+    found, pending = [], [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            found.append(item)
+        elif isinstance(item, dict):
+            found.extend(k for k in item if isinstance(k, str))
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+    return found
+
+
 class Store:
     def __init__(self, root, migrate=True, filename="spool.sqlite3"):
         self.focus_store = self
@@ -416,6 +431,20 @@ class Store:
         }
 
     def _dump(self, db, value, *, receipt=False, capture=False):
+        # Storage references are created below, never accepted as authored JSON.
+        # Reject before packing so a failed save rolls back instead of publishing
+        # a document that every subsequent read interprets as a missing blob.
+        def check_authored(held):
+            if isinstance(held, dict):
+                if set(held) == {"__spool_blob__"}:
+                    raise ValueError("Authored values cannot contain a project evidence blob reference")
+                for child in held.values():
+                    check_authored(child)
+            elif isinstance(held, list):
+                for child in held:
+                    check_authored(child)
+
+        check_authored(value)
         if receipt:
             value = copy.deepcopy(value)
             if "primary" in value and "artifacts" in value:
@@ -654,7 +683,14 @@ class Store:
                 except sqlite3.OperationalError:
                     continue
                 for row in rows:
-                    for token in re.findall(r"[A-Za-z0-9_\-./\\]+", row[0]):
+                    tokens = re.findall(r"[A-Za-z0-9_\-./\\]+", row[0])
+                    try:
+                        # Whole string values too: file names may hold spaces, and JSON
+                        # escapes non-ASCII characters, which the tokens alone would miss.
+                        tokens += json_strings(json.loads(row[0]))
+                    except (TypeError, ValueError):
+                        pass
+                    for token in tokens:
                         names.add(token)
                         if "/" in token or "\\" in token:
                             names.add(token.replace("\\", "/").rsplit("/", 1)[-1])
@@ -665,7 +701,7 @@ class Store:
         names = self.referenced_names()
         folders = {}
         for folder in ("previews", "exports", "uploads", "shots", "artifacts", "assets", "backups"):
-            directory = (self.cache if folder in ("previews", "shots") else self.root) / folder
+            directory = (self.cache if folder in ("previews", "shots", "backups") else self.root) / folder
             if not directory.is_dir():
                 continue
             files = [path for path in directory.rglob("*") if path.is_file()]
@@ -1147,6 +1183,13 @@ class Store:
                     pending.add(row["take_id"][:8])
                 result = self._load(row["result"], db, memo=memo) or {}
                 known.update(a.get("originalFile", a.get("file")) for a in result.get("artifacts", []))
+            # A retried farm task's copy is evidence of the same take, not a file dropped into the folder.
+            for row in db.execute(
+                "SELECT e.receipt FROM executions e JOIN attempts a ON a.id=e.attempt_id WHERE a.project_id=?",
+                (project_id,),
+            ):
+                receipt = self._load(row["receipt"], db, memo=memo) or {}
+                known.update(a.get("originalFile", a.get("file")) for a in receipt.get("artifacts", []))
             return known, numbers, pending
 
     def get(self, project_id):
@@ -1229,7 +1272,8 @@ class Store:
             row = db.execute("SELECT document FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
                 raise NotFound("Project not found")
-            document = json.loads(row[0])
+            # Unpacked as editing() reads it: this document is saved, and saving packs it again.
+            document = self._load(row[0], db)
             generated = (
                 db.execute(
                     "SELECT clip_id,take_id,result FROM attempts WHERE project_id=? AND take_id=? AND status='complete'",

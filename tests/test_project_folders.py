@@ -1,16 +1,23 @@
 """Project folder durability, portable inputs, discovery and exact receipt collection."""
 
 import asyncio
+import contextlib
 import copy
 import gzip
+import hashlib
+import io
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
+import sys
 import tempfile
+import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from threading import Event
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,15 +27,19 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from PIL import Image, PngImagePlugin
 
-from spool import commands, farm_protocol, operations, receipts, requests, sidecars, take_files, ledger
+from spool import commands, farm_protocol, maintenance, operations, receipts, requests, sidecars, take_files, ledger
 from spool.wire import unwire, wire
 from spool.collection import Collector
 from spool.execution import LocalExecutor
+from spool.errors import NotFound
 from spool.folder_takes import FolderTakes
 from spool.media import Media
 from spool.projects import Workspace
 from spool.routes import register
 from spool.store import Conflict, Store
+
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 class ProjectFolderTests(unittest.TestCase):
@@ -512,7 +523,7 @@ class ProjectFolderTests(unittest.TestCase):
         self.assertEqual(len(publications), 2, "Fail the imported document, after schema initialization")
         self.assertEqual(list(parent.iterdir()), [])
         self.assertEqual(self.workspace.folders(), folders)
-        with patch.object(self.workspace, "set_setting", side_effect=OSError("Registry unavailable")):
+        with patch.object(self.workspace, "register_folder", side_effect=OSError("Registry unavailable")):
             with self.assertRaisesRegex(OSError, "Registry unavailable"):
                 self.workspace.import_project(exported)
         self.assertEqual(list(parent.iterdir()), [])
@@ -523,22 +534,20 @@ class ProjectFolderTests(unittest.TestCase):
     def test_import_registers_only_a_durable_complete_project(self):
         exported = self.store.export_project(self.project["id"])
         original = copy.deepcopy(exported)
-        set_setting = self.workspace.set_setting
+        register_folder = self.workspace.register_folder
         checked = []
 
-        def register(key, value):
-            if key == "project_folders":
-                new = value[-1]
-                reader = Workspace(self.root / "import-reader")
-                durable = reader.open_folder(new["folder"])
-                self.assertEqual(durable["id"], new["id"])
-                clip = durable["document"]["clips"][0]
-                self.assertIn(clip["workflowVersion"], durable["recipes"])
-                self.assertEqual(clip["takeId"], "original")
-                checked.append(durable)
-            return set_setting(key, value)
+        def register(project_id, folder, check=None):
+            reader = Workspace(self.root / "import-reader")
+            durable = reader.open_folder(folder)
+            self.assertEqual(durable["id"], project_id)
+            clip = durable["document"]["clips"][0]
+            self.assertIn(clip["workflowVersion"], durable["recipes"])
+            self.assertEqual(clip["takeId"], "original")
+            checked.append(durable)
+            return register_folder(project_id, folder, check)
 
-        with patch.object(self.workspace, "set_setting", register):
+        with patch.object(self.workspace, "register_folder", register):
             imported = self.workspace.import_project(exported)
         self.assertEqual(checked, [imported])
         self.assertNotEqual(imported["id"], self.project["id"])
@@ -1640,6 +1649,195 @@ class ProjectFolderTests(unittest.TestCase):
                             await response.read()
 
         asyncio.run(check())
+
+    def test_a_retried_farm_task_does_not_become_a_second_take(self):
+        capture = copy.deepcopy(self.capture)
+        capture["prompt"]["submit"] = {
+            "class_type": "DeadlineSubmit",
+            "inputs": {"output_directory": "", "batch_count": 1, "chunk_size": 1},
+        }
+        saved = self.store.capture(
+            self.project["id"], self.project["revision"], "clip-a", self.media.prepare_workflow(capture, True)
+        )
+        project = requests.accept(
+            self.store, self.media, saved["id"], saved["revision"], [{"clipId": "clip-a", "count": 1}]
+        )
+        attempt = self.store.attempt(project["document"]["jobs"][0]["id"])
+        request = attempt["request"]
+        root = Path(request["prompt"]["submit"]["inputs"]["output_directory"])
+        package = {
+            "schemaVersion": 2,
+            **{k: request[k] for k in ("projectId", "clipId", "takeId", "attemptId", "fingerprint")},
+            "variationIndex": 0,
+            "result": request["capture"]["result"],
+            "assets": copy.deepcopy(request["assets"]),
+            "resultRoot": str(root),
+            "stagedPrompt": {k: copy.deepcopy(v) for k, v in request["prompt"].items() if k != "submit"},
+        }
+        package["submissionId"] = self.store.submission(attempt["id"], package)["id"]
+        for asset in package["assets"]:
+            asset["staged"] = asset["frozen"]
+        folder = root / "spool-submissions" / package["submissionId"]
+        farm_protocol.atomic_json(folder / "request.json", package)
+        farm_protocol.atomic_json(
+            folder / "ack.json",
+            {**{k: package[k] for k in ("schemaVersion", "submissionId", "attemptId", "fingerprint")}, "jobId": "job"},
+        )
+
+        def execute(colour):
+            execution = farm_protocol.prepare_execution(package, package["stagedPrompt"], self.roots[0], 0)
+            name = execution["executionId"] + ".png"
+            Image.new("RGB", (16, 16), colour).save(self.roots[1] / name)
+            history = {
+                "prompt": [0, "worker", execution["prompt"]],
+                "status": {"completed": True, "status_str": "success"},
+                "outputs": {"save": {"images": [{"filename": name, "type": "output"}]}},
+            }
+            farm_protocol.finalize(package, execution, "worker", history, self.media.host_roots, "render", "job")
+
+        collector = Collector(self.workspace, self.base_media)
+        execute("blue")
+        with patch("spool.farm.deadline_command", return_value=""):
+            collector.scan()
+        takes = self.store.get(self.project["id"])["document"]["clips"][0]["takes"]
+        # Deadline retries the task: a second, later execution of the same request.
+        execute("green")
+        with (
+            patch("spool.farm.deadline_command", return_value=""),
+            patch("spool.collection.Collector.HISTORY_INTERVAL", 0),
+        ):
+            collector.scan()
+            clip_folder = self.store.root / "output" / "Desert walk"
+            self.assertEqual(len(list(clip_folder.glob("take-*.png"))), 2)
+            for path in clip_folder.iterdir():
+                os.utime(path, (time.time() - 60, time.time() - 60))  # past the settle time
+            collector.scan()
+            collector.scan()
+        self.assertEqual(self.store.get(self.project["id"])["document"]["clips"][0]["takes"], takes)
+
+
+class UnavailableFolderTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+
+    def test_a_folder_that_cannot_open_leaves_the_other_projects_working(self):
+        workspace = Workspace(self.root / "app")
+        good = workspace.create({"project": "Good", "clips": [], "media": []}, self.root / "projects" / "Good")
+        workspace.create({"project": "Newer", "clips": [], "media": []}, self.root / "projects" / "Newer")
+        manifest = self.root / "projects" / "Newer" / "project.json"
+        # A newer Spool on another computer upgraded the shared folder.
+        manifest.write_text(json.dumps({**json.loads(manifest.read_text()), "formatVersion": 99}))
+        restarted = Workspace(self.root / "app")
+        listed = {row["name"]: row for row in restarted.list()}
+        self.assertTrue(listed["Newer"]["unavailable"])
+        self.assertEqual(listed["Good"]["id"], good["id"])
+        self.assertEqual([store.root.name for store in restarted.project_stores()], ["Good"])
+        with self.assertRaises(NotFound):
+            restarted.lookup("attempts", "missing")
+
+    def test_a_folder_upgraded_while_open_is_skipped_by_later_scans(self):
+        workspace = Workspace(self.root / "app")
+        workspace.create({"project": "Good", "clips": [], "media": []}, self.root / "projects" / "Good")
+        workspace.create({"project": "Newer", "clips": [], "media": []}, self.root / "projects" / "Newer")
+        self.assertEqual(len(workspace.project_stores()), 2)
+        manifest = self.root / "projects" / "Newer" / "project.json"
+        manifest.write_text(json.dumps({**json.loads(manifest.read_text()), "formatVersion": 99}))
+        stores = workspace.project_stores()
+        self.assertEqual([store.root.name for store in stores], ["Good"])
+        for store in stores:
+            store.pending()
+
+    def test_a_failing_upgrade_is_not_retried_on_every_scan(self):
+        workspace = Workspace(self.root / "app")
+        folder = self.root / "projects" / "Old"
+        workspace.create({"project": "Old", "clips": [], "media": []}, folder)
+        with closing(sqlite3.connect(folder / "project.spool")) as db, db:
+            db.execute("PRAGMA user_version=6")
+        (folder / "project.json").unlink()
+        restarted = Workspace(self.root / "app")
+        with patch.object(Store, "_migration7", side_effect=sqlite3.OperationalError("step 7 failed")):
+            for _ in range(10):
+                self.assertEqual(restarted.project_stores(), [])
+        self.assertEqual(len(list((folder / ".spool" / "backups").iterdir())), 1)
+
+    def test_projects_imported_at_once_all_stay_listed(self):
+        workspace = Workspace(self.root / "app")
+        export = {"spoolVersion": 1, "document": {"project": "Imported", "clips": [], "media": []}}
+        start = threading.Barrier(8)
+
+        def imported(_):
+            start.wait()
+            return workspace.import_project(export)["id"]
+
+        with ThreadPoolExecutor(8) as pool:
+            created = set(pool.map(imported, range(8)))
+        self.assertEqual({row["id"] for row in workspace.folders()}, created)
+        self.assertEqual({row["id"] for row in Workspace(self.root / "app").list()}, created)
+
+
+class MaintenanceCacheTests(unittest.TestCase):
+    def test_confirmed_maintenance_ignores_a_working_copy_planted_in_shared_temp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        folder = (Path(temp.name) / "projects" / "Film").resolve()
+        Workspace(Path(temp.name) / "app").create({"project": "Film", "clips": [], "media": []}, folder)
+        # Another user of this computer can write the system temporary folder.
+        shared = Path(tempfile.gettempdir()) / "spool-maintenance" / hashlib.sha256(str(folder).encode()).hexdigest()
+        shared.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(shutil.rmtree, shared, True)
+        shutil.copyfile(folder / "project.spool", shared / "working.sqlite3")
+        with closing(sqlite3.connect(shared / "working.sqlite3")) as db, db:
+            db.execute("UPDATE projects SET document=json_set(document,'$.project','Forged')")
+            db.execute("CREATE TABLE revisions(document TEXT)")
+        stat = (folder / "project.spool").stat()
+        (shared / "checkpoint.json").write_text(json.dumps([stat.st_mtime_ns, stat.st_size]))
+        before = set(Path(tempfile.gettempdir()).glob("spool-maintenance-*"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(maintenance.run(["--storage", str(folder), "--confirm", "--json"]), 0)
+        with closing(sqlite3.connect(folder / "project.spool")) as db:
+            name = db.execute("SELECT json_extract(document,'$.project') FROM projects").fetchone()[0]
+        self.assertEqual(name, "Film")
+        self.assertEqual(set(Path(tempfile.gettempdir()).glob("spool-maintenance-*")), before)
+
+
+class CrashRecoveryTests(unittest.TestCase):
+    def test_a_crashed_save_cannot_roll_back_another_computers_publications(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        folder = root / "projects" / "Film"
+        here = Workspace(root / "here")
+        project_id = here.create({"project": "initial", "clips": [], "media": []}, folder)["id"]
+        # A writer on this computer dies inside a transaction, leaving a hot rollback journal.
+        crash = (
+            "import os, sys\n"
+            "from spool.projects import Workspace\n"
+            "store = Workspace(sys.argv[1]).for_project(sys.argv[2])\n"
+            "with store.editing(sys.argv[2], 0) as edit:\n"
+            "    edit.db.execute('PRAGMA cache_size=1')\n"
+            "    edit.save({'project': 'uncommitted', 'clips': [], 'media': []})\n"
+            "    edit.db.execute('CREATE TABLE junk(x)')\n"
+            "    edit.db.executemany('INSERT INTO junk VALUES(?)', ((os.urandom(2000),) for _ in range(50)))\n"
+            "    os._exit(9)\n"
+        )
+        subprocess.run([sys.executable, "-c", crash, str(here.root), project_id], cwd=ROOT, check=False)
+        journal = here.for_project(project_id).runtime.with_name("working.sqlite3-journal")
+        self.assertTrue(journal.exists())
+        # Another computer publishes newer work to the shared folder meanwhile.
+        there = Workspace(root / "there").open_folder(folder)
+        other = Workspace(root / "there").for_project(project_id)
+        revision = there["revision"]
+        for index in range(3):
+            revision = other.save(project_id, revision, {"project": "there %d" % index, "clips": [], "media": []})[
+                "revision"
+            ]
+        restarted = Workspace(root / "here").for_project(project_id)
+        self.assertEqual(restarted.get(project_id)["document"]["project"], "there 2")
+        saved = restarted.save(project_id, revision, {"project": "here", "clips": [], "media": []})
+        self.assertEqual(saved["revision"], revision + 1)
+        self.assertEqual(Workspace(root / "third").open_folder(folder)["document"]["project"], "here")
 
 
 if __name__ == "__main__":

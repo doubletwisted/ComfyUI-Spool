@@ -229,8 +229,13 @@ async function startEditor(isFailed) {
   const projectKey = BOOT.id,
     STORAGE_KEY = 'spool-native-' + projectKey,
     VIEW_KEY = STORAGE_KEY + ':view';
+  // Project paths are file names: "#", "?" or "%" in one is part of the name, not URL syntax.
   const url = path =>
-    path.startsWith('api/') ? '/spool/' + path : path.startsWith('/') || path.startsWith('data:') ? path : BASE + path;
+    path.startsWith('api/')
+      ? '/spool/' + path
+      : path.startsWith('/') || path.startsWith('data:')
+        ? path
+        : BASE + path.split('/').map(encodeURIComponent).join('/');
   const thumbnails = createThumbnails(url, diagnostics, $('viewerStage'), async (m, rate) => {
     const entry = reviewSource(m, rate);
     if (entry.pending) await entry.pending;
@@ -1188,6 +1193,7 @@ async function startEditor(isFailed) {
     hideTrimPreview,
     clearHeld,
     getProjectEdit: () => projectEdit,
+    flushNative,
     getShowActionMenu: () => showActionMenu,
   });
   function takeSelection(c = selected()) {

@@ -40,6 +40,12 @@ saved under both the escaped and the unescaped path.
 The fake mirrors five host replies: the project, the unchanged-project poll, the
 save, take deletion and Use take. If one of those routes changes shape, change
 `pages/demo-api.js` and `tests/demo_api_checks.mjs` in the same commit.
+The simulated mutations also match the host's required-field validation: missing
+fields are `400 invalid_request`; a supplied stale revision remains a conflict.
+Supported saves also mirror the host's structural checks for document, clip,
+take and capture containers, including input-recovery lists. Executable graph
+meaning and input preparation remain host responsibilities. Demo take-value
+validation errors carry the same `invalid_request` code as the host.
 
 ## Recording the project
 

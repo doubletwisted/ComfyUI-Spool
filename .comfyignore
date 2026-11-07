@@ -4,6 +4,7 @@ pages/
 promo/
 .native-test/
 docs/archive/
+docs/audits/
 __pycache__/
 *.pyc
 AGENTS.local.md

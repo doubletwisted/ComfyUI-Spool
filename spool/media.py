@@ -1,11 +1,14 @@
 import copy
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
+import tempfile
+from bisect import bisect_right
+from fractions import Fraction
 from pathlib import Path
-from urllib.parse import unquote
 
 from PIL import Image, ImageDraw, ImageOps
 
@@ -21,33 +24,173 @@ from .timing import rate, frames_filter, tempo_filter
 
 PLAYBACK_VERSION = "playback-2"
 
+# Windows CreateProcess counts the quoted command in UTF-16 code units,
+# including its terminating NUL. Leave room below its 32767-unit limit.
+_SPLIT_COMMAND_BUDGET = 24000
+_SPLIT_BATCH_FRAMES = 100000
+
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".opus"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".mkv", ".m4v"}
 EXTENSIONS = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS | AUDIO_EXTENSIONS
 
 
+class UnreadableMedia(ValueError, subprocess.SubprocessError):
+    """ffprobe could not read a file: the caller's request is at fault, not Spool."""
+
+
 def _probe(source):
     ffprobe = find_tool("ffprobe")
     if not ffprobe:
         raise ValueError("Install ffprobe for native media review")
-    result = subprocess.run(
-        [ffprobe, "-v", "error", "-show_streams", "-show_format", "-of", "json", str(source)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=True,
-        timeout=30,
-    )
+    try:
+        result = subprocess.run(
+            [ffprobe, "-v", "error", "-show_streams", "-show_format", "-of", "json", str(source)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+            timeout=30,
+        )
+    except subprocess.CalledProcessError as error:
+        # ffprobe's message names this computer's path, so it stays in the traceback.
+        raise UnreadableMedia("This file is not readable video, image or audio") from error
+    except subprocess.TimeoutExpired as error:
+        raise UnreadableMedia("Reading this media took too long") from error
     return json.loads(result.stdout)
 
 
 def _rate(value):
-    numerator, _, denominator = str(value).partition("/")
-    rate = float(numerator) / float(denominator or 1)
-    if rate <= 0:
+    """A usable positive source rate from ffprobe, or a caller-facing validation error.
+
+    ffprobe reports missing video clocks as `0/0`, and broken metadata may hold
+    `nan` or an infinity. Import needs a real source rate, so never propagate a
+    division error or a nonfinite timing.
+    """
+    try:
+        numerator, separator, denominator = str(value).strip().partition("/")
+        if separator and not denominator.strip():
+            result = math.nan
+        else:
+            result = float(numerator) / float(denominator or 1)
+    except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+        result = math.nan
+    if not math.isfinite(result) or result <= 0:
         raise ValueError("The video has no usable frame rate")
-    return rate
+    return result
+
+
+def _exact_rate(value, fallback):
+    """An exact frame rate for frame-number timing, preferring ffprobe's rational.
+
+    A float approximation would drift against the proxy's rational frame clock
+    when seeking into later batches. ffprobe reports that clock exactly.
+    """
+    try:
+        result = Fraction(str(value))
+    except (TypeError, ValueError, ZeroDivisionError):
+        result = Fraction(str(fallback)).limit_denominator(1_000_000)
+    if result <= 0:
+        result = Fraction(str(fallback)).limit_denominator(1_000_000)
+    return result
+
+
+def _command_length(command):
+    return len(subprocess.list2cmdline(command).encode("utf-16-le")) // 2 + 1
+
+
+def _split_command(ffmpeg, proxy, folder, cuts, start, end, first, frame_rate, time_base, start_pts):
+    """Encode one contiguous batch, with frame numbers local to its first shot."""
+    command = [ffmpeg, "-v", "error", "-y", "-i", str(proxy)]
+    if start:
+        # Seek one frame early, then select the exact original timestamp. copyts
+        # prevents seek-time rounding from moving the trim boundary. The proxy
+        # has six-frame GOPs, so each batch decodes only a few preceding frames.
+        seek = (start - 1) * 1_000_000 // frame_rate
+        command = [ffmpeg, "-v", "error", "-y", "-copyts", "-ss", f"{seek}us", "-i", str(proxy)]
+        command += ["-vf", f"trim=start_pts={start_pts + round(start / frame_rate / time_base)},setpts=PTS-STARTPTS"]
+    command += [
+        "-an",
+        "-frames:v",
+        str(end - start),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-pix_fmt",
+        "yuv420p",
+        "-g",
+        "6",
+        "-bf",
+        "0",
+    ]
+    if cuts:
+        local = [cut - start for cut in cuts]
+        # FFmpeg rejects deeply nested expressions, including long flat sums.
+        # Pair terms so parser depth grows logarithmically with the cut count.
+        terms = [f"eq(n,{cut})" for cut in local]
+        while len(terms) > 1:
+            terms = [
+                f"({terms[index]}+{terms[index + 1]})" if index + 1 < len(terms) else terms[index]
+                for index in range(0, len(terms), 2)
+            ]
+        command += [
+            "-force_key_frames",
+            "expr:" + terms[0],
+            "-f",
+            "segment",
+            "-segment_frames",
+            ",".join(map(str, local)),
+            "-segment_start_number",
+            str(first),
+            "-reset_timestamps",
+            "1",
+            str(folder / "%03d.mp4"),
+        ]
+    else:
+        command.append(str(folder / f"{first:03d}.mp4"))
+    return command
+
+
+def _split_commands(ffmpeg, proxy, folder, cuts, frames, frame_rate, time_base, start_pts=0):
+    """Bound both explicit cut lists without losing short GOPs inside each shot.
+
+    Batches meet at actual cuts and encode disjoint frame ranges. The frame cap
+    is a grouping target: a single longer shot stays in one batch. The command
+    budget is hard and includes quoted paths, Unicode and the terminating NUL.
+    """
+    boundaries = [0, *cuts, frames]
+    if any(end <= start for start, end in zip(boundaries, boundaries[1:])):
+        raise ValueError("Detected cuts must increase inside the source")
+    first = 0
+    while first < len(boundaries) - 1:
+        start = boundaries[first]
+        last = max(first + 1, bisect_right(boundaries, start + _SPLIT_BATCH_FRAMES) - 1)
+        low, high = first + 1, last
+        command = None
+        while low <= high:
+            middle = (low + high) // 2
+            candidate = _split_command(
+                ffmpeg,
+                proxy,
+                folder,
+                boundaries[first + 1 : middle],
+                start,
+                boundaries[middle],
+                first,
+                frame_rate,
+                time_base,
+                start_pts,
+            )
+            if _command_length(candidate) <= _SPLIT_COMMAND_BUDGET:
+                command, last = candidate, middle
+                low = middle + 1
+            else:
+                high = middle - 1
+        if command is None:
+            raise ValueError("The media path is too long for FFmpeg's command line")
+        yield command
+        first = last
 
 
 def _video_stream(probe):
@@ -59,6 +202,27 @@ def _video_stream(probe):
         ),
         None,
     )
+
+
+def _video_display_size(stream):
+    """Pixel dimensions after ffmpeg's default autorotation, not the coded frame.
+
+    A display matrix supersedes the older rotate tag. FFmpeg transposes quarter
+    turns (within one degree); its arbitrary-angle rotate keeps the coded canvas.
+    Reflections change the pixels but do not change this size rule.
+    """
+    matrix = next(
+        (item for item in stream.get("side_data_list", []) if item.get("side_data_type") == "Display Matrix"), None
+    )
+    rotation = matrix.get("rotation", 0) if matrix is not None else stream.get("tags", {}).get("rotate", 0)
+    try:
+        rotation = float(rotation) % 360
+    except (TypeError, ValueError):
+        rotation = 0
+    width, height = stream["width"], stream["height"]
+    if math.isfinite(rotation) and (abs(rotation - 90) < 1 or abs(rotation - 270) < 1):
+        return height, width
+    return width, height
 
 
 def _review_probe(path, fps, run=None):
@@ -127,6 +291,12 @@ def resolved_root(root):
     return held
 
 
+def unique_partial(destination):
+    """A sibling temporary file only the copy that created it may publish or remove."""
+    destination = Path(destination)
+    return destination.with_name(destination.name + "." + uid() + ".partial")
+
+
 def contained(root, relative):
     """Resolve a stored relative path, refusing anything outside its root.
 
@@ -136,8 +306,10 @@ def contained(root, relative):
     containment depended on whether a directory had already been created.
     """
     base = resolved_root(str(root))
-    target = Path(os.path.normpath(os.path.join(str(base), unquote(relative))))
-    key, prefix = os.path.normcase(str(target)), os.path.normcase(str(base))
+    # Not URL-decoded: aiohttp decodes route paths once, and a stored name may hold a literal "%41".
+    target = Path(os.path.normpath(os.path.join(str(base), relative)))
+    # A drive or share root ("E:\\", "\\\\nas\\projects\\") already ends in a separator.
+    key, prefix = os.path.normcase(str(target)).rstrip(os.sep), os.path.normcase(str(base)).rstrip(os.sep)
     if key == prefix or not key.startswith(prefix + os.sep):
         raise ValueError("Media path escapes its storage root")
     return target
@@ -164,6 +336,20 @@ def check_frozen(path, asset, message="A frozen input changed before execution")
     """Refuse a frozen input whose bytes no longer match what was frozen."""
     if Path(path).stat().st_size != asset["byteSize"] or sha256(path) != asset["sha256"]:
         raise ValueError(message)
+
+
+def encode(command, target, timeout):
+    """Run an ffmpeg command whose last argument is `target`, publishing the file only when it finishes.
+
+    Cache files are reused whenever they exist, so an encode cut short by a timeout,
+    a stopped host or a full disk must not leave a truncated file at that name.
+    """
+    pending = target.with_name(target.stem + "-" + uid() + target.suffix)
+    try:
+        subprocess.run([*command, str(pending)], check=True, capture_output=True, timeout=timeout)
+        pending.replace(target)
+    finally:
+        pending.unlink(missing_ok=True)
 
 
 class Media:
@@ -277,8 +463,15 @@ class Media:
             source.stat().st_mtime_ns,
         ):
             pending = target.with_name(uid() + ".partial")
-            shutil.copy2(source, pending)
-            pending.replace(target)
+            try:
+                shutil.copy2(source, pending)
+                pending.replace(target)
+            except BaseException:
+                try:
+                    pending.unlink(missing_ok=True)
+                except OSError:
+                    pass  # Preserve the staging failure if cleanup is also denied.
+                raise
         return name
 
     def prepare_input(self, value):
@@ -333,11 +526,17 @@ class Media:
             with Image.open(path) as image:
                 if getattr(image, "n_frames", 1) > 1:
                     raise ValueError("Animated image review is not supported yet. Import a video instead.")
+                width, height = image.size
+                # Pillow applies these orientations, including mirrored quarter
+                # turns, when preparing generation inputs and previews. Leave the
+                # original file untouched so its pixels are not rotated twice.
+                if image.getexif().get(274) in (5, 6, 7, 8):
+                    width, height = height, width
                 result.update(
                     {
                         "kind": "image",
-                        "width": image.width,
-                        "height": image.height,
+                        "width": width,
+                        "height": height,
                         "frames": round(5 * fps),
                         "poster": relative,
                     }
@@ -366,10 +565,11 @@ class Media:
         if not ffmpeg:
             raise ValueError("Install ffmpeg for native media review")
         if video:
+            width, height = _video_display_size(video)
             result.update(
                 {
-                    "width": video["width"],
-                    "height": video["height"],
+                    "width": width,
+                    "height": height,
                     "fps": video.get("avg_frame_rate"),
                     "timeBase": video.get("time_base"),
                     "sourceFrameCount": video.get("nb_frames"),
@@ -382,7 +582,7 @@ class Media:
             )
             proxy = previews / (path.stem + "-" + hashlib.sha256(signature.encode()).hexdigest()[:24] + ".mp4")
             if not proxy.exists():
-                subprocess.run(
+                encode(
                     [
                         ffmpeg,
                         "-v",
@@ -416,11 +616,9 @@ class Media:
                         "-shortest",
                         "-movflags",
                         "+faststart",
-                        str(proxy),
                     ],
-                    check=True,
-                    capture_output=True,
-                    timeout=300,
+                    proxy,
+                    300,
                 )
             result["file"] = proxy.relative_to(self.root).as_posix()
             proxy_probe = _review_probe(proxy, fps)
@@ -442,22 +640,25 @@ class Media:
             }
             poster = proxy.with_suffix(".jpg")
             if not poster.exists():
-                subprocess.run(
-                    [ffmpeg, "-v", "error", "-y", "-i", str(proxy), "-frames:v", "1", str(poster)],
-                    check=True,
-                    capture_output=True,
-                    timeout=30,
-                )
+                encode([ffmpeg, "-v", "error", "-y", "-i", str(proxy), "-frames:v", "1"], poster, 30)
             result["poster"] = poster.relative_to(self.root).as_posix()
         if audio:
-            wave = previews / (
-                path.stem
-                + "-"
-                + hashlib.sha256((str(path.resolve()) + "-wave-1").encode()).hexdigest()[:24]
-                + "-wave.png"
+            wave = (
+                previews
+                / (
+                    path.stem
+                    + "-"
+                    # Like the proxy's key: new bytes at the same path draw a new waveform.
+                    + hashlib.sha256(
+                        json.dumps(
+                            [str(path.resolve()), path.stat().st_size, path.stat().st_mtime_ns, "wave-2"]
+                        ).encode()
+                    ).hexdigest()[:24]
+                    + "-wave.png"
+                )
             )
             if not wave.exists():
-                subprocess.run(
+                encode(
                     [
                         ffmpeg,
                         "-v",
@@ -469,11 +670,9 @@ class Media:
                         "aformat=channel_layouts=mono,showwavespic=s=1280x80:colors=0x91dab1",
                         "-frames:v",
                         "1",
-                        str(wave),
                     ],
-                    check=True,
-                    capture_output=True,
-                    timeout=60,
+                    wave,
+                    60,
                 )
             result["wave"] = wave.relative_to(self.root).as_posix()
             if not video:
@@ -481,8 +680,10 @@ class Media:
         return result
 
     def import_footage(self, source, fps=None, detect=True):
-        """Reference a local video in place and split its review proxy into one file per detected shot.
+        """Split a local video's review proxy into one file per detected shot.
 
+        Project imports retain their owned copy using a project-relative original
+        path. Unscoped imports keep the existing absolute in-place reference.
         Shots carry no audio; the source's own audio track is returned separately for the soundtrack lane."""
         source = Path(source)
         if not source.is_absolute() or not source.is_file() or source.suffix.lower() not in VIDEO_EXTENSIONS:
@@ -490,132 +691,120 @@ class Media:
         video = _video_stream(_probe(source))
         if not video:
             raise ValueError("The file has no video stream")
-        fps = fps or _rate(video["avg_frame_rate"])
+        fps = fps or _rate(video.get("avg_frame_rate"))
         whole = self.describe(source, source.name, fps)
+        original = whole["originalFile"] if self.project_id else str(source)
         ffmpeg = find_tool("ffmpeg")
         proxy = self.root / whole["file"]
         cuts = detect_cuts(scene_scores(ffmpeg, proxy, self.cache / "previews" / "cut-scores"), fps) if detect else []
+        frame_rate = time_base = None
+        start_pts = 0
+        if cuts:
+            proxy_video = _video_stream(_probe(proxy)) or {}
+            frame_rate = _exact_rate(proxy_video.get("avg_frame_rate"), fps)
+            time_base = Fraction(proxy_video.get("time_base", "1/1000000"))
+            start_pts = int(proxy_video.get("start_pts", 0))
         folder = self.cache / "shots" / uid()
         folder.mkdir(parents=True)
-        command = [
-            ffmpeg,
-            "-v",
-            "error",
-            "-y",
-            "-i",
-            str(proxy),
-            "-an",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "ultrafast",
-            "-pix_fmt",
-            "yuv420p",
-            "-g",
-            "6",
-            "-bf",
-            "0",
-        ]
-        if cuts:
-            command += [
-                "-force_key_frames",
-                "expr:" + "+".join(f"eq(n,{cut})" for cut in cuts),
-                "-f",
-                "segment",
-                "-segment_frames",
-                ",".join(map(str, cuts)),
-                "-reset_timestamps",
-                "1",
-                str(folder / "%03d.mp4"),
-            ]
-        else:
-            command.append(str(folder / "000.mp4"))
-        subprocess.run(command, check=True, capture_output=True, timeout=600)
-        shots = []
-        for index, (start, end) in enumerate(zip([0, *cuts], [*cuts, whole["frames"]])):
-            file = folder / f"{index:03d}.mp4"
-            count = int(_probe(file)["streams"][0]["nb_frames"])
-            if count != end - start:
-                raise ValueError(
-                    f"Shot {index + 1} has {count} frames instead of {end - start}; the source could not be split exactly"
+        track = None
+        try:
+            for command in _split_commands(
+                ffmpeg, proxy, folder, cuts, whole["frames"], frame_rate, time_base, start_pts
+            ):
+                subprocess.run(command, check=True, capture_output=True, timeout=600)
+            shots = []
+            for index, (start, end) in enumerate(zip([0, *cuts], [*cuts, whole["frames"]])):
+                file = folder / f"{index:03d}.mp4"
+                count = int(_probe(file)["streams"][0]["nb_frames"])
+                if count != end - start:
+                    raise ValueError(
+                        f"Shot {index + 1} has {count} frames instead of {end - start}; the source could not be split exactly"
+                    )
+                poster = file.with_suffix(".jpg")
+                subprocess.run(
+                    [
+                        ffmpeg,
+                        "-v",
+                        "error",
+                        "-y",
+                        "-ss",
+                        str(count / 2 / fps),
+                        "-i",
+                        str(file),
+                        "-frames:v",
+                        "1",
+                        str(poster),
+                    ],
+                    check=True,
+                    capture_output=True,
+                    timeout=30,
                 )
-            poster = file.with_suffix(".jpg")
-            subprocess.run(
-                [
-                    ffmpeg,
-                    "-v",
-                    "error",
-                    "-y",
-                    "-ss",
-                    str(count / 2 / fps),
-                    "-i",
-                    str(file),
-                    "-frames:v",
-                    "1",
-                    str(poster),
-                ],
-                check=True,
-                capture_output=True,
-                timeout=30,
-            )
-            shots.append(
-                {
-                    "id": uid(),
-                    "kind": "video",
-                    "name": f"Shot {index + 1:02d}",
-                    "file": file.relative_to(self.root).as_posix(),
-                    "originalFile": str(source),
-                    "poster": poster.relative_to(self.root).as_posix(),
-                    "frames": count,
-                    "duration": count / fps,
-                    "audio": False,
-                    "sequenceFps": fps,
-                    "fps": whole["fps"],
-                    "width": whole["width"],
-                    "height": whole["height"],
-                    "sourceRange": {"start": start, "frames": count},
-                    "sourceFrameCount": whole["sourceFrameCount"],
-                    "sourceDuration": whole["sourceDuration"],
-                    "frameRateMode": "interpret",
-                    "review": {**whole["review"], "frames": count, "duration": count / fps},
-                }
-            )
-        audio = None
-        if whole["audio"]:
-            track = self.cache / "previews" / (source.stem + "-" + uid() + "-audio.m4a")
-            subprocess.run(
-                [
-                    ffmpeg,
-                    "-v",
-                    "error",
-                    "-y",
-                    "-i",
-                    str(proxy),
-                    "-map",
-                    "0:a:0",
-                    "-vn",
-                    "-c:a",
-                    "aac",
-                    "-b:a",
-                    "256k",
-                    str(track),
-                ],
-                check=True,
-                capture_output=True,
-                timeout=300,
-            )
-            audio = self.describe(track, source.stem + " audio", fps)
-            audio["originalFile"] = str(source)
-            audio.update(
-                fps=whole["fps"],
-                frames=whole["frames"],
-                duration=whole["duration"],
-                sourceFrameCount=whole["sourceFrameCount"],
-                sourceDuration=whole["sourceDuration"],
-                frameRateMode="interpret",
-                review={"frameRateMode": "interpret"},
-            )
-        return {"fps": fps, "source": whole, "shots": shots, "audio": audio}
+                shots.append(
+                    {
+                        "id": uid(),
+                        "kind": "video",
+                        "name": f"Shot {index + 1:02d}",
+                        "file": file.relative_to(self.root).as_posix(),
+                        "originalFile": original,
+                        "poster": poster.relative_to(self.root).as_posix(),
+                        "frames": count,
+                        "duration": count / fps,
+                        "audio": False,
+                        "sequenceFps": fps,
+                        "fps": whole["fps"],
+                        "width": whole["width"],
+                        "height": whole["height"],
+                        "sourceRange": {"start": start, "frames": count},
+                        "sourceFrameCount": whole["sourceFrameCount"],
+                        "sourceDuration": whole["sourceDuration"],
+                        "frameRateMode": "interpret",
+                        "review": {**whole["review"], "frames": count, "duration": count / fps},
+                    }
+                )
+            audio = None
+            if whole["audio"]:
+                track = self.cache / "previews" / (source.stem + "-" + uid() + "-audio.m4a")
+                subprocess.run(
+                    [
+                        ffmpeg,
+                        "-v",
+                        "error",
+                        "-y",
+                        "-i",
+                        str(proxy),
+                        "-map",
+                        "0:a:0",
+                        "-vn",
+                        "-c:a",
+                        "aac",
+                        "-b:a",
+                        "256k",
+                        str(track),
+                    ],
+                    check=True,
+                    capture_output=True,
+                    timeout=300,
+                )
+                audio = self.describe(track, source.stem + " audio", fps)
+                audio["originalFile"] = original
+                audio.update(
+                    fps=whole["fps"],
+                    frames=whole["frames"],
+                    duration=whole["duration"],
+                    sourceFrameCount=whole["sourceFrameCount"],
+                    sourceDuration=whole["sourceDuration"],
+                    frameRateMode="interpret",
+                    review={"frameRateMode": "interpret"},
+                )
+            return {"fps": fps, "source": whole, "shots": shots, "audio": audio}
+        except BaseException:
+            shutil.rmtree(folder, ignore_errors=True)
+            if track is not None:
+                try:
+                    track.unlink(missing_ok=True)
+                except OSError:
+                    pass  # Preserve the ffmpeg or verification failure if cleanup is denied.
+            raise
 
     def reported(self, record):
         file_type = record.get("type", "output")
@@ -650,9 +839,15 @@ class Media:
                     selected = (node_id, group, index) == (selection["nodeId"], selection["group"], selection["index"])
                     destination = self.result_path(attempt, artifact_id, source.suffix.lower(), selected)
                     destination.parent.mkdir(parents=True, exist_ok=True)
-                    pending = destination.with_suffix(destination.suffix + ".partial")
-                    shutil.copyfile(source, pending)
-                    pending.replace(destination)
+                    pending = unique_partial(destination)
+                    try:
+                        shutil.copyfile(source, pending)
+                        atomic_replace(pending, destination)
+                    finally:
+                        try:
+                            pending.unlink(missing_ok=True)
+                        except OSError:
+                            pass  # Preserve the copy or replacement failure if cleanup is denied.
                     metadata = (
                         self.describe(destination, fps=request.get("sequenceFps", 24))
                         if review
@@ -1052,6 +1247,8 @@ class Media:
                     ],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=1800,
                 )
                 if result.returncode:
@@ -1168,7 +1365,7 @@ class Media:
             "offset": metadata.get("sourceRange", {}).get("start", 0) / fps,
         }
 
-    def export_frame(self, metadata, frame, fps):
+    def _write_frame(self, metadata, frame, output):
         frame = int(frame)
         if metadata["kind"] not in ("video", "image") or not 0 <= frame < metadata["frames"]:
             raise ValueError("Choose a frame inside the footage")
@@ -1176,9 +1373,7 @@ class Media:
         if not ffmpeg:
             raise ValueError("Install ffmpeg to export frames")
         original = self.original_source(metadata)
-        folder = self.root / "exports"
-        folder.mkdir(exist_ok=True)
-        output = folder / f"spool-frame-{frame:06d}-{uid()[:8]}.png"
+        output.parent.mkdir(exist_ok=True)
         command = [ffmpeg, "-v", "error", "-y"]
         if metadata["kind"] == "video":
             command += [
@@ -1193,6 +1388,11 @@ class Media:
         subprocess.run(command, check=True, capture_output=True, timeout=60)
         if not output.is_file():
             raise ValueError("The source has no frame at this position")
+
+    def export_frame(self, metadata, frame, fps):
+        frame = int(frame)
+        output = self.root / "exports" / f"spool-frame-{frame:06d}-{uid()[:8]}.png"
+        self._write_frame(metadata, frame, output)
         return {
             "url": ("/spool/media/" + self.project_id + "/exports/" if self.project_id else "/spool/media/exports/")
             + output.name,
@@ -1212,25 +1412,34 @@ class Media:
         canvas = Image.new("RGB", (columns * 384, ((len(takes) + columns - 1) // columns) * 256), "#181818")
         drawing = ImageDraw.Draw(canvas)
         evidence = []
-        for index, take in enumerate(takes):
-            metadata = take["media"]
-            frame = min(
-                metadata["frames"] - 1,
-                max(0, (clip.get("in", 0) + min(clip.get("out", metadata["frames"]), metadata["frames"]) - 1) // 2),
-            )
-            result = self.export_frame(metadata, frame, fps)
-            with Image.open(self.root / "exports" / result["filename"]) as image:
-                tile = ImageOps.contain(image.convert("RGB"), (384, 216))
-                x, y = index % columns * 384, index // columns * 256
-                canvas.paste(tile, (x + (384 - tile.width) // 2, y + (216 - tile.height) // 2))
-                drawing.text((x + 8, y + 224), take["id"][:32], fill="white")
-            evidence.append(
-                {
-                    "takeId": take["id"],
-                    "sampleFrame": frame,
-                    **{k: metadata.get(k) for k in ("kind", "duration", "width", "height", "fps", "audio")},
-                }
-            )
+        temporary = tempfile.TemporaryDirectory(prefix="spool-comparison-", dir=self.cache, ignore_cleanup_errors=True)
+        try:
+            for index, take in enumerate(takes):
+                metadata = take["media"]
+                frame = min(
+                    metadata["frames"] - 1,
+                    max(0, (clip.get("in", 0) + min(clip.get("out", metadata["frames"]), metadata["frames"]) - 1) // 2),
+                )
+                output = Path(temporary.name) / (str(index) + ".png")
+                self._write_frame(metadata, frame, output)
+                with Image.open(output) as image:
+                    tile = ImageOps.contain(image.convert("RGB"), (384, 216))
+                    x, y = index % columns * 384, index // columns * 256
+                    canvas.paste(tile, (x + (384 - tile.width) // 2, y + (216 - tile.height) // 2))
+                    drawing.text((x + 8, y + 224), take["id"][:32], fill="white")
+                evidence.append(
+                    {
+                        "takeId": take["id"],
+                        "sampleFrame": frame,
+                        **{k: metadata.get(k) for k in ("kind", "duration", "width", "height", "fps", "audio")},
+                    }
+                )
+        finally:
+            try:
+                temporary.cleanup()
+            except OSError:
+                pass  # Retain the comparison result or original failure if cleanup is denied.
+        (self.root / "exports").mkdir(exist_ok=True)
         target = self.root / "exports" / ("comparison-" + uid() + ".png")
         canvas.save(target)
         return {

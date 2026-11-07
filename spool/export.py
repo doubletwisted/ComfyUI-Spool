@@ -10,7 +10,7 @@ from .timing import rate, frames_filter, tempo_filter
 
 
 def run_ffmpeg(command, message):
-    result = subprocess.run(command, capture_output=True, text=True, timeout=180)
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
     if result.returncode:
         raise ValueError(result.stderr[-1200:] or message)
 
@@ -82,7 +82,10 @@ def export_sequence(data, *, root, resolve, probe, image_extensions, sources=Non
             run_ffmpeg(command, "Could not render a clip.")
             rendered.append(target)
         concat = Path(temp) / "sequence.txt"
-        concat.write_text("\n".join(f"file '{p.as_posix()}'" for p in rendered), encoding="utf-8")
+        # The concat demuxer reads quoted paths; a quote inside one (a Windows user named O'Brien) is '\''.
+        concat.write_text(
+            "\n".join("file '" + p.as_posix().replace("'", "'\\''") + "'" for p in rendered), encoding="utf-8"
+        )
         video = Path(temp) / "video.mp4"
         run_ffmpeg(
             [
@@ -167,5 +170,12 @@ def export_sequence(data, *, root, resolve, probe, image_extensions, sources=Non
         else:
             command += ["-map", "0:v:0", "-an"]
         command += ["-c:v", "copy", "-t", str(duration), "-movflags", "+faststart", str(output)]
-        run_ffmpeg(command, "Could not render the audio mix.")
+        try:
+            run_ffmpeg(command, "Could not render the audio mix.")
+        except BaseException:
+            try:
+                output.unlink(missing_ok=True)
+            except OSError:
+                pass  # Preserve the mux failure if cleanup is also denied.
+            raise
     return {"url": f"exports/{output.name}", "filename": output.name}

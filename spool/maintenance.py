@@ -3,11 +3,13 @@
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 
 from .projects import ProjectStore
 
-COMFY = Path(__file__).resolve().parents[3]
+# A checkout outside custom_nodes may sit too close to the drive root to have one.
+COMFY = Path(__file__).resolve().parents[min(3, len(Path(__file__).resolve().parents) - 1)]
 
 
 def default_root():
@@ -17,6 +19,12 @@ def default_root():
 
 def megabytes(value):
     return "%.1f MB" % (value / 1e6)
+
+
+def discard_cache(store):
+    """Remove the private working copy a confirmed run made; the project folder keeps what it published."""
+    if store.private_cache:
+        shutil.rmtree(store.private_cache, ignore_errors=True)
 
 
 def run_prune(argv=None):
@@ -36,7 +44,10 @@ def run_prune(argv=None):
     if not (args.storage / "project.spool").is_file():
         parser.error("Choose a project folder containing project.spool")
     store = ProjectStore(args.storage, migrate=False, writable=args.confirm)
-    report = store.prune(confirm=args.confirm, budget=int(args.budget_gb * 1024**3), grace=args.grace_minutes * 60)
+    try:
+        report = store.prune(confirm=args.confirm, budget=int(args.budget_gb * 1024**3), grace=args.grace_minutes * 60)
+    finally:
+        discard_cache(store)
     if args.json:
         print(json.dumps({**report, "unreferencedPreviews": None}, indent=2, default=str))
         return 0
@@ -68,7 +79,10 @@ def run(argv=None):
     if not (args.storage / "project.spool").is_file():
         parser.error("Choose a project folder containing project.spool")
     store = ProjectStore(args.storage, migrate=False, writable=args.confirm)
-    report = store.reclaim(confirm=args.confirm)
+    try:
+        report = store.reclaim(confirm=args.confirm)
+    finally:
+        discard_cache(store)
     if args.json:
         print(json.dumps(report, indent=2))
         return 0

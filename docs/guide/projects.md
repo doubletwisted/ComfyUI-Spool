@@ -81,7 +81,7 @@ ComfyUI as ComfyUI Desktop makes, and open the studio at
 python -m spool --open
 ```
 
-Either way you need Python 3.11+ with aiohttp and Pillow, and ffmpeg on PATH. Inside `ComfyUI/custom_nodes`, it uses the same settings
+Either way you need Python 3.11+ with aiohttp and Pillow, and ffmpeg/ffprobe 5.1 or newer on PATH. Inside `ComfyUI/custom_nodes`, it uses the same settings
 folder as the ComfyUI extension (`ComfyUI/user/spool`). Options: `--open`, `--port`,
 `--storage` (or `SPOOL_STORAGE`) for the settings folder, and `--host`. See
 [Security and network access](security.md) before changing the host.
@@ -114,6 +114,9 @@ no clip uses, including obsolete playback copies from older versions in
 `.spool/previews`; inputs and outputs are kept. The preview budget and grace
 window still apply. `reclaim` also compacts the project
 database and publishes a new snapshot.
+
+Dry runs read a temporary local copy, so a long report can finish while another
+editor saves. They leave the project files unchanged.
 
 ## Diagnostics
 

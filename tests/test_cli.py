@@ -1,8 +1,13 @@
 import contextlib
+import http.server
 import io
 import json
+import os
+import tempfile
+import threading
 import unittest
 import urllib.error
+from pathlib import Path
 from unittest.mock import patch
 
 from spool.cli import run
@@ -13,7 +18,7 @@ class CliTests(unittest.TestCase):
         out, err = io.StringIO(), io.StringIO()
         with (
             patch("sys.argv", ["spool", "status", "project", *args]),
-            patch("urllib.request.urlopen") as send,
+            patch("spool.cli.urlopen") as send,
             contextlib.redirect_stdout(out),
             contextlib.redirect_stderr(err),
         ):
@@ -49,3 +54,50 @@ class CliTests(unittest.TestCase):
         ):
             code, out, err = self.invoke(failure)
             self.assertEqual((code, out, json.loads(err)["code"]), (1, "", expected))
+
+    def test_unreadable_command_file_is_a_json_error(self):
+        with tempfile.TemporaryDirectory() as folder:
+            broken = Path(folder) / "command.json"
+            broken.write_text("{not json", encoding="utf-8")
+            for path in (broken, Path(folder) / "missing.json"):
+                err = io.StringIO()
+                with (
+                    patch("sys.argv", ["spool", "command", "project", "--file", str(path)]),
+                    patch("spool.cli.urlopen") as send,
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(err),
+                ):
+                    self.assertEqual(run(), 1)
+                send.assert_not_called()
+                self.assertEqual(json.loads(err.getvalue())["code"], "invalid_request")
+
+
+class LoopbackTests(unittest.TestCase):
+    def test_a_proxy_for_other_traffic_does_not_capture_this_computer(self):
+        class Spool(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = b'{"ok":true}'
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Spool)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        url = "http://127.0.0.1:%d" % server.server_port
+        # Port 9 on loopback refuses: a request sent to this proxy would fail.
+        environment = {key: value for key, value in os.environ.items() if "proxy" not in key.lower()}
+        out = io.StringIO()
+        with (
+            patch.dict(os.environ, {**environment, "http_proxy": "http://127.0.0.1:9"}, clear=True),
+            patch("sys.argv", ["spool", "status", "project", "--url", url]),
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            self.assertEqual(run(), 0)
+        self.assertEqual(json.loads(out.getvalue()), {"ok": True})

@@ -42,7 +42,7 @@ review takes and change the edit there; generating takes needs Spool with ComfyU
 - ComfyUI 0.39.0 or newer (tested with 0.43.1 / frontend 1.57.4 on Windows,
   and 0.43.0 / frontend 1.57.4 on Apple Silicon)
 - Python 3.11 or newer
-- `ffmpeg` and `ffprobe` on the PATH of the process running ComfyUI (on macOS,
+- `ffmpeg` and `ffprobe` 5.1 or newer on the PATH of the process running ComfyUI (on macOS,
   Spool also finds a Homebrew or MacPorts install)
 - For Comfy Cloud: a Comfy API key
 
