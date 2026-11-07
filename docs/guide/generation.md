@@ -205,6 +205,8 @@ path and execution record.
 - **Retry submission** appears only when Spool could not confirm a submission.
   **Find existing Deadline job** looks for a farm job that was accepted before
   the connection was lost. Neither starts a second render.
+  Deadline's confirmation grace excludes time waiting in the queue or preparing
+  inputs. A slow preparation does not by itself make submission uncertain.
 - **Retry collection** appears when a finished render could not be collected.
 - **Clear from queue** and **Clear finished** tidy the list. Takes, files and
   records stay. Dismissing a failed take on the take rail clears it here too.

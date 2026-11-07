@@ -115,6 +115,9 @@ no clip uses, including obsolete playback copies from older versions in
 window still apply. `reclaim` also compacts the project
 database and publishes a new snapshot.
 
+Dry runs read a temporary local copy, so a long report can finish while another
+editor saves. They leave the project files unchanged.
+
 ## Diagnostics
 
 The status in the top bar shows the current operation and how long it has taken.

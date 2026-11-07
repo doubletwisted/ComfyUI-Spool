@@ -1,6 +1,7 @@
 """Project folders are durable; SQLite working files stay on the editing computer."""
 
 import copy
+import errno
 import hashlib
 import json
 import logging
@@ -12,7 +13,7 @@ import tempfile
 import threading
 import time
 from datetime import datetime, timezone
-from contextlib import contextmanager, closing
+from contextlib import contextmanager, closing, nullcontext
 from pathlib import Path
 
 from .errors import NotFound
@@ -22,6 +23,84 @@ from .ownership import file_lock, atomic_replace
 from .store import Store, Conflict, uid, SCHEMA_VERSION, encode, validate_import, read_only_uri
 from .durable import atomic_json, write as durable_write
 from . import __version__
+
+
+@contextmanager
+def existing_project_lock(path):
+    """Coordinate a copy without creating or writing the project's lock file.
+
+    Legacy folders can have no lock yet. They remain inspectable, but a writer
+    opening one concurrently can still encounter the source-copy handle. Once
+    a lock exists, hold its same byte until that handle has closed on Windows.
+    """
+    try:
+        source = path.open("rb")
+    except FileNotFoundError:
+        yield
+        return
+    with source:
+        if os.name == "nt":
+            import ctypes
+            import msvcrt
+            from ctypes import wintypes
+
+            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+            lock, unlock = kernel.LockFile, kernel.UnlockFile
+            for operation in (lock, unlock):
+                operation.argtypes = (wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD)
+                operation.restype = wintypes.BOOL
+            handle = msvcrt.get_osfhandle(source.fileno())
+
+            def acquire():
+                # Unlike CRT locking, LockFile accepts an rb handle, including
+                # an empty file: locking beyond EOF does not extend it.
+                if not lock(handle, 0, 0, 1, 0):
+                    raise ctypes.WinError(ctypes.get_last_error())
+
+            def release():
+                if not unlock(handle, 0, 0, 1, 0):
+                    raise ctypes.WinError(ctypes.get_last_error())
+
+        else:
+            import fcntl
+
+            def acquire():
+                fcntl.flock(source, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            def release():
+                fcntl.flock(source, fcntl.LOCK_UN)
+
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                acquire()
+                break
+            except OSError as error:
+                retryable = (
+                    getattr(error, "winerror", None) in (32, 33)
+                    if os.name == "nt"
+                    else error.errno in (errno.EACCES, errno.EAGAIN)
+                )
+                if not retryable:
+                    raise
+                if time.monotonic() >= deadline:
+                    raise Conflict("Project is busy in another editor. Try again.") from error
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            release()
+
+
+@contextmanager
+def private_snapshot(path):
+    """Copy one immutable, atomically published generation to a private directory."""
+    with tempfile.TemporaryDirectory(prefix="spool-maintenance-read-") as directory:
+        local = Path(directory) / "read.sqlite3"
+        with existing_project_lock(path.parent / ".spool" / "project.lock"):
+            with path.open("rb") as source, local.open("xb") as target:
+                shutil.copyfileobj(source, target)
+        yield local
 
 
 def folder_name(name):
@@ -50,11 +129,13 @@ class ProjectStore(Store):
         self.manifest = folder / "project.json"
         self.check_manifest()
         self.snapshot = folder / "project.spool"
+        read_only = not (migrate or writable)
         # Refuse newer SQLite formats before creating even the lock/cache folders.
         if self.snapshot.exists():
-            with closing(sqlite3.connect(read_only_uri(self.snapshot), uri=True)) as db:
-                if db.execute("PRAGMA user_version").fetchone()[0] > SCHEMA_VERSION:
-                    raise ValueError("This Spool project needs a newer extension version")
+            with private_snapshot(self.snapshot) if read_only else nullcontext(self.snapshot) as path:
+                with closing(sqlite3.connect(read_only_uri(path), uri=True)) as db:
+                    if db.execute("PRAGMA user_version").fetchone()[0] > SCHEMA_VERSION:
+                        raise ValueError("This Spool project needs a newer extension version")
         key = hashlib.sha256(str(folder).encode()).hexdigest()
         # Maintenance without a workspace trusts whatever working copy its cache holds, so
         # a writable one gets a folder of its own: another user could fill a shared path.
@@ -177,7 +258,7 @@ class ProjectStore(Store):
     @contextmanager
     def connect(self):
         if self.read_only:
-            with Store.connect(self) as db:
+            with self.reading() as db:
                 yield db
             return
         notifications = []
@@ -280,8 +361,13 @@ class ProjectStore(Store):
         Writers use a different local file and can publish while a read is open.
         """
         if self.read_only:
-            with Store.connect(self) as db:
-                yield db
+            self.check_manifest()
+            with private_snapshot(self.snapshot) as path:
+                with closing(sqlite3.connect(read_only_uri(path), uri=True)) as db:
+                    if db.execute("PRAGMA user_version").fetchone()[0] > SCHEMA_VERSION:
+                        raise ValueError("This Spool project needs a newer extension version")
+                    db.row_factory = sqlite3.Row
+                    yield db
             return
         with file_lock(self.read_lock):
             self.check_manifest()

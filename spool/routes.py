@@ -862,7 +862,7 @@ def register(server, store, media, executor=None):
         store, media = await asyncio.to_thread(services, request)
         if executor is not None:
             await executor.reconcile()
-        await asyncio.to_thread(collector.scan)
+        await cloud_module.storage_call(collector.scan)
         return web.json_response({"ok": True})
 
     @routes.get("/spool/api/attempts/{attempt}")

@@ -2,10 +2,13 @@
 
 import asyncio
 import logging
+import os
 import subprocess
+import threading
 import time
 
 from . import attempts, joins, receipts, sidecars
+from .cloud import storage_call
 from .farm import FarmCollector
 from .folder_takes import FolderTakes
 from .store import Conflict
@@ -21,6 +24,16 @@ class Collector:
         self.history_checked = {}
         self.retained_at = {}
         self.playback_checkpoints = {}
+        self.project_locks = {}
+        self.project_locks_lock = threading.Lock()
+
+    def project_lock(self, store):
+        # Routes, local observations and Cloud ingestion share this collector.
+        # Lock the synchronous file work in its worker thread, per project; a
+        # cancelled await must not let another worker reuse its partial files.
+        key = os.path.normcase(os.path.abspath(store.root))
+        with self.project_locks_lock:
+            return self.project_locks.setdefault(key, threading.RLock())
 
     def annotate_progress(self, project):
         for job in project["document"]["jobs"]:
@@ -35,6 +48,10 @@ class Collector:
 
     def ingest(self, attempt):
         store = self.store.for_project(attempt["project_id"])
+        with self.project_lock(store):
+            return self._ingest(store, attempt)
+
+    def _ingest(self, store, attempt):
         media = self.media.for_project(store, attempt["project_id"])
         observed = store.attempt(attempt["id"])["status"]
         if observed == attempts.COMPLETE:
@@ -61,6 +78,10 @@ class Collector:
                 logging.exception("Spool project folder is temporarily unavailable: %s", store.root)
 
     def scan_project(self, store):
+        with self.project_lock(store):
+            self._scan_project(store)
+
+    def _scan_project(self, store):
         projects = store.list()
         project_id = projects[0]["id"] if projects else None
         media = self.media.for_project(store, project_id)
@@ -106,17 +127,19 @@ class Collector:
 
     async def lifecycle(self, app):
         task = asyncio.create_task(self.run())
-        yield
-        task.cancel()
         try:
-            await task
-        except asyncio.CancelledError:
-            pass
+            yield
+        finally:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     async def run(self):
         while True:
             try:
-                await asyncio.to_thread(self.scan)
+                await storage_call(self.scan)
             except Exception:
                 logging.exception("Spool receipt scan failed; evidence retained for retry")
             await asyncio.sleep(2)
