@@ -5,6 +5,12 @@ All notable changes to Spool are recorded here. Versions follow
 
 ## Unreleased
 
+### Tests
+
+- Native browser checks cover permanent take deletion with pending and failed
+  saves, plus completed OTIO downloads and export failures. They verify project
+  revisions, retained file bytes, downloaded timelines and blob URL replacement.
+
 ### Fixes
 
 - Transition buttons escape project track values, preventing a crafted track

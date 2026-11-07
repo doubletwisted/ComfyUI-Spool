@@ -20,6 +20,101 @@ const apiBase = process.env.SPOOL_API_BASE || base;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const nextPaint = evaluate =>
   evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+const safeLabel = name => name.replaceAll('/', '-');
+async function capture(page, evidence, label, name) {
+  const shot = await page.send('Page.captureScreenshot', { format: 'png' });
+  fs.writeFileSync(
+    path.join(evidence, label.replace('/', '-') + '-' + name + '.png'),
+    Buffer.from(shot.data, 'base64'),
+  );
+}
+
+async function waitForDownload(directory, name, start, downloads) {
+  const file = path.join(directory, name);
+  let lastSize = -1;
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const entry = downloads.slice(start).find(value => value.suggestedFilename === name && value.state === 'completed');
+    if (fs.existsSync(file) && !fs.existsSync(file + '.crdownload')) {
+      const size = fs.statSync(file).size;
+      if (entry && size > 0 && size === lastSize) return { file, entry };
+      lastSize = size;
+    }
+    await sleep(100);
+  }
+  throw Error(
+    'Chrome did not complete download ' +
+      name +
+      ' in ' +
+      directory +
+      '; files=' +
+      (fs.existsSync(directory) ? fs.readdirSync(directory).join(', ') : 'missing') +
+      '; events=' +
+      JSON.stringify(downloads.slice(start)),
+  );
+}
+
+function verifyOtioDownload({ bytes, expected, fixture, serverFile, name }) {
+  const timeline = JSON.parse(bytes.toString('utf8')),
+    labels = [],
+    equal = (label, actual, wanted) => {
+      assert.equal(actual, wanted, label);
+      labels.push(label);
+    },
+    stack = timeline.tracks,
+    videoTrack = stack.children.find(track => track.kind === 'Video'),
+    clips = videoTrack.children.filter(item => item.OTIO_SCHEMA === 'Clip.1');
+  equal('The downloaded ' + name + ' parses as an OpenTimelineIO Timeline.1', timeline.OTIO_SCHEMA, 'Timeline.1');
+  equal('The downloaded timeline carries the project name', timeline.name, expected.project);
+  equal('The downloaded timeline has no global start time', timeline.global_start_time, null);
+  equal('The downloaded timeline records the project frame rate', timeline.metadata.spool.fps, expected.fps);
+  equal('The downloaded timeline records the project width', timeline.metadata.spool.width, expected.width);
+  equal('The downloaded timeline records the project height', timeline.metadata.spool.height, expected.height);
+  equal('The downloaded timeline has one video track for this fixture', !!videoTrack, true);
+  equal('The downloaded timeline keeps the expected clip count', clips.length, expected.clips.length);
+  equal(
+    'The downloaded video track keeps the export range duration',
+    videoTrack.children.reduce((sum, item) => sum + Number(item.source_range?.duration?.value || 0), 0),
+    expected.duration,
+  );
+  let position = 0,
+    clipIndex = 0;
+  for (const item of videoTrack.children) {
+    const duration = Number(item.source_range?.duration?.value || 0),
+      start = Number(item.source_range?.start_time?.value || 0);
+    if (item.OTIO_SCHEMA === 'Gap.1') {
+      position += duration;
+      continue;
+    }
+    if (item.OTIO_SCHEMA !== 'Clip.1') continue;
+    const wanted = expected.clips[clipIndex];
+    if (!wanted) throw Error('The downloaded timeline has more clips than the plan');
+    equal('The downloaded clip ' + (clipIndex + 1) + ' keeps its authored name', item.name, wanted.name);
+    equal('The downloaded clip ' + (clipIndex + 1) + ' keeps its timeline start', position, wanted.start);
+    equal('The downloaded clip ' + (clipIndex + 1) + ' keeps its source in point', start, wanted.sourceStart);
+    equal('The downloaded clip ' + (clipIndex + 1) + ' keeps its trimmed duration', duration, wanted.duration);
+    equal(
+      'The downloaded clip ' + (clipIndex + 1) + ' keeps its native source rate',
+      item.source_range.start_time.rate,
+      fixture.nativeRate,
+    );
+    equal(
+      'The downloaded clip ' + (clipIndex + 1) + ' references the project-owned source path',
+      path.resolve(item.media_reference.target_url),
+      path.resolve(fixture.expectedFile),
+    );
+    position += duration;
+    clipIndex++;
+  }
+  equal('The downloaded timeline contains every planned clip', clipIndex, expected.clips.length);
+  assert.ok(fs.existsSync(serverFile), 'The host-written OTIO file is missing: ' + serverFile);
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(serverFile, 'utf8')),
+    timeline,
+    'The downloaded OTIO timeline differs from the host-written file: ' + serverFile,
+  );
+  labels.push('The downloaded OTIO parses to the same timeline as the host-written file at ' + serverFile);
+  return labels;
+}
 
 // Chrome can list a DevTools socket a moment before it accepts connections.
 async function connect(url, attempts = 5) {
@@ -820,6 +915,25 @@ const CHECKS = {
     globals: () => ({ __nativeSecurityCase: 'export' }),
     file: 'native_security_browser_checks.js',
   },
+  // F-12: real project files, a delayed save, an injected save failure and retry.
+  'native-take-delete-flush': {
+    fixture: () => takeCleanupFixture('Take disk flush QA', 'take-flush'),
+    modes: ['full'],
+    staged: true,
+    verifyTakeFiles: true,
+    globals: () => ({ __nativeTakeExportCase: 'f12' }),
+    file: 'native_take_export_browser_checks.js',
+  },
+  // F-23: real OTIO download clicks, repeated replacement and an injected export failure.
+  'native-take-export-download': {
+    fixture: nativeTakeExportFixture,
+    modes: ['full'],
+    staged: true,
+    downloads: true,
+    userGesture: true,
+    globals: () => ({ __nativeTakeExportCase: 'export' }),
+    file: 'native_take_export_browser_checks.js',
+  },
   'frame-interpretation': {
     fixture: frameInterpretationFixture,
     modes: ['full'],
@@ -1430,18 +1544,18 @@ async function clipFolderFixture() {
   return { id: project.id };
 }
 
-async function takeCleanupFixture() {
+async function takeCleanupFixture(projectName = 'Take cleanup QA', prefix = 'cleanup') {
   let project = await api('projects', {
-    document: { project: 'Take cleanup QA', fps: 24, clips: [], media: [], audioClips: [] },
+    document: { project: projectName, fps: 24, clips: [], media: [], audioClips: [] },
   });
   const takes = [],
     files = {};
   for (const [index, id] of ['chosen', 'one', 'two', 'three', 'four'].entries()) {
-    const file = path.resolve(evidence, 'cleanup-' + id + '.png');
+    const file = path.resolve(evidence, prefix + '-' + id + '.png');
     execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=red:s=96x64', '-frames:v', '1', file], {
       windowsHide: true,
     });
-    const response = await fetch(base + '/spool/api/upload?projectId=' + project.id + '&fps=24', {
+    const response = await fetch(apiBase + '/spool/api/upload?projectId=' + project.id + '&fps=24', {
       method: 'POST',
       headers: { 'X-Filename': id + '.png' },
       body: fs.readFileSync(file),
@@ -1466,7 +1580,76 @@ async function takeCleanupFixture() {
     },
     'PUT',
   );
-  return { id: project.id, files };
+  return { id: project.id, folder: project.folder, files };
+}
+
+async function nativeTakeExportFixture() {
+  let project = await api('projects', {
+    document: {
+      project: 'Native take export QA',
+      fps: 24,
+      resolution: { width: 320, height: 180 },
+      clips: [],
+      media: [],
+      audioClips: [],
+    },
+  });
+  const file = path.resolve(evidence, 'native-take-export.mp4');
+  execFileSync(
+    'ffmpeg',
+    [
+      '-v',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=size=96x64:rate=24:duration=2',
+      '-c:v',
+      'libx264',
+      '-pix_fmt',
+      'yuv420p',
+      file,
+    ],
+    { windowsHide: true },
+  );
+  const response = await fetch(apiBase + '/spool/api/upload?projectId=' + project.id + '&fps=24', {
+      method: 'POST',
+      headers: { 'X-Filename': 'native-take-export.mp4' },
+      body: fs.readFileSync(file),
+    }),
+    media = await response.json();
+  if (!response.ok) throw Error('Native take export fixture upload failed: ' + JSON.stringify(media));
+  const take = { id: 'chosen', number: 1, media: { ...media, frames: 48 } };
+  project = await api(
+    'projects/' + project.id,
+    {
+      revision: project.revision,
+      document: {
+        ...project.document,
+        clips: [
+          {
+            id: 'shot',
+            name: 'Export shot',
+            takeId: 'chosen',
+            takes: [take],
+            in: 12,
+            out: 36,
+            revision: 1,
+          },
+        ],
+        media: [take.media],
+      },
+    },
+    'PUT',
+  );
+  return {
+    id: project.id,
+    folder: project.folder,
+    projectName: project.document.project,
+    expectedFile: path.resolve(project.folder, media.originalFile),
+    nativeRate: Number(media.fps) || 24,
+  };
 }
 
 async function sidecarFixture() {
@@ -2478,6 +2661,10 @@ async function runLibraryDrop(page, evaluate, label) {
     ],
     { windowsHide: true, stdio: 'ignore' },
   );
+  fs.writeFileSync(
+    path.join(evidence, 'browser-session.json'),
+    JSON.stringify({ pid: child.pid, executable, debugPort: port, base, apiBase }, null, 2),
+  );
   let browser;
   const summary = [];
   try {
@@ -2491,7 +2678,17 @@ async function runLibraryDrop(page, evaluate, label) {
       }
     }
     if (!version) throw Error('Owned Chromium did not start');
+    fs.writeFileSync(
+      path.join(evidence, 'browser-session.json'),
+      JSON.stringify({ pid: child.pid, executable, debugPort: port, base, apiBase, version }, null, 2),
+    );
     browser = await connect(version.webSocketDebuggerUrl);
+    const browserDownloads = [];
+    browser.on('Browser.downloadWillBegin', params => browserDownloads.push({ ...params, state: 'started' }));
+    browser.on('Browser.downloadProgress', params => {
+      const entry = browserDownloads.find(value => value.guid === params.guid);
+      if (entry) Object.assign(entry, params);
+    });
 
     for (const name of names) {
       const check = CHECKS[name];
@@ -2502,7 +2699,18 @@ async function runLibraryDrop(page, evaluate, label) {
         const page = await connect(targets.find(t => t.id === target.targetId).webSocketDebuggerUrl);
         const pageErrors = [];
         const label = name + '/' + mode;
+        let downloadDir = null;
         try {
+          if (check.downloads) {
+            downloadDir = path.join(evidence, safeLabel(label) + '-downloads');
+            fs.mkdirSync(downloadDir, { recursive: true });
+            assert.equal(fs.readdirSync(downloadDir).length, 0, 'Use a fresh empty download evidence directory');
+            await browser.send('Browser.setDownloadBehavior', {
+              behavior: 'allow',
+              downloadPath: path.resolve(downloadDir),
+              eventsEnabled: true,
+            });
+          }
           page.on('Runtime.exceptionThrown', ({ exceptionDetails }) =>
             pageErrors.push(exceptionDetails.exception?.description || exceptionDetails.text),
           );
@@ -2826,8 +3034,121 @@ async function runLibraryDrop(page, evaluate, label) {
           }
 
           const takeDeleteKeys = check.takeFiles ? await runTakeDeleteKeys(page, evaluate) : [];
-          const result = await evaluate(fs.readFileSync(path.join(__dirname, check.file), 'utf8'));
+          let result = await evaluate(fs.readFileSync(path.join(__dirname, check.file), 'utf8'));
           result.checks.push(...takeDeleteKeys);
+          if (result.staged) {
+            const labels = [...result.checks],
+              gaps = [...(result.gaps || [])],
+              deleted = [...(result.deleted || [])],
+              stageEvidence = {},
+              exportsDir = path.join(project.folder, 'exports'),
+              originalTakeFiles = check.verifyTakeFiles
+                ? new Map(
+                    Object.values(project.files)
+                      .flatMap(files => Object.values(files))
+                      .map(file => [file, fs.readFileSync(file)]),
+                  )
+                : null;
+            for (const step of result.steps || []) {
+              const beforeDownloads = browserDownloads.length,
+                existingFiles = downloadDir && fs.existsSync(downloadDir) ? fs.readdirSync(downloadDir) : [],
+                existingExports = fs.existsSync(exportsDir) ? fs.readdirSync(exportsDir) : [];
+              const stage = await evaluate(`window.__nativeTakeExportStages[${JSON.stringify(step.name)}]()`);
+              labels.push(...(stage?.checks || []));
+              if (step.download) {
+                if (!stage?.download || !downloadDir) throw Error('Stage returned no OTIO download: ' + step.name);
+                const download = stage.download,
+                  point = await evaluate(
+                    `(()=>{const a=document.querySelector('#exportResult a.download-link');if(!a)return null;const r=a.getBoundingClientRect();const x=r.left+r.width/2,y=r.top+r.height/2,hit=document.elementFromPoint(x,y);return {x,y,onLink:hit===a||a.contains(hit)};})()`,
+                  );
+                if (!point?.onLink) throw Error('The OTIO download link is not clickable at ' + JSON.stringify(point));
+                await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y });
+                await page.send('Input.dispatchMouseEvent', {
+                  type: 'mousePressed',
+                  x: point.x,
+                  y: point.y,
+                  button: 'left',
+                  buttons: 1,
+                  clickCount: 1,
+                });
+                await page.send('Input.dispatchMouseEvent', {
+                  type: 'mouseReleased',
+                  x: point.x,
+                  y: point.y,
+                  button: 'left',
+                  buttons: 0,
+                  clickCount: 1,
+                });
+                labels.push('A trusted Chrome mouse click activates the real timeline download anchor');
+                const completed = await waitForDownload(downloadDir, download.name, beforeDownloads, browserDownloads),
+                  bytes = fs.readFileSync(completed.file),
+                  serverFile = path.join(project.folder, 'exports', download.name);
+                labels.push(
+                  ...verifyOtioDownload({
+                    bytes,
+                    expected: download.expected,
+                    fixture: project,
+                    serverFile,
+                    name: download.name,
+                  }),
+                );
+                stageEvidence[step.name] = {
+                  file: completed.file,
+                  href: download.href,
+                  size: bytes.length,
+                  downloadState: completed.entry.state,
+                  guid: completed.entry.guid,
+                  totalBytes: completed.entry.totalBytes,
+                };
+              } else if (step.noDownload) {
+                await sleep(800);
+                assert.equal(
+                  browserDownloads.length,
+                  beforeDownloads,
+                  'Failed export started a new Chrome download: ' + step.name,
+                );
+                assert.deepEqual(
+                  fs.readdirSync(downloadDir).filter(name => name.endsWith('.otio')),
+                  existingFiles.filter(name => name.endsWith('.otio')),
+                  'Failed export wrote a new OTIO file: ' + step.name,
+                );
+                labels.push('The failed OTIO export produced no new Chrome download file');
+                assert.deepEqual(
+                  fs.existsSync(exportsDir) ? fs.readdirSync(exportsDir) : [],
+                  existingExports,
+                  'Failed export wrote a new host export file: ' + step.name,
+                );
+                labels.push('The failed OTIO export produced no new host export file');
+                stageEvidence[step.name] = { newDownloads: 0 };
+              } else stageEvidence[step.name] = { checks: stage?.checks?.length || 0 };
+              if (check.verifyTakeFiles && step.deleted) {
+                const files = [];
+                for (const [id, takeFiles] of Object.entries(project.files))
+                  for (const file of Object.values(takeFiles)) {
+                    const exists = fs.existsSync(file);
+                    assert.equal(exists, !step.deleted.includes(id), step.name + ': take file ' + file);
+                    if (exists)
+                      assert.deepEqual(
+                        fs.readFileSync(file),
+                        originalTakeFiles.get(file),
+                        'Take bytes changed: ' + file,
+                      );
+                    files.push({ take: id, file, exists, unchanged: exists ? true : null });
+                  }
+                labels.push('Filesystem media/JSON pairs match the expected deletion state at ' + step.name);
+                stageEvidence[step.name].files = files;
+              }
+              if (step.capture) await capture(page, evidence, label, step.capture);
+            }
+            const final = await evaluate('window.__nativeTakeExportSummary()');
+            result = {
+              checks: [...labels, ...(final?.checks || [])],
+              gaps: [...gaps, ...(final?.gaps || [])],
+              deleted: [...new Set([...deleted, ...(final?.deleted || [])])],
+              evidence: { ...(final?.evidence || {}), stages: stageEvidence },
+            };
+            if (result.gaps.length) console.log(label + ': gaps: ' + result.gaps.join(' | '));
+          }
           if (check.libraryDrop) result.checks.push(...(await runLibraryDrop(page, evaluate, label)));
           if (check.takeFiles) {
             for (const [id, files] of Object.entries(project.files))
@@ -2839,6 +3160,18 @@ async function runLibraryDrop(page, evaluate, label) {
                 );
             result.checks.push(
               'Filesystem verification confirms deleted media and matching JSON are gone, with archived/kept files intact',
+            );
+          }
+          if (check.verifyTakeFiles) {
+            for (const [id, files] of Object.entries(project.files))
+              for (const file of Object.values(files))
+                assert.equal(
+                  fs.existsSync(file),
+                  !result.deleted.includes(id),
+                  'Verified take file exists: ' + file + ' (' + id + ')',
+                );
+            result.checks.push(
+              'Filesystem verification confirms the two deleted media/JSON pairs are gone and the chosen/remaining files are intact',
             );
           }
           if (check.continuation) {
@@ -2891,6 +3224,8 @@ async function runLibraryDrop(page, evaluate, label) {
           throw Error(label + ': ' + error.message, { cause: error });
         } finally {
           page.close();
+          if (check.downloads)
+            await browser.send('Browser.setDownloadBehavior', { behavior: 'default' }).catch(() => {});
           await browser.send('Target.closeTarget', { targetId: target.targetId });
         }
       }
