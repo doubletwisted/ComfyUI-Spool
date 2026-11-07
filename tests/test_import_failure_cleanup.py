@@ -65,6 +65,31 @@ class ImportFailureCleanupTests(unittest.TestCase):
                 self.workspace.import_project(self.exported)
         self.assert_only_source_remains(folders, caches)
 
+    def test_cache_path_failure_removes_the_empty_destination(self):
+        folders, caches = self.workspace.folders(), self.cache_names()
+        error = OSError("cache path unavailable")
+        with patch("spool.projects.working_cache", side_effect=error):
+            with self.assertRaises(OSError) as caught:
+                self.workspace.import_project(self.exported)
+        self.assertIs(caught.exception, error)
+        self.assert_only_source_remains(folders, caches)
+
+    def test_destination_resolution_failure_removes_only_the_empty_destination(self):
+        folders, caches = self.workspace.folders(), self.cache_names()
+        real_resolve = Path.resolve
+        error = OSError("destination resolution unavailable")
+
+        def resolve(path, *args, **kwargs):
+            if path.parent == self.projects and path.name.startswith("Untitled Spool project-"):
+                raise error
+            return real_resolve(path, *args, **kwargs)
+
+        with patch.object(Path, "resolve", resolve):
+            with self.assertRaises(OSError) as caught:
+                self.workspace.import_project(self.exported)
+        self.assertIs(caught.exception, error)
+        self.assert_only_source_remains(folders, caches)
+
     def test_invalid_import_transaction_removes_new_cache(self):
         folders, caches = self.workspace.folders(), self.cache_names()
         with self.assertRaises(ValueError):
@@ -163,9 +188,6 @@ class ImportFailureCleanupTests(unittest.TestCase):
 
         with (
             patch("spool.projects.tempfile.mkdtemp", side_effect=make),
-            # A bool-only presence query cannot prove absence when inspection
-            # failed. Later queries can succeed after that transient failure.
-            patch("spool.projects.os.path.lexists", return_value=False),
             patch.object(Path, "lstat", inspect),
         ):
             with self.assertRaises(ValueError):

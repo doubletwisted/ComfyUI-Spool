@@ -10,7 +10,8 @@ All notable changes to Spool are recorded here. Versions follow
 - Transition buttons escape project track values, preventing a crafted track
   from executing script when the timeline opens.
 - Failed imports remove only their own new working cache, preserving existing or
-  redirected caches and the original import error when cleanup is denied.
+  redirected caches and the original import error when cleanup is denied. Cache
+  path setup failures also remove the import's empty destination.
 - Storage reports include project backups from their managed cache directory.
 - Slow launcher settings, startup-file scans and process creation run in workers,
   keeping the host responsive. Delayed state updates preserve newer startup

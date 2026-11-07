@@ -151,6 +151,15 @@ def _discard_import(workspace, folder, destination, parent, cache, cache_existed
     working cache behind even when the project folder is gone. Cleanup is best
     effort so the caller still raises its original error.
     """
+    if cache is None:
+        # Cache setup failed before construction. Remove only the empty leaf
+        # mkdtemp created under the already resolved projects directory.
+        try:
+            if folder.parent == parent and not _redirected(folder):
+                folder.rmdir()
+        except OSError:
+            pass
+        return
     try:
         if destination.parent == parent and folder.resolve() == destination and not _redirected(folder):
             shutil.rmtree(destination)
@@ -673,16 +682,17 @@ class Workspace(Store):
         parent = Path(self.setting("projects_directory") or self.root / "projects").resolve()
         parent.mkdir(parents=True, exist_ok=True)
         folder = Path(tempfile.mkdtemp(prefix="Untitled Spool project-", dir=parent))
-        destination = folder.resolve()
-        cache = working_cache(self, folder)
+        destination, cache = folder, None
         cache_existed = True
         try:
-            cache.lstat()
-        except FileNotFoundError:
-            cache_existed = False
-        except OSError:
-            pass  # Only confirmed absence establishes this import's ownership.
-        try:
+            destination = folder.resolve()
+            cache = working_cache(self, folder)
+            try:
+                cache.lstat()
+            except FileNotFoundError:
+                cache_existed = False
+            except OSError:
+                pass  # Only confirmed absence establishes this import's ownership.
             store = ProjectStore(folder, self)
             project = store.import_project(value)
             self.register_folder(project["id"], folder)
