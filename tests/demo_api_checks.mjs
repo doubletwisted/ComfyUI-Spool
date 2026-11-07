@@ -117,6 +117,67 @@ const send = (method, path, value, headers) => api(path, { method, body: JSON.st
       check('Malformed ' + method + ' ' + target + ': ' + raw, status === 400 && error.code === 'invalid_request');
     }
   }
+  for (const [route, value] of [
+    ['/delete-takes/clip-1', { takeIds: null }],
+    ['/delete-takes/clip-1', { takeIds: [] }],
+    ['/delete-takes/clip-1', { takeIds: {} }],
+    ['/delete-takes/clip-1', { takeIds: [1] }],
+    ['/delete-takes/clip-1', { takeIds: ['missing'] }],
+    ['/delete-takes/clip-1', { takeIds: ['a'] }],
+    ['/use-take/clip-1', { takeId: null }],
+    ['/use-take/clip-1', { takeId: 'missing' }],
+    ['/use-take/clip-1', { takeId: 'b', capture: { provenance: { takeBase: { takeId: 'a' } } } }],
+  ]) {
+    const [status, error] = await send('POST', path + route, { revision: before.revision, ...value });
+    check(
+      'Invalid demo take values carry the host error code: ' + JSON.stringify(value),
+      status === 400 && error.code === 'invalid_request' && typeof error.error === 'string',
+    );
+  }
+  // Representative identical payload shapes are rejected by test_nested_request_shapes.py.
+  for (const [keys, replacement, field] of [
+    [['document', 'clips'], [1], 'clips'],
+    [['document', 'clips'], [{}], 'clips'],
+    [['document', 'media'], null, 'media'],
+    [['document', 'media'], [1], 'media'],
+    [['document', 'audioClips'], [1], 'audioClips'],
+    [['document', 'importedWorkflows'], {}, 'importedWorkflows'],
+    [['document', 'clips', 0, 'takes'], [1], 'takes'],
+    [['document', 'clips', 0, 'takes'], [{ id: 'take', media: null }], 'media'],
+    [['document', 'clips', 0, 'bindings'], [{}], 'bindings'],
+    [['document', 'clips', 0, 'inputValues'], [], 'inputValues'],
+    [['workflowRecipes'], null, 'workflowRecipes'],
+    [['workflowRecipes'], [], 'workflowRecipes'],
+    [['workflowRecipes'], { recipe: null }, 'workflow'],
+    [['workflowRecipes'], { recipe: { bindings: [1] } }, 'bindings'],
+    [['workflowRecipes'], { recipe: { provenance: [] } }, 'provenance'],
+    [['workflowRecipes'], { recipe: { inputRecovery: null } }, 'inputRecovery'],
+    [['workflowRecipes'], { recipe: { inputRecovery: { recovered: {} } } }, 'inputRecovery'],
+    [['workflowRecipes'], { recipe: { inputRecovery: { recovered: null } } }, 'inputRecovery'],
+    [['workflowRecipes'], { recipe: { result: null } }, 'result'],
+    [['workflowRecipes'], { recipe: { result: { nodeId: [] } } }, 'nodeId'],
+    [['workflowRecipes'], { recipe: { provenance: { builtinTemplate: [] } } }, 'builtinTemplate'],
+    [['workflowRecipes'], { recipe: { workflow: [] } }, 'workflow'],
+    [['workflowRecipes'], { recipe: { workflow: { nodes: [1] } } }, 'nodes'],
+    [['workflowRecipes'], { recipe: { workflow: { nodes: [{ type: 'LoadImage' }] } } }, 'id'],
+    [['workflowRecipes'], { recipe: { workflow: { definitions: null } } }, 'definitions'],
+    [['workflowRecipes'], { recipe: { workflow: { definitions: { subgraphs: [1] } } } }, 'subgraphs'],
+  ]) {
+    const value = { revision: before.revision, document: structuredClone(before.document) };
+    let target = value;
+    for (const key of keys.slice(0, -1)) target = target[key];
+    target[keys.at(-1)] = replacement;
+    const [status, error] = await send('PUT', path, value);
+    check(
+      'Nested demo save ' + field + ' matches host validation: ' + JSON.stringify(value.workflowRecipes ?? field),
+      status === 400 && error.code === 'invalid_request' && error.error.includes(field),
+    );
+  }
+  const [unavailable, unavailableError] = await send('POST', path + '/queue', { revision: before.revision, items: [] });
+  check(
+    'Unsupported demo operations keep their distinct response',
+    unavailable === 403 && unavailableError.code === 'demo_unavailable',
+  );
   const [, after] = await api(path);
   check(
     'Malformed demo requests preserve revision, document and sync token',
@@ -144,7 +205,10 @@ const send = (method, path, value, headers) => api(path, { method, body: JSON.st
 {
   const path = 'projects/' + ID + '/delete-takes/clip-1';
   const [refused, error] = await send('POST', path, { revision: 6, takeIds: ['a'] });
-  check('The take in the edit is never deleted', refused === 400 && /kept/.test(error.error));
+  check(
+    'The take in the edit is never deleted',
+    refused === 400 && error.code === 'invalid_request' && /kept/.test(error.error),
+  );
   const [status, value] = await send('POST', path, { revision: 6, takeIds: ['c'] });
   check('Deleting takes replies with the project', status === 200 && value.pendingFiles === 0);
   check('Deleted takes are gone and recorded', value.project.document.clips[0].takes.length === 2);
@@ -190,7 +254,10 @@ const send = (method, path, value, headers) => api(path, { method, body: JSON.st
   check('A split half reads the recorded setup of its take', status === 200 && Array.isArray(setup.bindings));
   const path = 'projects/' + ID + '/delete-takes/clip-2';
   const [refused, error] = await send('POST', path, { revision: saved.revision, takeIds: ['d'] });
-  check('A file the other half uses is not deleted', refused === 400 && /c2/.test(error.error));
+  check(
+    'A file the other half uses is not deleted',
+    refused === 400 && error.code === 'invalid_request' && /c2/.test(error.error),
+  );
 }
 
 {
@@ -206,7 +273,7 @@ const send = (method, path, value, headers) => api(path, { method, body: JSON.st
   };
   const refused = async (label, current, ids, message) => {
     const [status, error] = await send('POST', deletion, { revision: current.revision, takeIds: ids });
-    check(label, status === 400 && message.test(error.error));
+    check(label, status === 400 && error.code === 'invalid_request' && message.test(error.error));
     const [, after] = await api('projects/' + ID);
     check(
       label + ' leaves the document, revision and token unchanged',
@@ -274,6 +341,22 @@ const send = (method, path, value, headers) => api(path, { method, body: JSON.st
     /owned by this project/,
   );
   await refused('Invalid take-ID types use the host validation message', current, [3], /Select the takes/);
+}
+
+{
+  const path = 'projects/' + ID;
+  const [, current] = await api(path);
+  const document = { project: 'Minimal valid save', clips: [{ id: 'empty', in: 0, out: 24 }] };
+  const [status, saved] = await send('PUT', path, { revision: current.revision, document, workflowRecipes: {} });
+  check(
+    'Valid minimal saves keep the host defaults for omitted takes',
+    status === 200 && saved.revision === current.revision + 1 && saved.document.clips[0].takes.length === 0,
+  );
+  const [stale, error] = await send('PUT', path, { revision: current.revision, document });
+  check(
+    'Nested shape validation preserves stale revision conflicts',
+    stale === 409 && error.code === 'revision_conflict',
+  );
 }
 
 console.log(checks.length + ' demo API checks passed');

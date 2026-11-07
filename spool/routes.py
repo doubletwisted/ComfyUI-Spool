@@ -12,6 +12,7 @@ from aiohttp.helpers import content_disposition_header
 
 from .errors import NotFound, SpoolError, Forbidden, RevisionConflict, StudioOutdated
 from .protocol import API_VERSION
+from .store import validate_capture
 from .editor import editor_html
 from .media import EXTENSIONS, contained, staged_relative
 from .playback import PlaybackQueue
@@ -125,6 +126,67 @@ def revision_header(request):
         return int(value)
     except ValueError:
         raise ValueError("The X-Spool-Revision header must be an integer") from None
+
+
+def object_rows(value, field, *keys):
+    """Check containers consumed by save/preparation, without defining a project schema."""
+    if not isinstance(value, list) or any(not isinstance(row, dict) for row in value):
+        raise ValueError(f"{field} must be a list of JSON objects")
+    if any(not isinstance(row.get(key), str) for row in value for key in keys):
+        raise ValueError(f"{field} entries need string fields: {', '.join(keys)}")
+    return value
+
+
+def capture_shape(capture):
+    """Reject malformed capture containers before file preparation; Store owns their meaning."""
+    if not isinstance(capture, dict):
+        raise ValueError("The captured workflow must be a JSON object")
+    object_rows(capture.get("bindings", []), "Capture bindings", "key", "nodeId", "input")
+    for field in ("provenance", "result", "inputRecovery"):
+        if field in capture and not isinstance(capture[field], dict):
+            raise ValueError(f"Capture {field} must be a JSON object")
+    if not isinstance(capture.get("inputRecovery", {}).get("recovered", []), list):
+        raise ValueError("Capture inputRecovery.recovered must be a list")
+    if "result" in capture and not isinstance(capture["result"].get("nodeId"), str):
+        raise ValueError("Capture result needs a string nodeId")
+    builtin = capture.get("provenance", {}).get("builtinTemplate")
+    if builtin is not None and not isinstance(builtin, str):
+        raise ValueError("Capture builtinTemplate must be a string")
+    graphs = [capture["workflow"]] if capture.get("workflow") is not None else []
+    while graphs:
+        graph = graphs.pop()
+        if not isinstance(graph, dict):
+            raise ValueError("Capture workflow must be a JSON object")
+        nodes = object_rows(graph.get("nodes", []), "Workflow nodes", "type")
+        if any("id" not in node for node in nodes):
+            raise ValueError("Workflow nodes need an id")
+        definitions = graph.get("definitions", {})
+        if not isinstance(definitions, dict):
+            raise ValueError("Workflow definitions must be a JSON object")
+        graphs.extend(object_rows(definitions.get("subgraphs", []), "Workflow subgraphs", "id"))
+    validate_capture(capture)
+
+
+def save_shapes(document, recipes):
+    """Preflight every save container before any recipe can stage input files."""
+    if not isinstance(document, dict) or not isinstance(document.get("clips"), list):
+        raise ValueError("Project document must be an object with a clips list")
+    clips = object_rows(document["clips"], "Document clips", "id")
+    object_rows(document.get("media", []), "Document media", "id")
+    for field in ("audioClips", "importedWorkflows"):
+        object_rows(document.get(field, []), "Document " + field)
+    for clip in clips:
+        takes = object_rows(clip.get("takes", []), "Clip takes", "id")
+        for take in takes:
+            if not isinstance(take.get("media"), dict) or not isinstance(take["media"].get("id"), str):
+                raise ValueError("Take media must be a JSON object with an id")
+        object_rows(clip.get("bindings", []), "Clip bindings", "key")
+        if not isinstance(clip.get("inputValues", {}), dict):
+            raise ValueError("Clip inputValues must be a JSON object")
+    if not isinstance(recipes, dict):
+        raise ValueError("workflowRecipes must be a JSON object")
+    for capture in recipes.values():
+        capture_shape(capture)
 
 
 def register(server, store, media, executor=None):
@@ -532,14 +594,14 @@ def register(server, store, media, executor=None):
     @routes.put("/spool/api/projects/{project}")
     @endpoint
     async def save(request):
-        store, media = await asyncio.to_thread(services, request)
         text = await request.text()
         data = await asyncio.to_thread(lambda: unwire(json.loads(text)))
         revision, document = required_fields(data, "revision", "document")
-        if not isinstance(document, dict) or not isinstance(document.get("clips"), list):
-            raise ValueError("Project document must be an object with a clips list")
+        workflow_recipes = data.get("workflowRecipes", {})
+        save_shapes(document, workflow_recipes)
+        store, media = await asyncio.to_thread(services, request)
         recipes = {}
-        for version, capture in data.get("workflowRecipes", {}).items():
+        for version, capture in workflow_recipes.items():
             recipes[version] = await prepare_capture(capture, request)
             for clip in document["clips"]:
                 if clip.get("workflowVersion") == version and clip.get("inputValues"):
@@ -565,11 +627,12 @@ def register(server, store, media, executor=None):
     @routes.post("/spool/api/projects/{project}/capture/{clip}")
     @endpoint
     async def capture(request):
-        store, media = await asyncio.to_thread(services, request)
         data = unwire(await request.json())
         revision, original = required_fields(data, "revision", "capture")
-        if not isinstance(original, dict):
-            raise ValueError("The captured workflow must be a JSON object")
+        capture_shape(original)
+        if data.get("overrides") is not None and not isinstance(data["overrides"], dict):
+            raise ValueError("Capture overrides must be a JSON object")
+        store, media = await asyncio.to_thread(services, request)
         data["capture"] = await prepare_capture(original, request)
         if data.get("overrides"):
             operations.restage(original, data["capture"], data["overrides"])

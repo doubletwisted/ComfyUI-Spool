@@ -97,10 +97,10 @@ export function createProjectEdit({ project, document, apply, request, blocked, 
     }
   }
   async function flush() {
-    if (blocked('save')) throw Error('Resolve the project save before queueing or capturing.');
+    if (blocked('save')) throw Error('Resolve the project save before continuing.');
     save();
     while (draining) await draining;
-    if (dirty()) throw Error('Resolve the project save before queueing or capturing.');
+    if (dirty()) throw Error('Resolve the project save before continuing.');
   }
   function pollBlocked() {
     return (
