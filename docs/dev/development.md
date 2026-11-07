@@ -101,6 +101,15 @@ fails on any page exception. Without names it runs every check except the opt-in
 profiles (`workflow-project-profile`, `workflow-capture-bundle`); check names are
 the keys of `CHECKS` in `tests/run_browser_checks.cjs`.
 
+`native-take-delete-flush` checks permanent deletion while a save is pending,
+after an injected save failure, and after retry. Successful saves and deletion
+reach the test host; the runner also checks media/workflow files on disk.
+`native-take-export-download` clicks the real OTIO download link, waits for
+Chrome's completed-download event, and compares parsed bytes with the host's
+export. Its failure cases distinguish injected network failures from an HTTP
+400 produced by sending an empty export plan. Evidence includes screenshots,
+download events, completed files and the observed blob URL lifecycle.
+
 `embedded-templates-live` uses the installed native Comfy chooser. Wait for its
 search indicator to settle before clicking a result: frontend 1.57 debounces
 search and cancels pending template preparation when the results change, even
