@@ -52,6 +52,21 @@
   }
   const conflict = () =>
     reply(409, { error: 'This project changed. Reload to see it.', code: 'revision_conflict', current: copy(project) });
+  const invalid = error => reply(400, { error, code: 'invalid_request' });
+  function requiredBody(body, ...fields) {
+    let value;
+    try {
+      value = JSON.parse(body);
+    } catch {
+      return { error: invalid('Request body must be valid JSON') };
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return { error: invalid('Request body must be a JSON object') };
+    for (const field of fields)
+      if (!Object.hasOwn(value, field))
+        return { error: invalid('Request body is missing the required ' + field + ' field') };
+    return { value };
+  }
   function recorded(method, path) {
     const value = replies[method + ' ' + path];
     if (value === undefined) return null;
@@ -226,7 +241,10 @@
       return reply(200, copy(project));
     }
     if (method === 'PUT' && path === PROJECT) {
-      const value = JSON.parse(body);
+      const { value, error } = requiredBody(body, 'revision', 'document');
+      if (error) return error;
+      if (!value.document || typeof value.document !== 'object' || !Array.isArray(value.document.clips))
+        return invalid('Project document must be an object with a clips list');
       if (value.revision !== project.revision) return conflict();
       // The studio leaves out jobs, which the host owns and adds back to every reply.
       project.document = attach({ ...value.document, jobs: project.document.jobs });
@@ -236,13 +254,15 @@
     if (method === 'POST' && path.startsWith(PROJECT + '/focus/')) return reply(200, { ok: true });
     const deletion = method === 'POST' && path.match(/^projects\/[^/]+\/delete-takes\/([^/]+)$/);
     if (deletion) {
-      const value = JSON.parse(body);
+      const { value, error } = requiredBody(body, 'revision', 'takeIds');
+      if (error) return error;
       if (value.revision !== project.revision) return conflict();
       return deleteTakes(decodeURIComponent(deletion[1]), value);
     }
     const use = method === 'POST' && path.match(/^projects\/[^/]+\/use-take\/([^/]+)$/);
     if (use) {
-      const value = JSON.parse(body);
+      const { value, error } = requiredBody(body, 'revision', 'takeId');
+      if (error) return error;
       if (value.revision !== project.revision) return conflict();
       return useTake(decodeURIComponent(use[1]), value);
     }

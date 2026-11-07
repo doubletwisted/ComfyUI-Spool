@@ -23,6 +23,8 @@ from .credentials import cloud_key
 from .ownership import ExecutorLock, ExecutorBusy
 from .store import uid
 from .execution_targets import adapter_for
+from .media import unique_partial
+from .durable import atomic_replace
 
 
 FREE_TIER = "Running on Comfy Cloud needs a plan that allows API keys. To pay with Comfy credits instead, choose Execute on: Local ComfyUI · Partner Nodes."
@@ -208,19 +210,22 @@ class CloudExecutor:
         identity = uid()
         destination = await storage_call(media.result_path, attempt, identity, extension, True)
         await storage_call(destination.parent.mkdir, parents=True, exist_ok=True)
-        pending = destination.with_suffix(extension + ".partial")
+        pending = unique_partial(destination)
         try:
             await output.to_file(pending)
             await storage_call(
                 self.finish_download, attempt, media, job, address, output, identity, destination, pending
             )
         finally:
-            await storage_call(pending.unlink, missing_ok=True)
+            try:
+                await storage_call(pending.unlink, missing_ok=True)
+            except OSError:
+                pass  # Preserve the download or replacement failure if cleanup is denied.
 
     def finish_download(self, attempt, media, job, address, output, identity, destination, pending):
         if pending.stat().st_size != output.size_bytes:
             raise ValueError("Comfy Cloud video download is incomplete")
-        pending.replace(destination)
+        atomic_replace(pending, destination)
         selection = attempt["request"]["capture"]["result"]
         with destination.open("rb") as handle:
             checksum = hashlib.file_digest(handle, "sha256").hexdigest()

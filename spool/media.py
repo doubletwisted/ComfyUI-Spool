@@ -170,6 +170,12 @@ def resolved_root(root):
     return held
 
 
+def unique_partial(destination):
+    """A sibling temporary file only the copy that created it may publish or remove."""
+    destination = Path(destination)
+    return destination.with_name(destination.name + "." + uid() + ".partial")
+
+
 def contained(root, relative):
     """Resolve a stored relative path, refusing anything outside its root.
 
@@ -725,9 +731,15 @@ class Media:
                     selected = (node_id, group, index) == (selection["nodeId"], selection["group"], selection["index"])
                     destination = self.result_path(attempt, artifact_id, source.suffix.lower(), selected)
                     destination.parent.mkdir(parents=True, exist_ok=True)
-                    pending = destination.with_suffix(destination.suffix + ".partial")
-                    shutil.copyfile(source, pending)
-                    pending.replace(destination)
+                    pending = unique_partial(destination)
+                    try:
+                        shutil.copyfile(source, pending)
+                        atomic_replace(pending, destination)
+                    finally:
+                        try:
+                            pending.unlink(missing_ok=True)
+                        except OSError:
+                            pass  # Preserve the copy or replacement failure if cleanup is denied.
                     metadata = (
                         self.describe(destination, fps=request.get("sequenceFps", 24))
                         if review

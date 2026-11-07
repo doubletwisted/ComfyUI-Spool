@@ -88,6 +88,42 @@ const send = (method, path, value, headers) => api(path, { method, body: JSON.st
   check('Static files still load', (await window.fetch('/site/spool/ui/editor.js').then(r => r.text())) === 'static');
 }
 {
+  const path = 'projects/' + ID;
+  const [, before] = await api(path);
+  const cases = [
+    ['PUT', path, { document: before.document }, 'revision'],
+    ['PUT', path, { revision: before.revision }, 'document'],
+    ['PUT', path, { revision: before.revision, document: null }, 'document'],
+    ['PUT', path, { revision: before.revision, document: { clips: null } }, 'document'],
+    ['POST', path + '/use-take/clip-1', { takeId: 'b' }, 'revision'],
+    ['POST', path + '/use-take/clip-1', { revision: before.revision }, 'takeId'],
+    ['POST', path + '/delete-takes/clip-1', { takeIds: ['c'] }, 'revision'],
+    ['POST', path + '/delete-takes/clip-1', { revision: before.revision }, 'takeIds'],
+  ];
+  for (const [method, target, value, field] of cases) {
+    const [status, error] = await send(method, target, value);
+    check(
+      'Missing/invalid ' + field + ' on ' + method + ' ' + target + ' is a client error',
+      status === 400 && error.code === 'invalid_request' && error.error.includes(field),
+    );
+  }
+  for (const [method, target] of [
+    ['PUT', path],
+    ['POST', path + '/use-take/clip-1'],
+    ['POST', path + '/delete-takes/clip-1'],
+  ]) {
+    for (const raw of ['null', '[]', '"wrong shape"', '{']) {
+      const [status, error] = await api(target, { method, body: raw });
+      check('Malformed ' + method + ' ' + target + ': ' + raw, status === 400 && error.code === 'invalid_request');
+    }
+  }
+  const [, after] = await api(path);
+  check(
+    'Malformed demo requests preserve revision, document and sync token',
+    JSON.stringify(after) === JSON.stringify(before),
+  );
+}
+{
   const [, current] = await api('projects/' + ID);
   const document = structuredClone(current.document);
   delete document.jobs;

@@ -163,6 +163,10 @@ Read `code`, not message text: `not_found` (404), `invalid_request` (400),
 changed: a sidecar write can fail after a commit. Inspect state and reuse the
 identical operation envelope when retrying uncertain operations.
 
+Deadline recovery lookup failures use `unavailable` (503). Retry the same
+`recover_submission` envelope when Deadline is reachable again; successful
+lookup still verifies the existing job's submission and attempt identity.
+
 The studio sends `X-Spool-Api-Version` on every HTTP request. A mismatching
 version blocks writes and asks for a reload while keeping the tab's draft.
 Versionless requests from the CLI, agents and curl remain supported. A bridge

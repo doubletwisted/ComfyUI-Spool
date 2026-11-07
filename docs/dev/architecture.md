@@ -175,6 +175,11 @@ the same collector's per-project thread lock as periodic scans. File collection
 for one project cannot reuse another worker's partial files; other projects have
 independent locks. Cancellation drains these storage workers before their
 executor lock or lifecycle ownership is released, including repeated cancellation.
+Local, Deadline and Cloud artifact copies use unique sibling temporary files,
+including when independent workspaces collect into the same project. Publication
+uses the common replacement retry; cleanup removes only the operation's own
+temporary file and retains an original failure if cleanup is denied. This file
+ownership does not serialize separate collectors' receipt or ledger decisions.
 
 Deadline's 30-second missing-acknowledgment grace starts when collection first
 observes the durable `submitting.json` marker written immediately before the
