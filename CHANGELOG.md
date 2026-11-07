@@ -13,6 +13,9 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- Footage with many cuts imports without Windows command or FFmpeg expression
+  limits, while keeping exact shot frames and short keyframe intervals for seeking.
+  The existing FFmpeg/ffprobe 5.1 minimum is documented.
 - Save and capture validate clip, take and workflow containers before staging
   input files, returning request errors for invalid types. Demo save and take
   validation replies include matching error codes.

@@ -81,7 +81,7 @@ ComfyUI as ComfyUI Desktop makes, and open the studio at
 python -m spool --open
 ```
 
-Either way you need Python 3.11+ with aiohttp and Pillow, and ffmpeg on PATH. Inside `ComfyUI/custom_nodes`, it uses the same settings
+Either way you need Python 3.11+ with aiohttp and Pillow, and ffmpeg/ffprobe 5.1 or newer on PATH. Inside `ComfyUI/custom_nodes`, it uses the same settings
 folder as the ComfyUI extension (`ComfyUI/user/spool`). Options: `--open`, `--port`,
 `--storage` (or `SPOOL_STORAGE`) for the settings folder, and `--host`. See
 [Security and network access](security.md) before changing the host.

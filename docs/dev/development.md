@@ -27,7 +27,7 @@ python -m pip install -r ComfyUI/custom_nodes/Spool/requirements.txt
 ```
 
 The checks need Python 3.11+ (3.12 is used in development) with aiohttp and
-Pillow, Node 24, and `ffmpeg` and `ffprobe` on PATH. Browser checks also need
+Pillow, Node 24, and `ffmpeg` and `ffprobe` 5.1 or newer on PATH. Browser checks also need
 Chrome or Edge. Install the formatter and linters once per checkout or worktree:
 
 ```powershell
