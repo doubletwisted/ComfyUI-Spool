@@ -8,7 +8,8 @@ frame from the frames it was given, and its first new frames often dip in bright
 The joined copy fixes all three in the take itself, so the viewer and both exports only
 play it. Its overlap is the shot's own frames, the last `BLEND` of them dissolve into
 the re-render, its new frames start exactly where the shot ends, and the first `SETTLE`
-new frames are eased back to the shot's brightness. The studio shows it from `BLEND`
+new frames are eased back to the shot's brightness. Its audio follows those new frames
+on the sequence clock, so it keeps the copy's duration. The studio shows it from `BLEND`
 frames before the cut while the shot is still the one it was made from
 (ui/timeline.js:joinedTake). The render and its receipt stay untouched; the copy lives
 in the project cache and is recorded as the take media's `join`.
@@ -21,6 +22,7 @@ from PIL import Image, ImageChops, ImageStat
 
 from .media import _probe
 from .system import find_tool
+from .timing import rate, tempo_filter
 
 BLEND = 2  # frames the shot dissolves into the extension over, before the cut
 SETTLE = 8  # new frames whose brightness is eased back to the shot's
@@ -133,6 +135,25 @@ def _graded(image, gain):
     )
 
 
+def _audio_filter(shift, native, fps, duration):
+    """Time the render's audio as the joined copy plays its frames.
+
+    Joined frame `j` shows render frame `j + shift`, so the audio starts `shift`
+    source frames in (or waits when it is negative) and is played at the sequence
+    rate, exactly as a plain take's source audio is retimed. `duration` cuts it to
+    the joined copy's own length, padding a short render with silence.
+    """
+    speed = fps / native
+    offset = shift / native
+    filters = ["aresample=48000", "asetpts=PTS-STARTPTS"]
+    if offset > 0:
+        filters += [f"atrim=start={offset:.9f}", "asetpts=PTS-STARTPTS"]
+    elif offset < 0:
+        filters.append(f"adelay={round(-offset * 48000)}S:all=1")
+    filters += [tempo_filter(speed), f"apad,atrim=duration={duration:.9f}", "asetpts=PTS-STARTPTS"]
+    return ",".join(filters)
+
+
 def build(media, request, primary, joining):
     """Write the joined copy of `primary` and return its media record, or None."""
     ffmpeg = find_tool("ffmpeg")
@@ -145,7 +166,11 @@ def build(media, request, primary, joining):
     # The copy takes the shot's own size: the workflow stretched the shot to its render size,
     # and a copy that kept that size would be fitted into the shot's frame with bars beside it.
     shot_video = next(s for s in _probe(guide)["streams"] if s["codec_type"] == "video")
+    render_probe = _probe(render)
+    render_video = next((s for s in render_probe["streams"] if s["codec_type"] == "video"), None)
     overlap, frames = joining["overlap"], primary["frames"]
+    fps = request.get("sequenceFps", 24)
+    native = rate(primary.get("fps") or (render_video or {}).get("avg_frame_rate"), fps)
     size = (int(shot_video["width"]), int(shot_video["height"]))
     head = measure(ffmpeg, guide, render, overlap)
     shift, grade = head - overlap, gains(ffmpeg, guide, render, head)
@@ -153,19 +178,21 @@ def build(media, request, primary, joining):
     target = media.cache / "joins" / f"{primary['artifactId']}.mp4"
     target.parent.mkdir(parents=True, exist_ok=True)
     pending = target.with_name(target.stem + ".partial.mp4")
-    encoder = subprocess.Popen(
-        [
-            ffmpeg, "-v", "error", "-y",
-            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{size[0]}x{size[1]}",
-            "-r", str(request.get("sequenceFps", 24)), "-i", "-",
-            "-i", str(render), "-map", "0:v:0", "-map", "1:a?", "-c:a", "copy",
-            "-vf", "scale=out_color_matrix=bt709:out_range=tv:flags=accurate_rnd+full_chroma_int,format=yuv420p",
-            "-c:v", "libx264", "-crf", "14", "-preset", "medium",
-            "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "iec61966-2-1",
-            "-movflags", "+faststart", str(pending),
-        ],
-        stdin=subprocess.PIPE, stderr=subprocess.PIPE,
-    )  # fmt: skip
+    command = [
+        ffmpeg, "-v", "error", "-y",
+        "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{size[0]}x{size[1]}",
+        "-r", str(fps), "-i", "-",
+        "-i", str(render), "-map", "0:v:0",
+    ]  # fmt: skip
+    if any(s["codec_type"] == "audio" for s in render_probe["streams"]):
+        command += ["-map", "1:a:0", "-af", _audio_filter(shift, native, fps, frames / fps), "-c:a", "aac", "-b:a", "192k"]  # fmt: skip
+    command += [
+        "-vf", "scale=out_color_matrix=bt709:out_range=tv:flags=accurate_rnd+full_chroma_int,format=yuv420p",
+        "-c:v", "libx264", "-crf", "14", "-preset", "medium",
+        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "iec61966-2-1",
+        "-movflags", "+faststart", str(pending),
+    ]  # fmt: skip
+    encoder = subprocess.Popen(command, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     source = _frames(ffmpeg, render, size)
     state = {"index": -1, "frame": None}
 

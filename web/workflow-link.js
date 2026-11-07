@@ -1,4 +1,6 @@
 // Comfy owns live graph tabs; Spool owns the immutable recipe applied to a clip.
+import { refreshLoaderOptions } from './graph-inputs.js';
+
 export function createWorkflowLinks(app, load, capture, storage) {
   const key = 'spool-workflow-links';
   let links = new Map(),
@@ -31,7 +33,18 @@ export function createWorkflowLinks(app, load, capture, storage) {
         const loaded = await app.loadGraphData(graph, true, true, existing);
         if (loaded === false || app.extensionManager.workflow.activeWorkflow !== existing)
           throw Error('Comfy could not focus the linked workflow');
+      } else if (app.rootGraph) {
+        const graph = app.rootGraph;
+        await refreshLoaderOptions(
+          graph,
+          globalThis.fetch,
+          () => app.rootGraph === graph && app.extensionManager.workflow.activeWorkflow === existing,
+        );
+        if (app.rootGraph !== graph)
+          throw Error('The linked workflow changed while refreshing its image choices. Open it again.');
       }
+      if (app.extensionManager.workflow.activeWorkflow !== existing || workflow(record) !== existing)
+        throw Error('The linked workflow changed while refreshing its image choices. Open it again.');
       return { opened: true, reused: true };
     }
     await load(data);

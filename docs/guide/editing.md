@@ -150,8 +150,10 @@ The **Media** tab lists the project's footage, images and audio, with filters,
 search and grid or list views.
 
 - **Import footage…** adds files. Drop files onto the sidebar or the timeline.
-- **Project → Import video from path…** reads a video where it is, without copying
-  it, and splits it at detected hard cuts. Each shot becomes a clip whose first
+- **Project → Import video from path…** copies a video into the project's
+  `input/video/` folder and splits it at detected hard cuts. Its original-file
+  references are project-relative, so they remain valid when the project moves.
+  Each shot becomes a clip whose first
   take is **Original clip**; the source audio goes once on A2.
 - **Detect cuts in selected clip…** (in **Project**, or a clip's right-click menu)
   finds hard cuts inside the clip, shows the count and splits on request.
@@ -170,6 +172,10 @@ Spool plays every decoded source frame once at the project frame rate. Five
 seconds of 25 fps footage (125 frames) plays in 4.17 seconds on a 30 fps timeline.
 Linked audio follows the speed change with its pitch preserved. Original files
 are never changed.
+
+Joined extension copies also retime their own audio and apply the measured
+frame alignment. Newly imported media reports its displayed orientation, including
+rotated videos and EXIF-oriented images; saved records are not re-described.
 
 ## Export
 

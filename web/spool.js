@@ -17,7 +17,7 @@ import { containsExactInt } from '/spool/ui/wire.js';
 import { keyText } from '/spool/ui/keys.js';
 import { createEmbeddedTemplates } from './template-browser.js';
 import { createWorkflowLinks } from './workflow-link.js';
-import { applyGraphInputs } from './graph-inputs.js';
+import { applyGraphInputs, refreshLoaderOptions } from './graph-inputs.js';
 import { captureComfyGraph } from './graph-capture.js';
 
 // crypto.randomUUID exists only in secure contexts; Comfy opened over plain HTTP from another machine still needs IDs.
@@ -249,7 +249,15 @@ app.registerExtension({
   name: 'Spool.Timeline',
   commands: [{ id: 'Spool.OpenStudio', label: 'Open Spool', category: 'view-controls', function: openStudio }],
   // Workflow identity is finalized afterConfigureGraph; capture only after load.
-  afterLoadGraph() {
+  async afterLoadGraph() {
+    // This hook also runs for Comfy's restored/imported tabs, before its missing
+    // media scan. Discovery failures leave the selected source and graph intact.
+    try {
+      const graph = app.rootGraph;
+      await refreshLoaderOptions(graph, globalThis.fetch, () => app.rootGraph === graph);
+    } catch (error) {
+      console.warn('Spool image choices:', error);
+    }
     embeddedTemplates?.selected();
   },
   setup() {

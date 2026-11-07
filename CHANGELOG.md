@@ -7,6 +7,19 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- Linked Comfy image-loader choices refresh when a workflow opens or reloads,
+  keeping valid staged images selectable without changing the saved input.
+- Newly described image/video dimensions follow EXIF and display-matrix
+  orientation. Existing media records and originals are unchanged.
+- Path-imported video copies keep project-relative original references, so
+  moving a project also preserves its shot and audio source references.
+- Joined extension audio follows the measured frame shift and sequence frame
+  rate, keeping its duration aligned with the joined video.
+- Snapshot publications carry an identity inside the SQLite snapshot, so
+  same-size saves with coarse timestamps do not hide newer revisions.
+- Demo take deletion follows host media-pool and generation-input protection
+  rules and removes aliases of a deleted original.
+
 - New clip output folders stay distinct when names differ only by case, and
   Windows device names and truncated trailing spaces/dots are made portable.
   Existing assigned output folders are preserved.

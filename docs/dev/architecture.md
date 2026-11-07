@@ -144,6 +144,20 @@ lock. Only a changed published signature refreshes it under the share lock;
 writers serialize working-copy refresh/replacement with a different local lock.
 A writer can publish while an existing reader finishes its older generation.
 
+Each newly published snapshot contains an additive `spool_publication` table
+with a fresh publication UUID. The marker is written into the copied database
+before it is fsynced and atomically replaces `project.spool`; it travels with the
+snapshot even if manifest publication is interrupted. Change detection combines
+the marker with timestamp, size and file identity. Unchanged high-resolution
+file identities cache the marker; coarse timestamps re-read it. Legacy snapshots
+without the table remain readable and gain it on their next new-version save.
+Marker reads hold the project lock until their SQLite handle closes, so they
+cannot obstruct a concurrent snapshot replacement on Windows. An unreadable
+identity fails the operation instead of authorizing reuse of an older runtime.
+The manifest, document, API and SQLite schema-version number are unchanged.
+Older writers preserve the marker but do not refresh it; mixed-version detection
+then relies on the replacement file's identity.
+
 Receipt scans visit pending attempts every two seconds and settled history every
 five minutes (also on collector startup). Folder scans cache projection/inventory
 at a revision/event cursor and recheck both inside the save transaction. Collected

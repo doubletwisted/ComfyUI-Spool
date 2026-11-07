@@ -78,14 +78,38 @@
       ];
     return document;
   }
-  const files = media => [media?.originalFile, media?.file, media?.poster].filter(Boolean);
+  const filePath = value => {
+    if (typeof value !== 'string' || !value) return null;
+    let path = value;
+    try {
+      path = decodeURIComponent(path);
+    } catch {
+      // A literal percent sign is valid in a recorded file name.
+    }
+    path = path.replaceAll('\\', '/');
+    const parts = [];
+    for (const part of path.split('/')) {
+      if (!part || part === '.') continue;
+      if (part === '..' && parts.length && parts.at(-1) !== '..') parts.pop();
+      else parts.push(part);
+    }
+    return (path.startsWith('/') ? '/' : '') + parts.join('/');
+  };
+  const original = media => filePath(media?.originalFile || media?.file);
+  const sidecar = path => (path ? path.replace(/\.[^/.]+$/, '') + '.json' : null);
+  const files = media =>
+    [...new Set([media?.originalFile, media?.file, media?.poster].map(filePath)), sidecar(original(media))].filter(
+      Boolean,
+    );
 
   // Delete takes as the host does: never the take in the edit, then record the
   // deletion so the takes stay gone. Nothing is on disk to remove.
   function deleteTakes(clipId, body) {
     const clip = project.document.clips.find(c => c.id === clipId),
-      ids = body.takeIds;
-    if (!clip || !Array.isArray(ids) || !ids.length) return reply(400, { error: 'Select the takes to delete' });
+      requested = body.takeIds;
+    if (!clip || !Array.isArray(requested) || !requested.length || requested.some(id => typeof id !== 'string'))
+      return reply(400, { error: 'Select the takes to delete' });
+    const ids = [...new Set(requested)].sort();
     const hidden = new Set(clip.hiddenTakeIds || []);
     const available = new Map(clip.takes.filter(t => !t.placeholder && !hidden.has(t.id)).map(t => [t.id, t]));
     if (!ids.every(id => available.has(id)))
@@ -93,8 +117,23 @@
     if (ids.includes(clip.takeId))
       return reply(400, { error: 'The take in the edit is kept. Choose another take before deleting it.' });
     const document = project.document;
+    const originals = new Set(ids.map(id => original(available.get(id).media)));
+    if (
+      [...originals].some(
+        path =>
+          !/^(output|input|\.spool)\//.test(path || '') ||
+          !/\.(mp4|mov|webm|mkv|m4v|png|jpg|jpeg|webp|wav|mp3|m4a|aac|ogg|flac|opus)$/i.test(path),
+      )
+    )
+      return reply(400, {
+        error: 'Delete from disk only manages media owned by this project; archive this take instead.',
+      });
+    // Match the host's deletion plan: original, sidecar and project preview files.
+    // Other referenced files are protected but are not automatically deleted.
+    const selected = new Set([...originals, ...[...originals].map(sidecar)]);
+    for (const id of ids)
+      for (const path of files(available.get(id).media)) if (path.startsWith('.spool/previews/')) selected.add(path);
     // A file another take or timeline audio still uses stays: a split shares its takes.
-    const selected = new Set(ids.flatMap(id => files(available.get(id).media)));
     for (const other of document.clips)
       for (const take of other.takes || [])
         if (!(other.id === clipId && ids.includes(take.id)) && files(take.media).some(f => selected.has(f)))
@@ -106,11 +145,34 @@
           });
     if ((document.audioClips || []).some(a => files(a.media).some(f => selected.has(f))))
       return reply(400, { error: 'A selected file is used by timeline audio. Archive it instead.' });
+    for (const other of document.clips)
+      for (const binding of other.bindings || []) {
+        const value = other.inputValues?.[binding.key];
+        if (!binding.asset || typeof value !== 'string') continue;
+        const staged = value.startsWith('spool-projects/')
+          ? value
+              .replace(/ \[input\]$/, '')
+              .split('/')
+              .slice(2)
+              .join('/')
+          : null;
+        const candidate = staged ? filePath(staged) : /^(\/|[A-Za-z]:[\\/])/.test(value) ? filePath(value) : null;
+        if (originals.has(candidate))
+          return reply(400, { error: 'A selected file is a generation input. Archive it instead.' });
+      }
+    const mediaIds = new Set(ids.map(id => available.get(id).media?.id).filter(Boolean));
+    for (const media of document.media || [])
+      if (files(media).some(path => selected.has(path))) {
+        if (!originals.has(original(media)))
+          return reply(400, {
+            error: 'A selected file is shared with another media-pool asset. Archive it instead.',
+          });
+        if (media.id) mediaIds.add(media.id);
+      }
     document.deletedTakeIds = [...new Set([...(document.deletedTakeIds || []), ...ids])].sort();
-    document.deletedMediaIds = [
-      ...new Set([...(document.deletedMediaIds || []), ...ids.map(id => available.get(id).media?.id).filter(Boolean)]),
-    ].sort();
+    document.deletedMediaIds = [...new Set([...(document.deletedMediaIds || []), ...mediaIds])].sort();
     clip.takes = clip.takes.filter(t => !ids.includes(t.id));
+    document.media = (document.media || []).filter(media => !mediaIds.has(media.id));
     changed();
     return reply(200, { project: copy(project), deleted: ids, pendingFiles: 0 });
   }
