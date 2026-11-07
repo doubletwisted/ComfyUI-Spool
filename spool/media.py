@@ -324,8 +324,15 @@ class Media:
             source.stat().st_mtime_ns,
         ):
             pending = target.with_name(uid() + ".partial")
-            shutil.copy2(source, pending)
-            pending.replace(target)
+            try:
+                shutil.copy2(source, pending)
+                pending.replace(target)
+            except BaseException:
+                try:
+                    pending.unlink(missing_ok=True)
+                except OSError:
+                    pass  # Preserve the staging failure if cleanup is also denied.
+                raise
         return name
 
     def prepare_input(self, value):

@@ -7,6 +7,9 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- Failed input staging and export muxing remove their own partial files while
+  preserving published inputs, successful exports and the original error.
+
 - Linked Comfy image-loader choices refresh when a workflow opens or reloads,
   keeping valid staged images selectable without changing the saved input.
 - Newly described image/video dimensions follow EXIF and display-matrix
