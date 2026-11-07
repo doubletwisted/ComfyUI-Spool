@@ -5,6 +5,8 @@ import math
 import os
 import shutil
 import subprocess
+from bisect import bisect_right
+from fractions import Fraction
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageOps
@@ -20,6 +22,11 @@ from .ownership import file_lock, atomic_replace
 from .timing import rate, frames_filter, tempo_filter
 
 PLAYBACK_VERSION = "playback-2"
+
+# Windows CreateProcess counts the quoted command in UTF-16 code units,
+# including its terminating NUL. Leave room below its 32767-unit limit.
+_SPLIT_COMMAND_BUDGET = 24000
+_SPLIT_BATCH_FRAMES = 100000
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".opus"}
@@ -70,6 +77,119 @@ def _rate(value):
     if not math.isfinite(result) or result <= 0:
         raise ValueError("The video has no usable frame rate")
     return result
+
+
+def _exact_rate(value, fallback):
+    """An exact frame rate for frame-number timing, preferring ffprobe's rational.
+
+    A float approximation would drift against the proxy's rational frame clock
+    when seeking into later batches. ffprobe reports that clock exactly.
+    """
+    try:
+        result = Fraction(str(value))
+    except (TypeError, ValueError, ZeroDivisionError):
+        result = Fraction(str(fallback)).limit_denominator(1_000_000)
+    if result <= 0:
+        result = Fraction(str(fallback)).limit_denominator(1_000_000)
+    return result
+
+
+def _command_length(command):
+    return len(subprocess.list2cmdline(command).encode("utf-16-le")) // 2 + 1
+
+
+def _split_command(ffmpeg, proxy, folder, cuts, start, end, first, frame_rate, time_base, start_pts):
+    """Encode one contiguous batch, with frame numbers local to its first shot."""
+    command = [ffmpeg, "-v", "error", "-y", "-i", str(proxy)]
+    if start:
+        # Seek one frame early, then select the exact original timestamp. copyts
+        # prevents seek-time rounding from moving the trim boundary. The proxy
+        # has six-frame GOPs, so each batch decodes only a few preceding frames.
+        seek = (start - 1) * 1_000_000 // frame_rate
+        command = [ffmpeg, "-v", "error", "-y", "-copyts", "-ss", f"{seek}us", "-i", str(proxy)]
+        command += ["-vf", f"trim=start_pts={start_pts + round(start / frame_rate / time_base)},setpts=PTS-STARTPTS"]
+    command += [
+        "-an",
+        "-frames:v",
+        str(end - start),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-pix_fmt",
+        "yuv420p",
+        "-g",
+        "6",
+        "-bf",
+        "0",
+    ]
+    if cuts:
+        local = [cut - start for cut in cuts]
+        # FFmpeg rejects deeply nested expressions, including long flat sums.
+        # Pair terms so parser depth grows logarithmically with the cut count.
+        terms = [f"eq(n,{cut})" for cut in local]
+        while len(terms) > 1:
+            terms = [
+                f"({terms[index]}+{terms[index + 1]})" if index + 1 < len(terms) else terms[index]
+                for index in range(0, len(terms), 2)
+            ]
+        command += [
+            "-force_key_frames",
+            "expr:" + terms[0],
+            "-f",
+            "segment",
+            "-segment_frames",
+            ",".join(map(str, local)),
+            "-segment_start_number",
+            str(first),
+            "-reset_timestamps",
+            "1",
+            str(folder / "%03d.mp4"),
+        ]
+    else:
+        command.append(str(folder / f"{first:03d}.mp4"))
+    return command
+
+
+def _split_commands(ffmpeg, proxy, folder, cuts, frames, frame_rate, time_base, start_pts=0):
+    """Bound both explicit cut lists without losing short GOPs inside each shot.
+
+    Batches meet at actual cuts and encode disjoint frame ranges. The frame cap
+    is a grouping target: a single longer shot stays in one batch. The command
+    budget is hard and includes quoted paths, Unicode and the terminating NUL.
+    """
+    boundaries = [0, *cuts, frames]
+    if any(end <= start for start, end in zip(boundaries, boundaries[1:])):
+        raise ValueError("Detected cuts must increase inside the source")
+    first = 0
+    while first < len(boundaries) - 1:
+        start = boundaries[first]
+        last = max(first + 1, bisect_right(boundaries, start + _SPLIT_BATCH_FRAMES) - 1)
+        low, high = first + 1, last
+        command = None
+        while low <= high:
+            middle = (low + high) // 2
+            candidate = _split_command(
+                ffmpeg,
+                proxy,
+                folder,
+                boundaries[first + 1 : middle],
+                start,
+                boundaries[middle],
+                first,
+                frame_rate,
+                time_base,
+                start_pts,
+            )
+            if _command_length(candidate) <= _SPLIT_COMMAND_BUDGET:
+                command, last = candidate, middle
+                low = middle + 1
+            else:
+                high = middle - 1
+        if command is None:
+            raise ValueError("The media path is too long for FFmpeg's command line")
+        yield command
+        first = last
 
 
 def _video_stream(probe):
@@ -576,127 +696,114 @@ class Media:
         ffmpeg = find_tool("ffmpeg")
         proxy = self.root / whole["file"]
         cuts = detect_cuts(scene_scores(ffmpeg, proxy, self.cache / "previews" / "cut-scores"), fps) if detect else []
+        frame_rate = time_base = None
+        start_pts = 0
+        if cuts:
+            proxy_video = _video_stream(_probe(proxy)) or {}
+            frame_rate = _exact_rate(proxy_video.get("avg_frame_rate"), fps)
+            time_base = Fraction(proxy_video.get("time_base", "1/1000000"))
+            start_pts = int(proxy_video.get("start_pts", 0))
         folder = self.cache / "shots" / uid()
         folder.mkdir(parents=True)
-        command = [
-            ffmpeg,
-            "-v",
-            "error",
-            "-y",
-            "-i",
-            str(proxy),
-            "-an",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "ultrafast",
-            "-pix_fmt",
-            "yuv420p",
-            "-g",
-            "6",
-            "-bf",
-            "0",
-        ]
-        if cuts:
-            command += [
-                "-force_key_frames",
-                "expr:" + "+".join(f"eq(n,{cut})" for cut in cuts),
-                "-f",
-                "segment",
-                "-segment_frames",
-                ",".join(map(str, cuts)),
-                "-reset_timestamps",
-                "1",
-                str(folder / "%03d.mp4"),
-            ]
-        else:
-            command.append(str(folder / "000.mp4"))
-        subprocess.run(command, check=True, capture_output=True, timeout=600)
-        shots = []
-        for index, (start, end) in enumerate(zip([0, *cuts], [*cuts, whole["frames"]])):
-            file = folder / f"{index:03d}.mp4"
-            count = int(_probe(file)["streams"][0]["nb_frames"])
-            if count != end - start:
-                raise ValueError(
-                    f"Shot {index + 1} has {count} frames instead of {end - start}; the source could not be split exactly"
+        track = None
+        try:
+            for command in _split_commands(
+                ffmpeg, proxy, folder, cuts, whole["frames"], frame_rate, time_base, start_pts
+            ):
+                subprocess.run(command, check=True, capture_output=True, timeout=600)
+            shots = []
+            for index, (start, end) in enumerate(zip([0, *cuts], [*cuts, whole["frames"]])):
+                file = folder / f"{index:03d}.mp4"
+                count = int(_probe(file)["streams"][0]["nb_frames"])
+                if count != end - start:
+                    raise ValueError(
+                        f"Shot {index + 1} has {count} frames instead of {end - start}; the source could not be split exactly"
+                    )
+                poster = file.with_suffix(".jpg")
+                subprocess.run(
+                    [
+                        ffmpeg,
+                        "-v",
+                        "error",
+                        "-y",
+                        "-ss",
+                        str(count / 2 / fps),
+                        "-i",
+                        str(file),
+                        "-frames:v",
+                        "1",
+                        str(poster),
+                    ],
+                    check=True,
+                    capture_output=True,
+                    timeout=30,
                 )
-            poster = file.with_suffix(".jpg")
-            subprocess.run(
-                [
-                    ffmpeg,
-                    "-v",
-                    "error",
-                    "-y",
-                    "-ss",
-                    str(count / 2 / fps),
-                    "-i",
-                    str(file),
-                    "-frames:v",
-                    "1",
-                    str(poster),
-                ],
-                check=True,
-                capture_output=True,
-                timeout=30,
-            )
-            shots.append(
-                {
-                    "id": uid(),
-                    "kind": "video",
-                    "name": f"Shot {index + 1:02d}",
-                    "file": file.relative_to(self.root).as_posix(),
-                    "originalFile": original,
-                    "poster": poster.relative_to(self.root).as_posix(),
-                    "frames": count,
-                    "duration": count / fps,
-                    "audio": False,
-                    "sequenceFps": fps,
-                    "fps": whole["fps"],
-                    "width": whole["width"],
-                    "height": whole["height"],
-                    "sourceRange": {"start": start, "frames": count},
-                    "sourceFrameCount": whole["sourceFrameCount"],
-                    "sourceDuration": whole["sourceDuration"],
-                    "frameRateMode": "interpret",
-                    "review": {**whole["review"], "frames": count, "duration": count / fps},
-                }
-            )
-        audio = None
-        if whole["audio"]:
-            track = self.cache / "previews" / (source.stem + "-" + uid() + "-audio.m4a")
-            subprocess.run(
-                [
-                    ffmpeg,
-                    "-v",
-                    "error",
-                    "-y",
-                    "-i",
-                    str(proxy),
-                    "-map",
-                    "0:a:0",
-                    "-vn",
-                    "-c:a",
-                    "aac",
-                    "-b:a",
-                    "256k",
-                    str(track),
-                ],
-                check=True,
-                capture_output=True,
-                timeout=300,
-            )
-            audio = self.describe(track, source.stem + " audio", fps)
-            audio["originalFile"] = original
-            audio.update(
-                fps=whole["fps"],
-                frames=whole["frames"],
-                duration=whole["duration"],
-                sourceFrameCount=whole["sourceFrameCount"],
-                sourceDuration=whole["sourceDuration"],
-                frameRateMode="interpret",
-                review={"frameRateMode": "interpret"},
-            )
-        return {"fps": fps, "source": whole, "shots": shots, "audio": audio}
+                shots.append(
+                    {
+                        "id": uid(),
+                        "kind": "video",
+                        "name": f"Shot {index + 1:02d}",
+                        "file": file.relative_to(self.root).as_posix(),
+                        "originalFile": original,
+                        "poster": poster.relative_to(self.root).as_posix(),
+                        "frames": count,
+                        "duration": count / fps,
+                        "audio": False,
+                        "sequenceFps": fps,
+                        "fps": whole["fps"],
+                        "width": whole["width"],
+                        "height": whole["height"],
+                        "sourceRange": {"start": start, "frames": count},
+                        "sourceFrameCount": whole["sourceFrameCount"],
+                        "sourceDuration": whole["sourceDuration"],
+                        "frameRateMode": "interpret",
+                        "review": {**whole["review"], "frames": count, "duration": count / fps},
+                    }
+                )
+            audio = None
+            if whole["audio"]:
+                track = self.cache / "previews" / (source.stem + "-" + uid() + "-audio.m4a")
+                subprocess.run(
+                    [
+                        ffmpeg,
+                        "-v",
+                        "error",
+                        "-y",
+                        "-i",
+                        str(proxy),
+                        "-map",
+                        "0:a:0",
+                        "-vn",
+                        "-c:a",
+                        "aac",
+                        "-b:a",
+                        "256k",
+                        str(track),
+                    ],
+                    check=True,
+                    capture_output=True,
+                    timeout=300,
+                )
+                audio = self.describe(track, source.stem + " audio", fps)
+                audio["originalFile"] = original
+                audio.update(
+                    fps=whole["fps"],
+                    frames=whole["frames"],
+                    duration=whole["duration"],
+                    sourceFrameCount=whole["sourceFrameCount"],
+                    sourceDuration=whole["sourceDuration"],
+                    frameRateMode="interpret",
+                    review={"frameRateMode": "interpret"},
+                )
+            return {"fps": fps, "source": whole, "shots": shots, "audio": audio}
+        except BaseException:
+            shutil.rmtree(folder, ignore_errors=True)
+            if track is not None:
+                try:
+                    track.unlink(missing_ok=True)
+                except OSError:
+                    pass  # Preserve the ffmpeg or verification failure if cleanup is denied.
+            raise
 
     def reported(self, record):
         file_type = record.get("type", "output")
