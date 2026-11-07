@@ -11,17 +11,23 @@ def key_path():
     return Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".config") / "Spool" / "comfy-cloud.key"
 
 
-def cloud_key():
+def _effective_key():
+    # One read resolves both the key and its source, so status always matches cloud_key.
     path = key_path()
     saved = path.read_text(encoding="utf-8").strip() if path.is_file() else ""
-    return saved or os.environ.get("COMFY_API_KEY", "").strip()
+    if saved:
+        return saved, "saved"
+    environment = os.environ.get("COMFY_API_KEY", "").strip()
+    return (environment, "environment") if environment else ("", None)
+
+
+def cloud_key():
+    return _effective_key()[0]
 
 
 def key_status():
-    return {
-        "hasApiKey": bool(cloud_key()),
-        "apiKeySource": "saved" if key_path().is_file() else "environment" if os.environ.get("COMFY_API_KEY") else None,
-    }
+    key, source = _effective_key()
+    return {"hasApiKey": bool(key), "apiKeySource": source}
 
 
 def save_key(value):
