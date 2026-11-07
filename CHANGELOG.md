@@ -7,6 +7,13 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- Invalid or nonfinite probed frame rates produce a clear validation error.
+- Cloud observation batches settle before reporting failures; cancellation
+  preserves other errors and always releases executor ownership on shutdown.
+
+- The local demo server rejects inverted or out-of-bounds byte ranges with a
+  complete 416 response instead of a negative content length.
+
 - Cloud key status follows the effective saved or environment credential,
   including empty or whitespace-only values.
 - Registry publishing pins its external action to a reviewed commit.
