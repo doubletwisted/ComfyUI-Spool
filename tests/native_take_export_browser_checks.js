@@ -344,7 +344,7 @@
         await openDiskDelete();
         $('takeDeleteConfirm').click();
         await wait('Permanent deletion did not refuse the failed save', () =>
-          $('takeDeleteError').textContent.includes('Resolve the project save before queueing or capturing.'),
+          $('takeDeleteError').textContent.includes('Resolve the project save before continuing.'),
         );
         const saved = await serverProject();
         check(

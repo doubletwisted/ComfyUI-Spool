@@ -53,6 +53,82 @@
   const conflict = () =>
     reply(409, { error: 'This project changed. Reload to see it.', code: 'revision_conflict', current: copy(project) });
   const invalid = error => reply(400, { error, code: 'invalid_request' });
+  const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+  function objectRows(value, field, ...keys) {
+    if (!Array.isArray(value) || value.some(row => !object(row))) return field + ' must be a list of JSON objects';
+    if (value.some(row => keys.some(key => typeof row[key] !== 'string')))
+      return field + ' entries need string fields: ' + keys.join(', ');
+    return null;
+  }
+  // Match the host's save-container boundary; preparation and graph meaning stay on the host.
+  function saveShape(document, recipes) {
+    if (!object(document) || !Array.isArray(document.clips))
+      return 'Project document must be an object with a clips list';
+    for (const [field, keys] of [
+      ['clips', ['id']],
+      ['media', ['id']],
+      ['audioClips', []],
+      ['importedWorkflows', []],
+    ]) {
+      const error = objectRows(Object.hasOwn(document, field) ? document[field] : [], 'Document ' + field, ...keys);
+      if (error) return error;
+    }
+    for (const clip of document.clips) {
+      for (const [field, keys] of [
+        ['takes', ['id']],
+        ['bindings', ['key']],
+      ]) {
+        const error = objectRows(Object.hasOwn(clip, field) ? clip[field] : [], 'Clip ' + field, ...keys);
+        if (error) return error;
+      }
+      for (const take of clip.takes || [])
+        if (!object(take.media) || typeof take.media.id !== 'string')
+          return 'Take media must be a JSON object with an id';
+      if (Object.hasOwn(clip, 'inputValues') && !object(clip.inputValues))
+        return 'Clip inputValues must be a JSON object';
+    }
+    if (!object(recipes)) return 'workflowRecipes must be a JSON object';
+    for (const capture of Object.values(recipes)) {
+      if (!object(capture)) return 'The captured workflow must be a JSON object';
+      const error = objectRows(
+        Object.hasOwn(capture, 'bindings') ? capture.bindings : [],
+        'Capture bindings',
+        'key',
+        'nodeId',
+        'input',
+      );
+      if (error) return error;
+      for (const field of ['provenance', 'result', 'inputRecovery'])
+        if (Object.hasOwn(capture, field) && !object(capture[field]))
+          return 'Capture ' + field + ' must be a JSON object';
+      if (
+        Object.hasOwn(capture, 'inputRecovery') &&
+        Object.hasOwn(capture.inputRecovery, 'recovered') &&
+        !Array.isArray(capture.inputRecovery.recovered)
+      )
+        return 'Capture inputRecovery.recovered must be a list';
+      if (Object.hasOwn(capture, 'result') && typeof capture.result.nodeId !== 'string')
+        return 'Capture result needs a string nodeId';
+      const builtin = capture.provenance?.builtinTemplate;
+      if (builtin != null && typeof builtin !== 'string') return 'Capture builtinTemplate must be a string';
+      const graphs = capture.workflow == null ? [] : [capture.workflow];
+      while (graphs.length) {
+        const graph = graphs.pop();
+        if (!object(graph)) return 'Capture workflow must be a JSON object';
+        const nodes = Object.hasOwn(graph, 'nodes') ? graph.nodes : [];
+        const nodeError = objectRows(nodes, 'Workflow nodes', 'type');
+        if (nodeError) return nodeError;
+        if (nodes.some(node => !Object.hasOwn(node, 'id'))) return 'Workflow nodes need an id';
+        const definitions = Object.hasOwn(graph, 'definitions') ? graph.definitions : {};
+        if (!object(definitions)) return 'Workflow definitions must be a JSON object';
+        const subgraphs = Object.hasOwn(definitions, 'subgraphs') ? definitions.subgraphs : [];
+        const subgraphError = objectRows(subgraphs, 'Workflow subgraphs', 'id');
+        if (subgraphError) return subgraphError;
+        graphs.push(...subgraphs);
+      }
+    }
+    return null;
+  }
   function requiredBody(body, ...fields) {
     let value;
     try {
@@ -88,7 +164,7 @@
     const deleted = new Set(document.deletedTakeIds || []);
     for (const clip of document.clips)
       clip.takes = [
-        ...clip.takes.filter(t => !t.generated),
+        ...(clip.takes || []).filter(t => !t.generated),
         ...generated.filter(a => !deleted.has(a.takeId) && owns(clip, a)).map(a => copy(a.take)),
       ];
     return document;
@@ -123,14 +199,13 @@
     const clip = project.document.clips.find(c => c.id === clipId),
       requested = body.takeIds;
     if (!clip || !Array.isArray(requested) || !requested.length || requested.some(id => typeof id !== 'string'))
-      return reply(400, { error: 'Select the takes to delete' });
+      return invalid('Select the takes to delete');
     const ids = [...new Set(requested)].sort();
     const hidden = new Set(clip.hiddenTakeIds || []);
     const available = new Map(clip.takes.filter(t => !t.placeholder && !hidden.has(t.id)).map(t => [t.id, t]));
-    if (!ids.every(id => available.has(id)))
-      return reply(400, { error: 'Some selected takes are no longer available' });
+    if (!ids.every(id => available.has(id))) return invalid('Some selected takes are no longer available');
     if (ids.includes(clip.takeId))
-      return reply(400, { error: 'The take in the edit is kept. Choose another take before deleting it.' });
+      return invalid('The take in the edit is kept. Choose another take before deleting it.');
     const document = project.document;
     const originals = new Set(ids.map(id => original(available.get(id).media)));
     if (
@@ -140,9 +215,7 @@
           !/\.(mp4|mov|webm|mkv|m4v|png|jpg|jpeg|webp|wav|mp3|m4a|aac|ogg|flac|opus)$/i.test(path),
       )
     )
-      return reply(400, {
-        error: 'Delete from disk only manages media owned by this project; archive this take instead.',
-      });
+      return invalid('Delete from disk only manages media owned by this project; archive this take instead.');
     // Match the host's deletion plan: original, sidecar and project preview files.
     // Other referenced files are protected but are not automatically deleted.
     const selected = new Set([...originals, ...[...originals].map(sidecar)]);
@@ -152,14 +225,11 @@
     for (const other of document.clips)
       for (const take of other.takes || [])
         if (!(other.id === clipId && ids.includes(take.id)) && files(take.media).some(f => selected.has(f)))
-          return reply(400, {
-            error:
-              'A selected file is also used by another take in ' +
-              (other.name || 'this clip') +
-              '. Archive it instead.',
-          });
+          return invalid(
+            'A selected file is also used by another take in ' + (other.name || 'this clip') + '. Archive it instead.',
+          );
     if ((document.audioClips || []).some(a => files(a.media).some(f => selected.has(f))))
-      return reply(400, { error: 'A selected file is used by timeline audio. Archive it instead.' });
+      return invalid('A selected file is used by timeline audio. Archive it instead.');
     for (const other of document.clips)
       for (const binding of other.bindings || []) {
         const value = other.inputValues?.[binding.key];
@@ -172,16 +242,13 @@
               .join('/')
           : null;
         const candidate = staged ? filePath(staged) : /^(\/|[A-Za-z]:[\\/])/.test(value) ? filePath(value) : null;
-        if (originals.has(candidate))
-          return reply(400, { error: 'A selected file is a generation input. Archive it instead.' });
+        if (originals.has(candidate)) return invalid('A selected file is a generation input. Archive it instead.');
       }
     const mediaIds = new Set(ids.map(id => available.get(id).media?.id).filter(Boolean));
     for (const media of document.media || [])
       if (files(media).some(path => selected.has(path))) {
         if (!originals.has(original(media)))
-          return reply(400, {
-            error: 'A selected file is shared with another media-pool asset. Archive it instead.',
-          });
+          return invalid('A selected file is shared with another media-pool asset. Archive it instead.');
         if (media.id) mediaIds.add(media.id);
       }
     document.deletedTakeIds = [...new Set([...(document.deletedTakeIds || []), ...ids])].sort();
@@ -202,10 +269,9 @@
     if (!clip) return reply(404, { error: 'Clip not found' });
     const take = clip.takes.find(t => t.id === takeId && !t.placeholder);
     if (!take || ((clip.hiddenTakeIds || []).includes(takeId) && takeId !== clip.takeId))
-      return reply(400, { error: 'This take is no longer available for the shot' });
+      return invalid('This take is no longer available for the shot');
     const takeBase = capture?.provenance?.takeBase;
-    if (capture && takeBase?.takeId !== takeId)
-      return reply(400, { error: 'Generation setup must belong to the chosen take' });
+    if (capture && takeBase?.takeId !== takeId) return invalid('Generation setup must belong to the chosen take');
     timeline.chooseTake(project.document, clipId, takeId);
     clip.generationBase = takeBase || { takeId, source: 'No executable metadata' };
     for (const field of ['workflow', 'shotInputs', 'seedKey']) delete clip[field];
@@ -243,8 +309,11 @@
     if (method === 'PUT' && path === PROJECT) {
       const { value, error } = requiredBody(body, 'revision', 'document');
       if (error) return error;
-      if (!value.document || typeof value.document !== 'object' || !Array.isArray(value.document.clips))
-        return invalid('Project document must be an object with a clips list');
+      const shapeError = saveShape(
+        value.document,
+        Object.hasOwn(value, 'workflowRecipes') ? value.workflowRecipes : {},
+      );
+      if (shapeError) return invalid(shapeError);
       if (value.revision !== project.revision) return conflict();
       // The studio leaves out jobs, which the host owns and adds back to every reply.
       project.document = attach({ ...value.document, jobs: project.document.jobs });

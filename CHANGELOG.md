@@ -13,6 +13,10 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- Save and capture validate clip, take and workflow containers before staging
+  input files, returning request errors for invalid types. Demo save and take
+  validation replies include matching error codes.
+- Unresolved-save messages also apply to pending actions such as take deletion.
 - Transition buttons escape project track values, preventing a crafted track
   from executing script when the timeline opens.
 - Failed imports remove only their own new working cache, preserving existing or
