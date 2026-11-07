@@ -398,7 +398,7 @@ def execute(store, media, project_id, data):
         if attempt["project_id"] != project_id or attempt["clip_id"] not in scope.get("clipIds", []):
             raise ValueError("Attempt is outside the cancellation scope")
         submission = store.submission_for(attempt["id"])
-        with store.connect() as db:
+        with store.reading() as db:
             done = store.cancellation_done(db, attempt["id"])
         adapter = adapter_for(attempt["request"], submission)
         cancellation = asyncio.run(

@@ -78,6 +78,11 @@ SQLite and filesystem work, including process creation. Startup reservation and
 spawn stay in one worker. Status/error writers replace only the launch state
 they observed, so a delayed worker cannot overwrite a newer reservation.
 
+Cancellation preflight reads the acknowledgement through the immutable read
+generation. Planning and recording delivery still use their writer transactions.
+FFmpeg text diagnostics use UTF-8 with replacement for invalid bytes, independent
+of the host locale; subprocess failure types and timeouts remain unchanged.
+
 ## Project format
 
 A project folder has a `project.spool` SQLite snapshot and a small `project.json`

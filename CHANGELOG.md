@@ -13,6 +13,10 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- FFmpeg errors retain Unicode filenames on Windows instead of failing while
+  decoding diagnostics during audio preparation, export or cut detection.
+- Cancellation preflight reads avoid writer locks and checkpoint rewrites;
+  cancellation plans and delivery acknowledgements keep their transactions.
 - Footage with many cuts imports without Windows command or FFmpeg expression
   limits, while keeping exact shot frames and short keyframe intervals for seeking.
   The existing FFmpeg/ffprobe 5.1 minimum is documented.
