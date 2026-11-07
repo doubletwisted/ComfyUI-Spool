@@ -5,6 +5,7 @@ import math
 import os
 import shutil
 import subprocess
+import tempfile
 from bisect import bisect_right
 from fractions import Fraction
 from pathlib import Path
@@ -1364,7 +1365,7 @@ class Media:
             "offset": metadata.get("sourceRange", {}).get("start", 0) / fps,
         }
 
-    def export_frame(self, metadata, frame, fps):
+    def _write_frame(self, metadata, frame, output):
         frame = int(frame)
         if metadata["kind"] not in ("video", "image") or not 0 <= frame < metadata["frames"]:
             raise ValueError("Choose a frame inside the footage")
@@ -1372,9 +1373,7 @@ class Media:
         if not ffmpeg:
             raise ValueError("Install ffmpeg to export frames")
         original = self.original_source(metadata)
-        folder = self.root / "exports"
-        folder.mkdir(exist_ok=True)
-        output = folder / f"spool-frame-{frame:06d}-{uid()[:8]}.png"
+        output.parent.mkdir(exist_ok=True)
         command = [ffmpeg, "-v", "error", "-y"]
         if metadata["kind"] == "video":
             command += [
@@ -1389,6 +1388,11 @@ class Media:
         subprocess.run(command, check=True, capture_output=True, timeout=60)
         if not output.is_file():
             raise ValueError("The source has no frame at this position")
+
+    def export_frame(self, metadata, frame, fps):
+        frame = int(frame)
+        output = self.root / "exports" / f"spool-frame-{frame:06d}-{uid()[:8]}.png"
+        self._write_frame(metadata, frame, output)
         return {
             "url": ("/spool/media/" + self.project_id + "/exports/" if self.project_id else "/spool/media/exports/")
             + output.name,
@@ -1408,25 +1412,34 @@ class Media:
         canvas = Image.new("RGB", (columns * 384, ((len(takes) + columns - 1) // columns) * 256), "#181818")
         drawing = ImageDraw.Draw(canvas)
         evidence = []
-        for index, take in enumerate(takes):
-            metadata = take["media"]
-            frame = min(
-                metadata["frames"] - 1,
-                max(0, (clip.get("in", 0) + min(clip.get("out", metadata["frames"]), metadata["frames"]) - 1) // 2),
-            )
-            result = self.export_frame(metadata, frame, fps)
-            with Image.open(self.root / "exports" / result["filename"]) as image:
-                tile = ImageOps.contain(image.convert("RGB"), (384, 216))
-                x, y = index % columns * 384, index // columns * 256
-                canvas.paste(tile, (x + (384 - tile.width) // 2, y + (216 - tile.height) // 2))
-                drawing.text((x + 8, y + 224), take["id"][:32], fill="white")
-            evidence.append(
-                {
-                    "takeId": take["id"],
-                    "sampleFrame": frame,
-                    **{k: metadata.get(k) for k in ("kind", "duration", "width", "height", "fps", "audio")},
-                }
-            )
+        temporary = tempfile.TemporaryDirectory(prefix="spool-comparison-", dir=self.cache, ignore_cleanup_errors=True)
+        try:
+            for index, take in enumerate(takes):
+                metadata = take["media"]
+                frame = min(
+                    metadata["frames"] - 1,
+                    max(0, (clip.get("in", 0) + min(clip.get("out", metadata["frames"]), metadata["frames"]) - 1) // 2),
+                )
+                output = Path(temporary.name) / (str(index) + ".png")
+                self._write_frame(metadata, frame, output)
+                with Image.open(output) as image:
+                    tile = ImageOps.contain(image.convert("RGB"), (384, 216))
+                    x, y = index % columns * 384, index // columns * 256
+                    canvas.paste(tile, (x + (384 - tile.width) // 2, y + (216 - tile.height) // 2))
+                    drawing.text((x + 8, y + 224), take["id"][:32], fill="white")
+                evidence.append(
+                    {
+                        "takeId": take["id"],
+                        "sampleFrame": frame,
+                        **{k: metadata.get(k) for k in ("kind", "duration", "width", "height", "fps", "audio")},
+                    }
+                )
+        finally:
+            try:
+                temporary.cleanup()
+            except OSError:
+                pass  # Retain the comparison result or original failure if cleanup is denied.
+        (self.root / "exports").mkdir(exist_ok=True)
         target = self.root / "exports" / ("comparison-" + uid() + ".png")
         canvas.save(target)
         return {

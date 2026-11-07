@@ -82,6 +82,8 @@ Cancellation preflight reads the acknowledgement through the immutable read
 generation. Planning and recording delivery still use their writer transactions.
 FFmpeg text diagnostics use UTF-8 with replacement for invalid bytes, independent
 of the host locale; subprocess failure types and timeouts remain unchanged.
+Comparison sheets extract frames in a private temporary directory and retain
+only the returned sheet. Explicit frame exports remain durable user outputs.
 
 ## Project format
 
@@ -218,6 +220,8 @@ obstruct Windows replacement while the source is being copied.
 `durable.py` owns unique temporary files, flush/fsync, atomic replacement with
 SMB retry, and failure cleanup for JSON receipts, take sidecars, farm JSON and
 manifests. `ownership.atomic_replace` reexports the same replacement primitive.
+OTIO exports use the same replacement retry and exclusively created pending
+files, cleaning only their own unfinished file after a failure.
 Deadline submissions copy the stdlib-only helper beside their worker protocol.
 Local `receipt.json` writes use schema 2 and `primaryArtifactId`; collection still
 verifies schema 1 from older executions. Farm protocol 2 already uses that

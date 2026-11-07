@@ -13,6 +13,10 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- OTIO export retries transient Windows sharing denials and removes only its own
+  unfinished file if writing or publication fails.
+- Comparison sheets use temporary frames that are cleaned after success or
+  failure. Saved sheets and explicitly exported frames remain available.
 - FFmpeg errors retain Unicode filenames on Windows instead of failing while
   decoding diagnostics during audio preparation, export or cut detection.
 - Cancellation preflight reads avoid writer locks and checkpoint rewrites;
