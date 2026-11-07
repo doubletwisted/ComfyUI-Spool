@@ -73,6 +73,10 @@ Storage and project-folder work runs off ComfyUI's event loop through
 the published snapshot, import proxies and other referenced media. Playback cache
 keys include source path/size/mtime, project size/FPS and the cache format version.
 The preview route enqueues work and returns preparing until its local file is ready.
+Launcher probes, status and startup use cancellation-draining workers for their
+SQLite and filesystem work, including process creation. Startup reservation and
+spawn stay in one worker. Status/error writers replace only the launch state
+they observed, so a delayed worker cannot overwrite a newer reservation.
 
 ## Project format
 
@@ -157,6 +161,9 @@ identity fails the operation instead of authorizing reuse of an older runtime.
 The manifest, document, API and SQLite schema-version number are unchanged.
 Older writers preserve the marker but do not refresh it; mixed-version detection
 then relies on the replacement file's identity.
+Failed project imports clean their exclusively created destination and new local
+working cache. Cleanup preserves pre-existing caches and refuses redirected or
+uninspectable paths; a denied cleanup retains the original import failure.
 
 Receipt scans visit pending attempts every two seconds and settled history every
 five minutes (also on collector startup). Folder scans cache projection/inventory

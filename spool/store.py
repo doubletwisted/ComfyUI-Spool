@@ -701,7 +701,7 @@ class Store:
         names = self.referenced_names()
         folders = {}
         for folder in ("previews", "exports", "uploads", "shots", "artifacts", "assets", "backups"):
-            directory = (self.cache if folder in ("previews", "shots") else self.root) / folder
+            directory = (self.cache if folder in ("previews", "shots", "backups") else self.root) / folder
             if not directory.is_dir():
                 continue
             files = [path for path in directory.rglob("*") if path.is_file()]

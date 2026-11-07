@@ -369,7 +369,7 @@ export function createTimelineRenderer({
               '" style="left:' +
               row.end * getPixelScale() +
               'px;top:calc(var(--video-top-' +
-              cut.track +
+              esc(cut.track) +
               ') + 6px)" title="Add transition" aria-label="Add transition between ' +
               esc(getState().clips.find(c => c.id === cut.left)?.name || '') +
               ' and ' +

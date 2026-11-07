@@ -246,6 +246,207 @@ async function embeddedWorkflowFixture() {
   return { id: created.id, bridge: 'embedded-workflow-qa' };
 }
 
+// Real project-owned media for the native security checks. The names hold a hash,
+// a literal "%41" and a percent sign; upload receives them URI-encoded exactly once.
+function nativeSecurityMediaSource(extension) {
+  const folder = path.resolve(evidence, 'native-security-fixtures'),
+    source = path.join(folder, 'native-security-weird' + extension);
+  fs.mkdirSync(folder, { recursive: true });
+  if (!fs.existsSync(source)) {
+    execFileSync(
+      'ffmpeg',
+      extension === '.mp4'
+        ? [
+            '-v',
+            'error',
+            '-y',
+            '-f',
+            'lavfi',
+            '-i',
+            'testsrc=size=320x180:rate=24:duration=2',
+            '-c:v',
+            'libx264',
+            '-pix_fmt',
+            'yuv420p',
+            '-movflags',
+            '+faststart',
+            source,
+          ]
+        : ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=teal:s=64x36:d=1', '-frames:v', '1', source],
+      { windowsHide: true },
+    );
+  }
+  return source;
+}
+
+async function nativeSecurityUpload(projectId, extension) {
+  const response = await fetch(apiBase + '/spool/api/upload?projectId=' + projectId + '&fps=24', {
+    method: 'POST',
+    headers: { 'X-Filename': encodeURIComponent('Native #7 %41 100%' + extension) },
+    body: fs.readFileSync(nativeSecurityMediaSource(extension)),
+  });
+  const value = await response.json();
+  if (!response.ok) throw Error(value.error || 'Native security media upload failed');
+  return value;
+}
+
+async function nativeSecurityFixture(kind) {
+  const payload = '<img src=x onerror="window.__nativeSecurityXss=(window.__nativeSecurityXss||0)+1">';
+  if (kind === 'xss') {
+    const media = {
+      ...still(payload, { kind: 'image', name: payload + '.png' }),
+      file: 'assets/black.png',
+      originalFile: 'assets/black.png',
+      poster: 'assets/black.png',
+    };
+    return api('projects', {
+      document: {
+        project: 'Native security XSS QA',
+        fps: 24,
+        resolution: { width: 960, height: 540 },
+        media: [media],
+        importedWorkflows: [],
+        audioClips: [],
+        tailGap: 0,
+        videoTracks: 1,
+        clips: [
+          {
+            id: payload,
+            name: 'Crafted identities',
+            in: 0,
+            out: 24,
+            count: 1,
+            revision: 1,
+            takeId: payload + '-take',
+            sources: [],
+            takes: [{ id: payload + '-take', number: payload, media }],
+          },
+        ],
+      },
+    });
+  }
+  if (kind === 'xss-before') {
+    const media = { ...still('before-media', { kind: 'image' }) };
+    return api('projects', {
+      document: {
+        project: 'Native security XSS before QA',
+        fps: 24,
+        resolution: { width: 960, height: 540 },
+        media: [media],
+        importedWorkflows: [],
+        audioClips: [],
+        tailGap: 0,
+        videoTracks: 1,
+        clips: [
+          {
+            id: 'before-clip',
+            name: 'Before-fix take number',
+            in: 0,
+            out: 24,
+            count: 1,
+            revision: 1,
+            takeId: 'before-take',
+            sources: [],
+            takes: [{ id: 'before-take', number: payload, media }],
+          },
+        ],
+      },
+    });
+  }
+  if (kind === 'track') {
+    const track = '1)"><img src=x onerror="window.__nativeSecurityXss=(window.__nativeSecurityXss||0)+1">',
+      clips = ['track-left', 'track-right'].map((id, index) => ({
+        id,
+        name: 'Crafted track ' + (index + 1),
+        videoTrack: track,
+        in: 0,
+        out: 24,
+        count: 1,
+        revision: 1,
+        takeId: id + '-take',
+        sources: [],
+        takes: [{ id: id + '-take', number: 1, media: still(id + '-media', { kind: 'image' }) }],
+      }));
+    return api('projects', {
+      document: {
+        project: 'Native security track QA',
+        fps: 24,
+        resolution: { width: 960, height: 540 },
+        media: [],
+        importedWorkflows: [],
+        audioClips: [],
+        tailGap: 0,
+        videoTracks: 1,
+        clips,
+      },
+    });
+  }
+  const created = await api('projects', {
+      document: {
+        project: 'Native security media QA',
+        fps: 24,
+        resolution: { width: 960, height: 540 },
+        media: [],
+        importedWorkflows: [],
+        audioClips: [],
+        tailGap: 0,
+        videoTracks: 1,
+        clips: [],
+      },
+    }),
+    video = await nativeSecurityUpload(created.id, '.mp4'),
+    image = await nativeSecurityUpload(created.id, '.png'),
+    record = ({ probe, ...value }) => value,
+    videoTake = record(video);
+  const document = {
+    project: 'Native security media QA',
+    fps: 24,
+    resolution: { width: 960, height: 540 },
+    media: [record(video), record(image)],
+    importedWorkflows: [],
+    audioClips: [],
+    tailGap: 0,
+    videoTracks: 1,
+    clips: [
+      {
+        id: 'native-encoded-image',
+        name: 'Encoded image',
+        in: 0,
+        out: 24,
+        count: 1,
+        revision: 1,
+        takeId: 'native-encoded-image-take',
+        sources: [],
+        takes: [
+          {
+            id: 'native-encoded-image-take',
+            number: 1,
+            media: {
+              ...image,
+              file: image.file,
+              originalFile: image.originalFile,
+              poster: image.poster,
+            },
+          },
+        ],
+      },
+      {
+        id: 'native-encoded-video',
+        name: 'Encoded video',
+        in: 0,
+        out: 24,
+        count: 1,
+        revision: 1,
+        takeId: 'native-encoded-video-take',
+        sources: [],
+        takes: [{ id: 'native-encoded-video-take', number: 1, media: videoTake }],
+      },
+    ],
+  };
+  await api('projects/' + created.id, { revision: created.revision, document }, 'PUT');
+  return { id: created.id };
+}
+
 async function reviewFixture() {
   const takes = ['one', 'two', 'three'].map((id, index) => ({
     id,
@@ -580,6 +781,45 @@ async function firstWorkflowFixture() {
 }
 const CHECKS = {
   'stale-tab': { fixture: workflowPreviewFixture, modes: ['full'], file: 'stale_tab_browser_checks.js' },
+  'native-security-xss': {
+    fixture: () => nativeSecurityFixture('xss'),
+    modes: ['full'],
+    globals: () => ({ __nativeSecurityCase: 'xss' }),
+    file: 'native_security_browser_checks.js',
+  },
+  'native-security-xss-before': {
+    fixture: () => nativeSecurityFixture('xss-before'),
+    modes: ['full'],
+    securityBefore: true,
+    globals: () => ({ __nativeSecurityCase: 'xss-before' }),
+    file: 'native_security_browser_checks.js',
+  },
+  // Keep the cut-transition track sink in normal native acceptance.
+  'native-security-track': {
+    fixture: () => nativeSecurityFixture('track'),
+    modes: ['full'],
+    globals: () => ({ __nativeSecurityCase: 'track' }),
+    file: 'native_security_browser_checks.js',
+  },
+  'native-security-media': {
+    fixture: () => nativeSecurityFixture('media'),
+    modes: ['full'],
+    globals: () => ({ __nativeSecurityCase: 'media' }),
+    file: 'native_security_browser_checks.js',
+  },
+  'native-security-media-before': {
+    fixture: () => nativeSecurityFixture('media'),
+    modes: ['full'],
+    securityBeforeMedia: true,
+    globals: () => ({ __nativeSecurityCase: 'media-before' }),
+    file: 'native_security_browser_checks.js',
+  },
+  'native-security-export': {
+    fixture: () => nativeSecurityFixture('media'),
+    modes: ['full'],
+    globals: () => ({ __nativeSecurityCase: 'export' }),
+    file: 'native_security_browser_checks.js',
+  },
   'frame-interpretation': {
     fixture: frameInterpretationFixture,
     modes: ['full'],
@@ -2182,7 +2422,15 @@ async function runLibraryDrop(page, evaluate, label) {
   const names = requested.length
     ? requested
     : Object.keys(CHECKS).filter(
-        name => !['workflow-project-profile', 'workflow-capture-bundle', 'cloud-smoke', 'stale-tab'].includes(name),
+        name =>
+          ![
+            'workflow-project-profile',
+            'workflow-capture-bundle',
+            'cloud-smoke',
+            'stale-tab',
+            'native-security-xss-before',
+            'native-security-media-before',
+          ].includes(name),
       );
   for (const name of names) if (!CHECKS[name]) throw Error('Unknown check: ' + name);
   // Frontend checks can share an older CPU host. Cover new backend routes with
@@ -2460,6 +2708,13 @@ async function runLibraryDrop(page, evaluate, label) {
               pathname.split('/').at(-1),
             );
             if (fs.existsSync(file) && fs.statSync(file).isFile()) {
+              let body = fs.readFileSync(file);
+              if (check.securityBefore && path.basename(file) === 'timeline-renderer.js')
+                body = Buffer.from(body.toString('utf8').replace(/\besc\(/g, 'String('));
+              if (check.securityBeforeMedia && path.basename(file) === 'editor.js')
+                body = Buffer.from(
+                  body.toString('utf8').replace("path.split('/').map(encodeURIComponent).join('/')", 'path'),
+                );
               await page.send('Fetch.fulfillRequest', {
                 requestId,
                 responseCode: 200,
@@ -2467,7 +2722,7 @@ async function runLibraryDrop(page, evaluate, label) {
                   { name: 'Content-Type', value: file.endsWith('.css') ? 'text/css' : 'text/javascript' },
                   { name: 'Cache-Control', value: 'no-store' },
                 ],
-                body: fs.readFileSync(file).toString('base64'),
+                body: body.toString('base64'),
               });
             } else await page.send('Fetch.continueRequest', { requestId });
           });

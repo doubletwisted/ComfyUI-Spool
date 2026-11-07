@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import sqlite3
+import stat
 import tempfile
 import threading
 import time
@@ -119,6 +120,59 @@ def folder_name(name):
     return name
 
 
+def working_cache(workspace, folder):
+    """The local editing cache a ProjectStore derives from one project folder.
+
+    Import cleanup needs this identity before a failed constructor leaves no store,
+    and it must stay exactly the path ProjectStore.__init__ uses.
+    """
+    folder = Path(folder).resolve()
+    key = hashlib.sha256(str(folder).encode()).hexdigest()
+    return Path(workspace.root) / "cache" / key
+
+
+def _redirected(path):
+    """Reject redirects and paths whose redirection status cannot be inspected."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True  # Unreadable metadata cannot authorize recursive cleanup.
+    if stat.S_ISLNK(info.st_mode):
+        return True
+    return bool(getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+
+
+def _discard_import(workspace, folder, destination, parent, cache, cache_existed):
+    """Remove only the folder and cache one failed import created.
+
+    Constructor, import transaction and registration failures can leave the local
+    working cache behind even when the project folder is gone. Cleanup is best
+    effort so the caller still raises its original error.
+    """
+    try:
+        if destination.parent == parent and folder.resolve() == destination and not _redirected(folder):
+            shutil.rmtree(destination)
+    except Exception:
+        pass  # Preserve the import failure if cleanup is also denied.
+    if cache_existed:
+        return
+    try:
+        cache_root = Path(workspace.root) / "cache"
+        # A redirected cache root or cache could make the delete reach outside this
+        # workspace. Requiring the exact child of the real cache root also keeps a
+        # broad path from ever reaching the root itself.
+        if _redirected(cache_root) or _redirected(cache) or cache != working_cache(workspace, destination):
+            return
+        root, target = cache_root.resolve(), cache.resolve()
+        if target.parent != root or target == root or not target.is_dir():
+            return
+        shutil.rmtree(target)
+    except Exception:
+        pass  # Preserve the import failure if cleanup is also denied.
+
+
 class ProjectStore(Store):
     def __init__(self, folder, workspace=None, *, migrate=True, writable=False):
         self.workspace = workspace
@@ -136,15 +190,15 @@ class ProjectStore(Store):
                 with closing(sqlite3.connect(read_only_uri(path), uri=True)) as db:
                     if db.execute("PRAGMA user_version").fetchone()[0] > SCHEMA_VERSION:
                         raise ValueError("This Spool project needs a newer extension version")
-        key = hashlib.sha256(str(folder).encode()).hexdigest()
         # Maintenance without a workspace trusts whatever working copy its cache holds, so
         # a writable one gets a folder of its own: another user could fill a shared path.
         self.private_cache = None
         if workspace:
-            cache = workspace.root / "cache" / key
+            cache = working_cache(workspace, folder)
         elif migrate or writable:
             cache = self.private_cache = Path(tempfile.mkdtemp(prefix="spool-maintenance-"))
         else:
+            key = hashlib.sha256(str(folder).encode()).hexdigest()
             cache = Path(tempfile.gettempdir()) / "spool-maintenance" / key  # never created when read-only
         self.runtime = cache / "working.sqlite3"
         self.stamp = cache / "checkpoint.json"
@@ -619,14 +673,22 @@ class Workspace(Store):
         parent = Path(self.setting("projects_directory") or self.root / "projects").resolve()
         parent.mkdir(parents=True, exist_ok=True)
         folder = Path(tempfile.mkdtemp(prefix="Untitled Spool project-", dir=parent))
+        destination = folder.resolve()
+        cache = working_cache(self, folder)
+        cache_existed = True
+        try:
+            cache.lstat()
+        except FileNotFoundError:
+            cache_existed = False
+        except OSError:
+            pass  # Only confirmed absence establishes this import's ownership.
         try:
             store = ProjectStore(folder, self)
             project = store.import_project(value)
             self.register_folder(project["id"], folder)
         except Exception:
-            # Only this import's exclusively created destination belongs to us.
-            if folder.resolve().parent == parent:
-                shutil.rmtree(folder)
+            # The constructor creates the local working cache before it can fail.
+            _discard_import(self, folder, destination, parent, cache, cache_existed)
             raise
         self.opened[project["id"]] = store
         return project

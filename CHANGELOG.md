@@ -7,6 +7,14 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- Transition buttons escape project track values, preventing a crafted track
+  from executing script when the timeline opens.
+- Failed imports remove only their own new working cache, preserving existing or
+  redirected caches and the original import error when cleanup is denied.
+- Storage reports include project backups from their managed cache directory.
+- Slow launcher settings, startup-file scans and process creation run in workers,
+  keeping the host responsive. Delayed state updates preserve newer startup
+  reservations, and cancellation waits for an in-flight launch to finish.
 - Local, Deadline and Cloud collection own their temporary files, so concurrent
   collectors cannot overwrite or remove each other's unfinished copies.
 - Finding an existing Deadline job reports an unavailable service with a retry

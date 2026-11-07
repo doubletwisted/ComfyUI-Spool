@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { Linter } from 'eslint';
 
-const FIELDS = new Set(['id', 'number', 'workflow', 'videoTrack', 'sourceLane']);
+const FIELDS = new Set(['id', 'number', 'workflow', 'videoTrack', 'track', 'sourceLane']);
 const CALLS = new Set(['videoTrack', 'sourceLane', 'takeName']);
 const markup = node =>
   (node.type === 'Literal' && typeof node.value === 'string' && /[<>]|="/.test(node.value)) ||
@@ -75,10 +75,12 @@ const check = source => linter.verify(source, config).map(m => m.line + ':' + m.
 assert.equal(check(`h.innerHTML = '<div data-clip="' + c.id + '">';`).length, 1);
 assert.equal(check(`h.innerHTML = '<b>' + 'T' + String(t.number).padStart(2, '0') + '</b>';`).length, 1);
 assert.equal(check(`h.innerHTML = '<i style="top:var(--v-' + T.videoTrack(c) + ')">';`).length, 1);
+assert.equal(check(`h.innerHTML = '<button style="top:var(--v-' + cut.track + ')">';`).length, 1);
 assert.equal(check(`h.innerHTML = '<p>' + (x ? takeName(t) : 'None') + '</p>';`).length, 1);
 assert.equal(check('h.innerHTML = `<p>${m.id}</p>`;').length, 1);
 assert.deepEqual(check(`h.innerHTML = '<div data-clip="' + esc(c.id) + '">' + (a.id === b.id ? ' on' : '');`), []);
 assert.deepEqual(check(`label.textContent = 'Take ' + t.number;`), []);
+assert.deepEqual(check(`h.innerHTML = '<button style="top:var(--v-' + esc(cut.track) + ')">';`), []);
 
 const problems = [];
 for (const folder of ['ui', 'web'])
