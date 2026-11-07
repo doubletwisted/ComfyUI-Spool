@@ -170,5 +170,12 @@ def export_sequence(data, *, root, resolve, probe, image_extensions, sources=Non
         else:
             command += ["-map", "0:v:0", "-an"]
         command += ["-c:v", "copy", "-t", str(duration), "-movflags", "+faststart", str(output)]
-        run_ffmpeg(command, "Could not render the audio mix.")
+        try:
+            run_ffmpeg(command, "Could not render the audio mix.")
+        except BaseException:
+            try:
+                output.unlink(missing_ok=True)
+            except OSError:
+                pass  # Preserve the mux failure if cleanup is also denied.
+            raise
     return {"url": f"exports/{output.name}", "filename": output.name}
