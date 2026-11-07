@@ -53,11 +53,23 @@ def _probe(source):
 
 
 def _rate(value):
-    numerator, _, denominator = str(value).partition("/")
-    rate = float(numerator) / float(denominator or 1)
-    if rate <= 0:
+    """A usable positive source rate from ffprobe, or a caller-facing validation error.
+
+    ffprobe reports missing video clocks as `0/0`, and broken metadata may hold
+    `nan` or an infinity. Import needs a real source rate, so never propagate a
+    division error or a nonfinite timing.
+    """
+    try:
+        numerator, separator, denominator = str(value).strip().partition("/")
+        if separator and not denominator.strip():
+            result = math.nan
+        else:
+            result = float(numerator) / float(denominator or 1)
+    except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+        result = math.nan
+    if not math.isfinite(result) or result <= 0:
         raise ValueError("The video has no usable frame rate")
-    return rate
+    return result
 
 
 def _video_stream(probe):
@@ -552,7 +564,7 @@ class Media:
         video = _video_stream(_probe(source))
         if not video:
             raise ValueError("The file has no video stream")
-        fps = fps or _rate(video["avg_frame_rate"])
+        fps = fps or _rate(video.get("avg_frame_rate"))
         whole = self.describe(source, source.name, fps)
         original = whole["originalFile"] if self.project_id else str(source)
         ffmpeg = find_tool("ffmpeg")

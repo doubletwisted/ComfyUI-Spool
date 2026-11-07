@@ -239,7 +239,24 @@ class CloudExecutor:
                 for a in store.scan_attempts(target="cloud", pending_only=True)
             ]
         )
-        await asyncio.gather(*(self.observe(a) for a in pending))
+        # Let every observation settle before reporting a failure. An early return
+        # would orphan the rest of this batch while the lifecycle starts the next
+        # one, observing the same attempts concurrently.
+        results = await asyncio.gather(*(self.observe(a) for a in pending), return_exceptions=True)
+        failures = [result for result in results if isinstance(result, BaseException)]
+        if not failures:
+            return
+        control = next((error for error in failures if not isinstance(error, Exception)), None)
+        if control is not None:
+            errors = [error for error in failures if isinstance(error, Exception)]
+            if errors:
+                cause = ExceptionGroup("Spool Cloud observations failed before cancellation", errors)
+                logging.error("Spool Cloud observations failed before cancellation", exc_info=cause)
+                raise control from cause
+            raise control
+        if len(failures) == 1:
+            raise failures[0]
+        raise ExceptionGroup("Spool Cloud observation batch failed", failures)
 
     async def lifecycle(self, app):
         try:
@@ -265,4 +282,5 @@ class CloudExecutor:
                 await task
             except asyncio.CancelledError:
                 pass
-            self.ownership.close()
+            finally:
+                self.ownership.close()

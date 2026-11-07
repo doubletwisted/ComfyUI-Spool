@@ -27,6 +27,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return super().translate_path("/" + clean[len(self.base) :])
 
     def send_head(self):
+        self.remaining = None
         path = self.translate_path(self.path)
         if os.path.isdir(path):
             path = os.path.join(path, "index.html")
@@ -34,10 +35,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not match or not os.path.isfile(path):
             return super().send_head()
         size = os.path.getsize(path)
-        start = int(match[1]) if match[1] else max(0, size - int(match[2] or 0))
-        end = min(int(match[2]), size - 1) if match[1] and match[2] else size - 1
-        if start >= size:
-            self.send_error(416)
+        if match[1]:
+            start = int(match[1])
+            end = min(int(match[2]), size - 1) if match[2] else size - 1
+        else:
+            start = max(0, size - int(match[2] or 0))
+            end = size - 1
+        if start >= size or end < start:
+            self.send_unsatisfiable_range(size)
             return None
         handle = open(path, "rb")
         handle.seek(start)
@@ -48,6 +53,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.remaining = end - start + 1
         return handle
+
+    def send_unsatisfiable_range(self, size):
+        self.send_response(416)
+        self.send_header("Content-Range", f"bytes */{size}")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def copyfile(self, source, outputfile):
         remaining = getattr(self, "remaining", None)
