@@ -93,7 +93,8 @@ def run(argv=None):
             "retired table    : %s (%d rows, %s of payload, no reader)"
             % (entry["table"], entry["rows"], megabytes(entry["payloadBytes"]))
         )
-    if not report["retired"] and not report["freeBytes"]:
+    # After --confirm the report describes the compacted file, whose free pages are gone.
+    if not report["retired"] and not report["freeBytes"] and not report["reclaimed"]:
         print("nothing to reclaim")
         return 0
     if report["freeBytes"]:

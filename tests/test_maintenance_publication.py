@@ -416,5 +416,45 @@ class MaintenancePublicationTests(unittest.TestCase):
         self.assertFalse(folder.exists())
 
 
+class ReclaimReportTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.folder = (Path(temp.name) / "projects" / "Film").resolve()
+        self.workspace = Workspace(Path(temp.name) / "app")
+        self.project = self.workspace.create({"project": "Film", "clips": [], "media": []}, self.folder)
+
+    def reclaim(self, *arguments):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(maintenance.run(["--storage", str(self.folder), *arguments]), 0)
+        return output.getvalue()
+
+    def test_compacting_free_pages_reports_what_it_reclaimed(self):
+        store = self.workspace.for_project(self.project["id"])
+        document = {**self.project["document"], "notes": "x" * 2_000_000}
+        saved = store.save(self.project["id"], self.project["revision"], document)
+        store.save(self.project["id"], saved["revision"], self.project["document"])
+        self.assertIn("available to return", self.reclaim())
+        before = (self.folder / "project.spool").stat().st_size
+        report = self.reclaim("--confirm")
+        self.assertNotIn("nothing to reclaim", report)
+        reclaimed = before - (self.folder / "project.spool").stat().st_size
+        self.assertGreater(reclaimed, 1_000_000)
+        self.assertIn("reclaimed        : %.1f MB" % (reclaimed / 1e6), report)
+
+    def test_a_first_publication_marker_is_not_reported_as_negative_space(self):
+        # A snapshot from a version before publication markers, with no free pages.
+        with contextlib.closing(sqlite3.connect(self.folder / "project.spool")) as db:
+            db.execute("DROP TABLE spool_publication")
+            db.commit()
+            db.execute("VACUUM")
+        before = (self.folder / "project.spool").stat().st_size
+        report = json.loads(self.reclaim("--confirm", "--json"))
+        self.assertGreaterEqual((self.folder / "project.spool").stat().st_size, before)
+        self.assertEqual(report["reclaimed"], 0)
+        self.assertEqual(self.reclaim("--confirm").splitlines()[-1], "nothing to reclaim")
+
+
 if __name__ == "__main__":
     unittest.main()

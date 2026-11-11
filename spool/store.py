@@ -798,7 +798,9 @@ class Store:
         with self.connect() as db:
             for entry in report["retired"]:
                 db.execute("DROP TABLE " + entry["table"])
-        reclaimed = self.compact()
+        # Publishing can add a page, such as an older project's first publication
+        # marker; the file then grew and nothing was reclaimed.
+        reclaimed = max(0, self.compact())
         return {**self.storage_report(), "retired": report["retired"], "reclaimed": reclaimed}
 
     @contextmanager
