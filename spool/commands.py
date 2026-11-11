@@ -363,7 +363,7 @@ def execute(store, media, project_id, data):
             "experiment": preview,
             "command": data,
         }
-        store.accept_queue(identity, project_id, revision, payload, frozen, actor)
+        requests.accept_frozen(store, media, identity, project_id, revision, payload, frozen, actor)
         return status(store, project_id)
     note_actions = {"add_note", "edit_note", "address_note", "reopen_note"}
     clip_id = arguments.get("clipId")

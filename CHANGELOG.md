@@ -13,6 +13,10 @@ All notable changes to Spool are recorded here. Versions follow
 
 ### Fixes
 
+- A queue request refused after its inputs were frozen (the project changed, the
+  job budget filled, or a retry of the same operation was accepted first) removes
+  its frozen input copies, as does one whose freezing fails partway. Copies used by
+  accepted takes stay.
 - OTIO export retries transient Windows sharing denials and removes only its own
   unfinished file if writing or publication fails.
 - Comparison sheets use temporary frames that are cleaned after success or

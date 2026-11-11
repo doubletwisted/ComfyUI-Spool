@@ -5,6 +5,7 @@ import re
 
 from . import attempts, cast, cloud, system
 from .media import SAVER_GROUPS, contained, sha256
+from .errors import OperationConflict
 from .store import Conflict, uid, encode
 from .workflow_inputs import LOADERS, compact_groups, input_problem, leave_out
 
@@ -475,10 +476,17 @@ def prepare(store, media, project, items, freeze=True):
                 )
             )
     if freeze:
-        for asset in frozen_assets.values():
-            replacement = media.freeze_asset(asset["frozen"])
-            path = contained(media.host_roots["input"], replacement)
-            asset.update({"frozen": replacement, "byteSize": path.stat().st_size, "sha256": sha256(path)})
+        made = []
+        try:
+            for asset in frozen_assets.values():
+                replacement = media.freeze_asset(asset["frozen"])
+                made.append(replacement)
+                path = contained(media.host_roots["input"], replacement)
+                asset.update({"frozen": replacement, "byteSize": path.stat().st_size, "sha256": sha256(path)})
+        except BaseException:
+            for name in made:
+                media.discard_frozen(name)
+            raise
         for _, request in requests:
             for asset in request["assets"]:
                 source = contained(media.host_roots["input"], asset["source"].removesuffix(" [input]"))
@@ -559,5 +567,33 @@ def accept(store, media, project_id, revision, items, operation_id=None, actor="
     if pairing and pairing["roots"] != {k: str(v) for k, v in media.host_roots.items()}:
         raise Conflict("Spool and its paired Comfy use different media folders")
     frozen = prepare(store, media, project, items)
-    store.accept_queue(operation_id, project_id, revision, payload, frozen, actor)
+    accept_frozen(store, media, operation_id, project_id, revision, payload, frozen, actor)
     return store.get(project_id)
+
+
+def accept_frozen(store, media, operation_id, project_id, revision, payload, frozen, actor):
+    """Accept requests prepare() froze; their snapshots stay only if these requests became the attempts.
+
+    Acceptance can still refuse a prepared batch: the project changed, the job budget
+    filled, or a concurrent replay of the same operation was accepted first. Each
+    snapshot was made for this batch alone, so nothing else refers to it.
+    """
+    try:
+        return store.accept_queue(operation_id, project_id, revision, payload, frozen, actor)
+    finally:
+        if frozen and not accepted_as(store, operation_id, project_id, payload, frozen):
+            for name in {asset["frozen"] for _, request in frozen for asset in request["assets"]}:
+                media.discard_frozen(name)
+
+
+def accepted_as(store, operation_id, project_id, payload, frozen):
+    """Whether the operation recorded these requests; an unknown answer keeps their snapshots."""
+    try:
+        attempt_ids = store.operation(operation_id, project_id, payload)
+        if not attempt_ids:
+            return False
+        return store.attempt(attempt_ids[0])["request"]["outputNamespace"] == frozen[0][1]["outputNamespace"]
+    except OperationConflict:
+        return False  # The ID has expired or belongs to another request, never to these.
+    except Exception:
+        return True
