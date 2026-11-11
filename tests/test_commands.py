@@ -596,7 +596,27 @@ class CommandTests(unittest.TestCase):
             futures = [pool.submit(self.execute, value) for value in values]
             errors = [future.exception() for future in futures]
         self.assertEqual(sum(error is None for error in errors), 1)
-        self.assertEqual(len(self.store.get(self.project["id"])["document"]["jobs"]), 2)
+        jobs = self.store.get(self.project["id"])["document"]["jobs"]
+        self.assertEqual(len(jobs), 2)
+        # The refused experiment froze its own input copy; only the accepted one remains.
+        frozen = {a["frozen"] for j in jobs for a in self.store.attempt(j["id"])["request"]["assets"]}
+        self.assertEqual({"spool-frozen/" + p.name for p in (self.root / "input/spool-frozen").iterdir()}, frozen)
+
+    def test_an_experiment_refused_at_acceptance_leaves_no_frozen_inputs(self):
+        original = commands.requests.prepare
+
+        def prepared(*args):
+            result = original(*args)
+            human = self.store.get(self.project["id"])
+            self.store.save(human["id"], human["revision"], human["document"])
+            return result
+
+        data = self.envelope("queue_experiment", {"mode": "repeat", "variants": [{"clipId": "shot"}]}, "late", "queue")
+        with patch("spool.commands.requests.prepare", side_effect=prepared):
+            with self.assertRaises(Conflict):
+                self.execute(data)
+        self.assertEqual(list((self.root / "input/spool-frozen").glob("*")), [])
+        self.assertEqual(self.store.get(self.project["id"])["document"]["jobs"], [])
 
     def test_owned_cancel_retry_recovers_an_uncertain_external_effect(self):
         attempt_id, submission, cancel = self.owned_cancel()

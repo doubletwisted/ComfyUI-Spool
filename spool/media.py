@@ -327,6 +327,14 @@ def staged_relative(value):
     return parts[2] if len(parts) == 3 else None
 
 
+def _discard(path):
+    """Remove a file the failed operation created; a denied removal keeps its original error."""
+    try:
+        Path(path).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def sha256(path):
     with Path(path).open("rb") as handle:
         return hashlib.file_digest(handle, "sha256").hexdigest()
@@ -1049,14 +1057,42 @@ class Media:
             source = self.keep_input(source)
             target = self.cache / "frozen" / (uid() + source.suffix.lower())
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
-            return self.stage_input(target)
+            try:
+                shutil.copy2(source, target)
+                return self.stage_input(target)
+            except BaseException:
+                _discard(target)
+                raise
         if not source.is_file():
             raise ValueError("Bound input asset does not exist in Comfy's input directory")
         target = contained(self.host_roots["input"], "spool-frozen/" + uid() + source.suffix.lower())
         target.parent.mkdir(exist_ok=True)
-        shutil.copyfile(source, target)
+        try:
+            shutil.copyfile(source, target)
+        except BaseException:
+            _discard(target)
+            raise
         return target.relative_to(self.host_roots["input"]).as_posix()
+
+    def discard_frozen(self, value):
+        """Remove a snapshot freeze_asset made for a request that was never accepted.
+
+        Only the snapshot's own copies go: the uniquely named file in the frozen
+        folder and, for a project, its staged copy in Comfy's input. The input it
+        was made from, and the project's copy of that input, are shared and stay.
+        """
+        staged = contained(self.host_roots["input"], value)
+        if not self.project_id:
+            if staged.parent == contained(self.host_roots["input"], "spool-frozen"):
+                _discard(staged)
+            return
+        relative = staged_relative(value)
+        if relative is None or not value.startswith(STAGED_PREFIX + self.project_id + "/"):
+            return
+        owned = contained(self.root, relative)
+        if owned.parent == contained(self.root, ".spool/frozen"):
+            _discard(staged)
+            _discard(owned)
 
     def bake_shot(self, metadata, start, end, fps, slot, frame=None, audio=False, exact_frame=False):
         if not 0 <= start < end <= metadata["frames"] or slot not in (
